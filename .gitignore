@@ -130,3 +130,5 @@ viewer/build/WebAssembly_Qt_6_8_2_multi_threaded-Debug/
 build/dubug/.qtc_clangd/.cache/clangd/index/
 
 build/dubug/.qtc_clangd/
+
+deployments/Bioretention_assimilation/model/output.txt
