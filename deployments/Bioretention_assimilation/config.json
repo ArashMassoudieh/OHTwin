@@ -3,7 +3,7 @@
         "name": "Bioretention_assimilation",
         "model_file": "model/Bioretention.ohq",
         "viz_file": "viz_bioretention.json",
-        "port": 8087
+        "port": 8085
     },
     "runtime": {
         "weather_source": "openmeteo_historical",
@@ -13,7 +13,7 @@
         "forecast_horizon": "",
         "start_datetime": "2020-01-03T00:00:00",
         "stop_datetime": "2022-01-03T00:00:00",
-        "time_acceleration": 1000,
+        "time_acceleration": 4000,
         "advance_to_observations": true,
         "state_variables": [],
         "keep_debug_outputs": false
@@ -23,9 +23,9 @@
         "noise_sigma": 0.0
     },
     "assimilation": {
-        "truth_csv_url": "http://localhost:8086/outputs/selected_output.csv",
-        "truth_meta_url": "http://localhost:8086/outputs/selected_output_meta.json",
-        "poll_interval": "7day",
+        "truth_csv_url": "http://localhost:8084/outputs/selected_output.csv",
+        "truth_meta_url": "http://localhost:8084/outputs/selected_output_meta.json",
+        "poll_interval": "3day",
         "calibration_output_dir": "outputs/calibration",
         "calibration_observations": [
             "Underdrain flow (m3/day)",
