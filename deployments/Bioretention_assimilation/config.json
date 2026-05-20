@@ -13,7 +13,7 @@
         "forecast_horizon": "",
         "start_datetime": "2020-01-03T00:00:00",
         "stop_datetime": "2022-01-03T00:00:00",
-        "time_acceleration": 200,
+        "time_acceleration": 1000,
         "advance_to_observations": true,
         "state_variables": [],
         "keep_debug_outputs": false
@@ -25,7 +25,7 @@
     "assimilation": {
         "truth_csv_url": "http://localhost:8086/outputs/selected_output.csv",
         "truth_meta_url": "http://localhost:8086/outputs/selected_output_meta.json",
-        "poll_interval": "3day",
+        "poll_interval": "7day",
         "calibration_output_dir": "outputs/calibration",
         "calibration_observations": [
             "Underdrain flow (m3/day)",
