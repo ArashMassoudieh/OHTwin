@@ -1,6 +1,6 @@
 /*
  * OpenHydroTwin
- * Copyright (C) 2026  Arash Massoudieh
+ * Copyright (C) 2026  EnviroInformatics, LLC
  *
  * This file is part of OpenHydroTwin.
  *

@@ -1,0 +1,124 @@
+/*
+ * OpenHydroTwin
+ * Copyright (C) 2026  Enviro
+ *
+ * This file is part of OpenHydroTwin.
+ *
+ * OpenHydroTwin is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * OpenHydroTwin is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+#pragma once
+
+#include "DTObservationBuffer.h"
+
+#include <QObject>
+#include <QString>
+#include <QTimer>
+#include "System.h"
+#include <atomic>
+
+class DTConfig;
+class RunLogger;
+
+// ---------------------------------------------------------------------------
+// DTAssimilation
+//
+// Orchestrates the data-assimilation side of a forward digital twin:
+//
+//   - Owns the DTObservationBuffer that mirrors the Truth Twin's
+//     observation stream.
+//   - Drives an independent QTimer that periodically refresh()es the
+//     buffer at the configured poll cadence.
+//   - (Future) Owns a DTCalibrator and triggers calibration cycles
+//     against the buffer's contents.
+//
+// Lifetime: owned by DTRunner, instantiated only if
+// DTConfig::assimilation.enabled is true.
+//
+// The class is a QObject so the timer slot connection is straightforward
+// and so the (future) calibrator can emit signals back to the runner.
+// ---------------------------------------------------------------------------
+class DTAssimilation : public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit DTAssimilation(const DTConfig &config, QObject *parent = nullptr);
+
+    // Configure endpoints. Call once on the *owning* (main) thread before
+    // moveToThread(). Performs the initial buffer refresh and validates
+    // config. Does NOT start the timer — that happens in startTimer(),
+    // which must run on the assimilation thread.
+    bool configure(QString &errorMessage);
+
+    // *on the assimilation thread*. NOT safe to call from other threads
+    // once the object has been moveToThread()'d. Cross-thread callers
+    // should use bufferTMax() / bufferPointCount() instead.
+
+    const DTObservationBuffer &buffer() const { return m_buffer; }
+
+    // Thread-safe accessors for the forward (main) thread.
+    // Updated after each successful poll.
+    double bufferTMax() const { return m_bufferTMax.load();       }
+    qint64 bufferPointCount() const { return m_bufferPointCount.load(); }
+
+    void setRunLogger(RunLogger *logger) { m_runLogger = logger; }
+
+
+signals:
+    // Emitted after each successful poll. Carries the number of points
+    // currently held in the buffer for quick logging/diagnostics.
+    void buffered(qint64 totalPoints);
+
+    // Emitted after a polling failure (network/parse). Receivers may
+    // log; the timer keeps running.
+    void pollFailed(QString errorMessage);
+
+    void calibrationCompleted(QString newSnapshotPath);
+    void calibrationFailed(QString errorMessage);
+
+private slots:
+    void onPollTick();
+
+
+public slots:
+    // Start the poll timer. Must be invoked on the assimilation thread
+    // (typically via a queued connection from QThread::started).
+    void startTimer();
+
+    // Stop the poll timer. Must be invoked on the assimilation thread
+    // (use QMetaObject::invokeMethod with QueuedConnection from outside).
+    void stopTimer();
+
+    // Snapshot handoff from the forward thread. Connect via signal/slot
+    // (auto-becomes QueuedConnection across threads); never call directly
+    // from another thread.
+    void setLatestSnapshot(QString path) { m_latestSnapshotPath = path; }
+
+private:
+    const DTConfig       &m_config;
+    DTObservationBuffer   m_buffer;
+    QTimer                m_pollTimer;
+    bool                  m_started = false;
+    bool m_calibrationInProgress = false;   // touched only on assim thread
+    std::atomic<double> m_bufferTMax{0.0};
+    std::atomic<qint64> m_bufferPointCount{0};
+    qint64 m_pollIntervalWallClockMs = 0;
+    int m_cyclesCompleted = 0;
+    bool runCalibration(QString &errorMessage);
+    bool archiveGAOutput(int cycleIndex);
+    QString m_latestSnapshotPath;
+    bool writeParameterLog(const System &sys, int cycleIndex);
+    RunLogger *m_runLogger = nullptr;   // not owned; lifetime managed by DTRunner
+};
