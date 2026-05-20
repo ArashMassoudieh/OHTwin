@@ -249,7 +249,20 @@ bool DTAssimilation::runCalibration(QString &errorMessage)
     ErrorHandler errs = sys.VerifyAllQuantities();
     if (errs.Count() != 0)
     {
+        std::cerr << "[Assim] verification errors (" << errs.Count() << "):\n";
+        for (int i = 0; i < errs.Count(); ++i)
+        {
+            _error *e = errs[i];
+            if (!e) continue;
+            std::cerr << "  [" << i << "] "
+                      << "object='" << e->objectname << "' "
+                      << "class='"  << e->cls        << "' "
+                      << "func='"   << e->funct      << "' "
+                      << "code="    << e->code       << ": "
+                      << e->description << "\n";
+        }
         errorMessage = "model has verification errors";
+
         if (m_runLogger)
         {
             m_runLogger->recordRun(
