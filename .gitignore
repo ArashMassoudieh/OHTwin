@@ -132,3 +132,7 @@ build/dubug/.qtc_clangd/.cache/clangd/index/
 build/dubug/.qtc_clangd/
 
 deployments/Bioretention_assimilation/model/output.txt
+
+deployments/Bioretention_assimilation/config.json
+
+deployments/Bioretention_truth/config.json
