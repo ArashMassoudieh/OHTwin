@@ -379,6 +379,32 @@ bool DTRunner::init(QString &errorMessage)
         std::cout << "[Runner] Assimilation disabled (no 'assimilation' block in config).\n";
     }
 
+    // ------------------------------------------------------------------
+    // Parameter drift (Truth Twin). Load each configured CSV into a
+    // TimeSeries<double>. The Advance stage queries these by simulated
+    // time and applies the interpolated value to the named parameter
+    // before each Solve(). Empty config => no drift, vector stays empty.
+    // ------------------------------------------------------------------
+    m_parameterDrift.clear();
+    m_parameterDrift.reserve(m_config.parameterDrift.size());
+    for (const auto &entry : m_config.parameterDrift)
+    {
+        TimeSeries<double> ts;
+        if (!ts.readfile(entry.csvPath))
+        {
+            errorMessage = "Failed to read parameter drift CSV: " +
+                           QString::fromStdString(entry.csvPath);
+            return false;
+        }
+        std::cout << "[Runner] Parameter drift loaded: '"
+                  << entry.parameter << "' from "
+                  << entry.csvPath << " ("
+                  << ts.size() << " points)\n";
+        m_parameterDrift.push_back(std::move(ts));
+    }
+    if (!m_parameterDrift.empty())
+        std::cout << "[Runner] " << m_parameterDrift.size()
+                  << " parameter drift series active.\n";
 
 
     return true;
@@ -826,6 +852,7 @@ StageResult DTRunner::runStage(StageKind kind,
         ohqSystem->CreateFromScript(scr, settingsFile);
         ohqSystem->SetProp("simulation_start_time", ohqStart);
         ohqSystem->SetProp("simulation_end_time",   ohqEnd);
+
     }
 
     ohqSystem->SetSilent(false);
@@ -849,6 +876,12 @@ StageResult DTRunner::runStage(StageKind kind,
         }
     }
     DTWeather::injectPrecipitation(ohqSystem.get(), precip);
+
+    // Apply Truth Twin parameter drift (no-op if config has no entries).
+    // Query each drift series at the midpoint of this stage's window so the
+    // applied value is representative of the interval being solved.
+    const double driftQueryTime = 0.5 * (simStartSerial + simEndSerial);
+    applyParameterDrift(ohqSystem.get(), driftQueryTime);
 
     // Penman ET forcings — fetch and inject the four weather variables that
     // the "Evapotranspiration_Penman (Soil)" source consumes. If the model
@@ -875,6 +908,7 @@ StageResult DTRunner::runStage(StageKind kind,
         m_config.weatherSource, "shortwave_radiation",
         m_config.latitude, m_config.longitude, stageStart, stageEnd);
     DTWeather::injectWeather(ohqSystem.get(), etSource, "solar_radiation", rad);
+
 
     ohqSystem->CalcAllInitialValues();
     std::cout << "[Runner] Solving...\n";
@@ -1299,6 +1333,44 @@ void DTRunner::injectPrecipitation(System *system, const CPrecipitation &precip)
                   << intensityVar->GetExpression()->ToString() << "\n";
     }
     std::cout << "[Runner] Injected " << precip.n << " precipitation bins...\n";
+}
+
+// ---------------------------------------------------------------------------
+// applyParameterDrift
+//
+// Truth Twin parameter drift injection. For each (parameter, TimeSeries)
+// configured in m_config.parameterDrift, interpolate the series at
+// tSerial (OHQ day-serial) and write the value into the live System via
+// Parameter::SetValue(). Called once per stage, after the System is
+// built/loaded and before CalcAllInitialValues()/Solve(), so the
+// drifted value participates in this cycle's solve and is automatically
+// captured in the state snapshot written at the end of the stage.
+//
+// No-op when m_parameterDrift is empty. Missing parameters log a warning
+// but do not abort the cycle — drift is auxiliary forcing.
+// ---------------------------------------------------------------------------
+void DTRunner::applyParameterDrift(System *system, double tSerial)
+{
+    if (m_parameterDrift.empty()) return;
+    if (!system) return;
+
+    for (size_t i = 0; i < m_parameterDrift.size(); ++i)
+    {
+        const std::string &name = m_config.parameterDrift[i].parameter;
+        const double value = m_parameterDrift[i].interpol(tSerial);
+
+        Parameter *p = system->GetParameter(name);
+        if (!p)
+        {
+            std::cerr << "[Runner] Parameter drift: parameter '"
+                      << name << "' not found in system; skipping.\n";
+            continue;
+        }
+        p->SetValue(value);
+        std::cout << "[Runner] Parameter drift: " << name
+                  << " <- " << value
+                  << " (at t=" << tSerial << ")\n";
+    }
 }
 
 

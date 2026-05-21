@@ -32,6 +32,7 @@
 #include "noaaweatherfetcher.h"
 #include "Precipitation.h"
 #include "TimeSeriesSet.h"
+#include "TimeSeries.h"
 
 
 class System;
@@ -210,6 +211,12 @@ private:
                               double defaultSigma,
                               double tauDays);
 
+    // Apply time-varying parameter overrides (Truth Twin drift) to the live
+    // System before solve. Reads each entry's TimeSeries at the given OHQ
+    // day-serial time and calls Parameter::SetValue(). No-op when
+    // m_parameterDrift is empty.
+    void applyParameterDrift(System *system, double tSerial);
+
     // Return the noise sigma for one observed-output series. The default
     // value comes from observations.noiseSigma; optional entries in
     // observations.noiseSigmaByPattern override it when their lower-case
@@ -276,6 +283,14 @@ private:
     // Owned for the entire lifetime of the runner; shared with
     // m_assimilation (raw pointer) so calibration cycles can append rows.
     std::unique_ptr<RunLogger> m_runLogger;
+
+    // -----------------------------------------------------------------------
+    // Parameter drift (Truth Twin)
+    // -----------------------------------------------------------------------
+    // One TimeSeries per ParameterDriftEntry in m_config.parameterDrift,
+    // loaded from CSV at init(). Time axis is in OHQ day-serial units.
+    // Indices are aligned with m_config.parameterDrift.
+    std::vector<TimeSeries<double>> m_parameterDrift;
 
 
 };

@@ -459,6 +459,45 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
                         .push_back(v.toString().toStdString());
         }
     }
+
+    // --- parameter_drift (optional) ---
+    if (root.contains("parameter_drift")) {
+        const QJsonValue v = root.value("parameter_drift");
+        if (!v.isArray()) {
+            errorMessage = "config.json: 'parameter_drift' must be an array.";
+            return false;
+        }
+        const QJsonArray arr = v.toArray();
+        for (int i = 0; i < arr.size(); ++i) {
+            if (!arr[i].isObject()) {
+                errorMessage = QString("config.json: 'parameter_drift[%1]' "
+                                       "must be an object.").arg(i);
+                return false;
+            }
+            const QJsonObject entry = arr[i].toObject();
+
+            const QString name = entry.value("parameter").toString();
+            const QString csv  = entry.value("csv").toString();
+            if (name.isEmpty() || csv.isEmpty()) {
+                errorMessage = QString("config.json: 'parameter_drift[%1]' "
+                                       "requires non-empty 'parameter' and "
+                                       "'csv' fields.").arg(i);
+                return false;
+            }
+
+            const QString absCsv = resolvePath(csv);
+            if (!QFileInfo::exists(absCsv)) {
+                errorMessage = QString("config.json: parameter_drift CSV not "
+                                       "found: %1").arg(absCsv);
+                return false;
+            }
+
+            ParameterDriftEntry e;
+            e.parameter = name.toStdString();
+            e.csvPath   = absCsv.toStdString();
+            parameterDrift.push_back(e);
+        }
+    }
     // ------------------------------------------------------------------
     // Auto-derived working directories under the deployment root
     // ------------------------------------------------------------------

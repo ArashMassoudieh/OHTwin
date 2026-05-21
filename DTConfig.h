@@ -68,6 +68,26 @@ struct ObservationConfig
 };
 
 // ---------------------------------------------------------------------------
+// ParameterDriftEntry
+// One time-varying parameter for the Truth Twin.
+//
+//   parameter : name of the OHQ parameter to update each cycle, as accepted
+//               by System::GetParameter(name).
+//   csvPath   : absolute path to a CSV readable by TimeSeries<double>. The
+//               time axis is in OHQ day-serial units (Excel epoch); values
+//               are interpolated to the current simulation time before each
+//               Advance stage and applied via Parameter::SetValue().
+//
+// The block is OPTIONAL in config.json. If absent or empty, no drift is
+// applied and the Truth Twin behaves exactly as a forward simulator.
+// ---------------------------------------------------------------------------
+struct ParameterDriftEntry
+{
+    std::string parameter;
+    std::string csvPath;
+};
+
+// ---------------------------------------------------------------------------
 // AssimilationConfig
 // Settings for pulling observations from a Truth Twin (or, eventually,
 // a real sensor stream) and for running data assimilation against them.
@@ -218,6 +238,12 @@ public:
 
 
     static bool eraseDirectoryContents(const QString &dirPath, QString &err);
+
+    // --- parameter drift (Truth Twin) ---
+    // Time-varying parameter overrides driven by external CSV time series.
+    // Empty vector = no drift (default).
+    std::vector<ParameterDriftEntry> parameterDrift;
+
 private:
     // Parse "300s", "15min", "4hr", "1day" -> milliseconds.
     // Returns -1 on parse error and writes details into err.
