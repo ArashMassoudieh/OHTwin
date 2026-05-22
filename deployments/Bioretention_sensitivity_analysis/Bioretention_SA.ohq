@@ -52,7 +52,7 @@ create parameter;type=Parameter,high=20,low=5,name=EngineeredSoilKsat,prior_dist
 create parameter;type=Parameter,high=1.5,low=0.5,name=EngineeredSoilAlpha,prior_distribution=log-normal,value=1
 create parameter;type=Parameter,high=0.1,low=0.01,name=NativeSoilKsat,prior_distribution=log-normal,value=0.01
 create parameter;type=Parameter,high=5,low=0.5,name=NativeSoilAlpha,prior_distribution=log-normal,value=1
-create parameter;type=Parameter,high=1.2,low=0.2,name=Evap_Coeff,prior_distribution=normal,value=1
+create parameter;type=Parameter,high=1.2,low=0.2,name=Evap_Coeff,prior_distribution=normal,value=0.8
 create parameter;type=Parameter,high=0.3,low=0.001,name=Std_PondWaterDepth,prior_distribution=normal,value=0.1
 create parameter;type=Parameter,high=0.03,low=0.001,name=Std_SoilMoisture,prior_distribution=normal,value=0.01
 create parameter;type=Parameter,high=20,low=5,name=Std_UnderdrainFlow,prior_distribution=normal,value=10
