@@ -50,8 +50,10 @@ create parameter;type=Parameter,high=1,low=0.6,name=Runoff_Coeff,prior_distribut
 create parameter;type=Parameter,high=0.015,low=0.0095,name=Manning's_Roughness,prior_distribution=normal,value=0.011
 create parameter;type=Parameter,high=20,low=5,name=EngineeredSoilKsat,prior_distribution=log-normal,value=10
 create parameter;type=Parameter,high=1.5,low=0.5,name=EngineeredSoilAlpha,prior_distribution=log-normal,value=1
+create parameter;type=Parameter,high=1.8,low=1.1,name=EngineeredSoiln,prior_distribution=log-normal,value=1.41
 create parameter;type=Parameter,high=0.1,low=0.01,name=NativeSoilKsat,prior_distribution=log-normal,value=0.01
 create parameter;type=Parameter,high=5,low=0.5,name=NativeSoilAlpha,prior_distribution=log-normal,value=1
+create parameter;type=Parameter,high=3,low=1.1,name=NativeSoiln,prior_distribution=log-normal,value=1.41
 create parameter;type=Parameter,high=1.2,low=0.2,name=Evap_Coeff,prior_distribution=normal,value=0.8
 create parameter;type=Parameter,high=0.3,low=0.001,name=Std_PondWaterDepth,prior_distribution=normal,value=0.1
 create parameter;type=Parameter,high=0.03,low=0.001,name=Std_SoilMoisture,prior_distribution=normal,value=0.01
@@ -88,14 +90,18 @@ create observation;type=Observation,autocorrelation_time-span=1,comparison_metho
 create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Weighted Least Squared,error_standard_deviation=1,error_structure=normal,expression=flow,kernel_Delta0=30,kernel_alpha=1,kernel_tau=1,name=Underdrain flow (m3/day),object=Underdrain,observed_data=
 setasparameter; object= Engineered soil, parametername= EngineeredSoilKsat, quantity= K_sat_original
 setasparameter; object= Engineered soil, parametername= EngineeredSoilAlpha, quantity= alpha
+setasparameter; object= Engineered soil, parametername= EngineeredSoiln, quantity= n
 setasparameter; object= Impervious contributing catchment, parametername= Manning's_Roughness, quantity= ManningCoeff
 setasparameter; object= Impervious contributing catchment, parametername= Runoff_Coeff, quantity= Runoff_coeff
 setasparameter; object= Native soil underneath the engineered soil(0:0), parametername= NativeSoilKsat, quantity= K_sat_original
 setasparameter; object= Native soil underneath the engineered soil(0:0), parametername= NativeSoilAlpha, quantity= alpha
+setasparameter; object= Native soil underneath the engineered soil(0:0), parametername= NativeSoiln, quantity= n
 setasparameter; object= Native soil underneath the engineered soil(0:1), parametername= NativeSoilKsat, quantity= K_sat_original
 setasparameter; object= Native soil underneath the engineered soil(0:1), parametername= NativeSoilAlpha, quantity= alpha
+setasparameter; object= Native soil underneath the engineered soil(0:1), parametername= NativeSoiln, quantity= n
 setasparameter; object= Native soil underneath the engineered soil(0:2), parametername= NativeSoilKsat, quantity= K_sat_original
 setasparameter; object= Native soil underneath the engineered soil(0:2), parametername= NativeSoilAlpha, quantity= alpha
+setasparameter; object= Native soil underneath the engineered soil(0:2), parametername= NativeSoiln, quantity= n
 setasparameter; object= Pond water depth (m), parametername= Std_PondWaterDepth, quantity= error_standard_deviation
 setasparameter; object= Soil Moisture, parametername= Std_SoilMoisture, quantity= error_standard_deviation
 setasparameter; object= Underdrain flow (m3/day), parametername= Std_UnderdrainFlow, quantity= error_standard_deviation
