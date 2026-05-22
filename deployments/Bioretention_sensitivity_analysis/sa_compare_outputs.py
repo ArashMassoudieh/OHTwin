@@ -726,7 +726,7 @@ def write_tornado_tables_and_plots(
             'set style line 1 lc rgb "#BDBDBD"\n'
             'set style line 2 lc rgb "#F28E2B"\n'
             f'set xlabel "{xlabel}"\n'
-            'set ylabel "Materials Properties / Zones"\n'
+            'set ylabel "Parameters"\n'
             f'set xrange [{xmin:.12g}:{xmax:.12g}]\n'
             f'set yrange [0:{len(items)+1}]\n'
             'set xzeroaxis lw 2 lc rgb "black"\n'
