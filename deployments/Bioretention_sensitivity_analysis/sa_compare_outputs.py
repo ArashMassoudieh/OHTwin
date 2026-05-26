@@ -34,10 +34,6 @@ Main outputs:
     SA_Results/tornado_<metric>_<output>.dat
     SA_Results/plot_tornado_<metric>_<output>.gp
     SA_Results/tornado_<metric>_<output>.png
-    SA_Results/tornado_mse_logsens.csv
-    SA_Results/tornado_mse_logsens_<output>.dat
-    SA_Results/plot_tornado_mse_logsens_<output>.gp
-    SA_Results/tornado_mse_logsens_<output>.png
 
 Example:
     python3 sa_compare_outputs.py --root .
@@ -692,8 +688,8 @@ def write_tornado_tables_and_plots(
                 low_abs = item["low_abs"]
                 high_abs = item["high_abs"]
 
-                low_half = max(low_abs * 0.5, 1e-6)
-                high_half = max(high_abs * 0.5, 1e-6)
+                low_half = max(low_abs * 0.5, 1e-14)
+                high_half = max(high_abs * 0.5, 1e-14)
                 low_center = -low_half
                 high_center = high_half
 
@@ -821,6 +817,307 @@ def pretty_parameter_label(param: str) -> str:
     return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", param).replace("_", " ")
 
 
+
+def regression_metrics_against_reference(ref: Series, run: Series) -> Dict[str, float]:
+    """
+    Calculate deterministic-time-series-based fit metrics.
+
+    The deterministic selected output is treated as the observed/reference
+    series. The sensitivity run is interpolated to the deterministic time grid.
+    Returned R2 is the squared Pearson correlation coefficient. NSE is the
+    Nash-Sutcliffe efficiency, 1 - SSE/SST, using the deterministic series as
+    the reference observations.
+    """
+    pairs: List[Tuple[float, float]] = []
+    if not ref.time or not run.time:
+        return {
+            "n_pairs": 0,
+            "MSE": float("nan"),
+            "RMSE": float("nan"),
+            "MAE": float("nan"),
+            "R2": float("nan"),
+            "NSE": float("nan"),
+            "max_abs_diff": float("nan"),
+        }
+
+    for t, y_ref in zip(ref.time, ref.value):
+        y_run = interp_linear(run.time, run.value, t)
+        if math.isfinite(y_ref) and math.isfinite(y_run):
+            pairs.append((y_ref, y_run))
+
+    n = len(pairs)
+    if n == 0:
+        return {
+            "n_pairs": 0,
+            "MSE": float("nan"),
+            "RMSE": float("nan"),
+            "MAE": float("nan"),
+            "R2": float("nan"),
+            "NSE": float("nan"),
+            "max_abs_diff": float("nan"),
+        }
+
+    obs = [a for a, _ in pairs]
+    sim = [b for _, b in pairs]
+    diffs = [b - a for a, b in pairs]
+    sse = sum(d * d for d in diffs)
+    mse = sse / n
+    rmse = math.sqrt(mse)
+    mae = sum(abs(d) for d in diffs) / n
+    max_abs = max(abs(d) for d in diffs)
+
+    obs_mean = sum(obs) / n
+    sim_mean = sum(sim) / n
+    sst = sum((a - obs_mean) ** 2 for a in obs)
+    nse = 1.0 - sse / sst if sst > 1e-300 else float("nan")
+
+    ss_obs = sum((a - obs_mean) ** 2 for a in obs)
+    ss_sim = sum((b - sim_mean) ** 2 for b in sim)
+    if ss_obs > 1e-300 and ss_sim > 1e-300:
+        cov = sum((a - obs_mean) * (b - sim_mean) for a, b in pairs)
+        r2 = (cov * cov) / (ss_obs * ss_sim)
+    else:
+        r2 = float("nan")
+
+    return {
+        "n_pairs": n,
+        "MSE": mse,
+        "RMSE": rmse,
+        "MAE": mae,
+        "R2": r2,
+        "NSE": nse,
+        "max_abs_diff": max_abs,
+    }
+
+
+def write_calculated_fit_tables(
+    runs: List[RunData],
+    outputs: List[str],
+    outdir: Path,
+    deterministic: RunData,
+) -> None:
+    """
+    Calculate MSE/R2/NSE directly from observedoutput.txt time series.
+
+    For each selected output, the deterministic run is treated as the reference
+    observed time series. Each run is interpolated to the deterministic time
+    grid before metrics are calculated.
+    """
+    long_path = outdir / "calculated_metrics_vs_deterministic.csv"
+    selected_path = outdir / "calculated_metrics_selected.csv"
+    metrics_by_run: Dict[Tuple[str, str], Dict[str, float]] = {}
+
+    with long_path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow([
+            "folder", "order", "tag", "parameter", "side", "output",
+            "n_pairs", "calc_MSE", "calc_RMSE", "calc_MAE", "calc_R2", "calc_NSE", "calc_max_abs_diff",
+        ])
+        for run in runs:
+            for outname in outputs:
+                ref = deterministic.series.get(outname)
+                s = run.series.get(outname)
+                if ref is None or s is None:
+                    continue
+                m = regression_metrics_against_reference(ref, s)
+                metrics_by_run[(run.folder, outname)] = m
+                w.writerow([
+                    run.folder, run.order, run.tag, run.param, run.side, outname,
+                    m["n_pairs"], m["MSE"], m["RMSE"], m["MAE"], m["R2"], m["NSE"], m["max_abs_diff"],
+                ])
+    print(f"[INFO] Wrote calculated deterministic-reference metrics: {long_path.name}")
+
+    with selected_path.open("w", newline="", encoding="utf-8") as f:
+        header = ["folder", "order", "tag", "parameter", "side"]
+        for outname in outputs:
+            short = clean_name_for_file(outname)
+            header += [f"{short}_calc_MSE", f"{short}_calc_R2", f"{short}_calc_NSE"]
+        w = csv.writer(f)
+        w.writerow(header)
+        for run in runs:
+            row = [run.folder, run.order, run.tag, run.param, run.side]
+            for outname in outputs:
+                m = metrics_by_run.get((run.folder, outname), {})
+                row += [m.get("MSE", ""), m.get("R2", ""), m.get("NSE", "")]
+            w.writerow(row)
+    print(f"[INFO] Wrote selected calculated metrics: {selected_path.name}")
+
+
+def write_calculated_mse_tornado_plots(
+    outputs: List[str],
+    outdir: Path,
+    make_png: bool = True,
+) -> None:
+    """
+    Make additional tornado-style plots using MSE calculated directly from
+    deterministic observedoutput.txt time series.
+
+    These are intentionally separate from:
+      * tornado_<metric>_* files from time-series response metrics; and
+      * tornado_mse_logsens_* files from fit_measures.txt + parameter log-sensitivity.
+    """
+    calc_path = outdir / "calculated_metrics_vs_deterministic.csv"
+    if not calc_path.exists():
+        print("[WARN] Calculated-MSE tornado skipped: calculated_metrics_vs_deterministic.csv not found.")
+        return
+
+    rows = []
+    with calc_path.open("r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for r in reader:
+            side = r.get("side", "").upper()
+            if side not in {"L", "LOW", "U", "UP", "HIGH", "H"}:
+                continue
+            if r.get("output") not in outputs:
+                continue
+            try:
+                val = float(r.get("calc_MSE", "nan"))
+            except Exception:
+                val = float("nan")
+            if not math.isfinite(val):
+                continue
+            r["_mse"] = val
+            rows.append(r)
+
+    summary_path = outdir / "tornado_calc_mse.csv"
+    with summary_path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow([
+            "output", "parameter", "low_folder", "low_calc_MSE", "high_folder", "high_calc_MSE",
+            "span", "abs_span", "dominant_direction",
+        ])
+
+        grouped: Dict[Tuple[str, str], Dict[str, dict]] = {}
+        for r in rows:
+            grouped.setdefault((r["output"], r["parameter"]), {})[side_label(r["side"])] = r
+
+        for (outname, param), d in sorted(grouped.items()):
+            low = d.get("Low")
+            high = d.get("High")
+            low_val = float(low["_mse"]) if low else float("nan")
+            high_val = float(high["_mse"]) if high else float("nan")
+            if math.isfinite(low_val) and math.isfinite(high_val):
+                span = high_val - low_val
+                dom = "High larger MSE" if high_val > low_val else "Low larger MSE"
+            elif math.isfinite(low_val):
+                span = low_val
+                dom = "Low only"
+            elif math.isfinite(high_val):
+                span = high_val
+                dom = "High only"
+            else:
+                continue
+            w.writerow([
+                outname, param,
+                low["folder"] if low else "", low_val if math.isfinite(low_val) else "",
+                high["folder"] if high else "", high_val if math.isfinite(high_val) else "",
+                span, abs(span), dom,
+            ])
+    print(f"[INFO] Wrote calculated-MSE tornado table: {summary_path.name}")
+
+    if not rows:
+        print("[WARN] Calculated-MSE tornado produced no rows with L/U side labels.")
+        return
+
+    grouped: Dict[Tuple[str, str], Dict[str, dict]] = {}
+    for r in rows:
+        grouped.setdefault((r["output"], r["parameter"]), {})[side_label(r["side"])] = r
+
+    gnuplot = shutil.which("gnuplot")
+    if make_png and not gnuplot:
+        print("[WARN] gnuplot not found. Calculated-MSE tornado .dat/.gp files were written, but PNGs were not generated.")
+
+    for outname in outputs:
+        items = []
+        for (o, param), d in grouped.items():
+            if o != outname:
+                continue
+            low = d.get("Low")
+            high = d.get("High")
+            low_val = float(low["_mse"]) if low else float("nan")
+            high_val = float(high["_mse"]) if high else float("nan")
+            vals = [v for v in (low_val, high_val) if math.isfinite(v)]
+            if not vals:
+                continue
+            span_abs = abs(high_val - low_val) if math.isfinite(low_val) and math.isfinite(high_val) else max(abs(v) for v in vals)
+            items.append({
+                "parameter": param,
+                "label": pretty_parameter_label(param),
+                "low": low_val,
+                "high": high_val,
+                "low_abs": abs(low_val) if math.isfinite(low_val) else 0.0,
+                "high_abs": abs(high_val) if math.isfinite(high_val) else 0.0,
+                "span_abs": span_abs,
+            })
+
+        items.sort(key=lambda x: x["span_abs"], reverse=True)
+        if not items:
+            print(f"[WARN] No calculated-MSE tornado items for output: {outname}")
+            continue
+
+        slug = clean_name_for_file(outname)
+        dat_path = outdir / f"tornado_calc_mse_{slug}.dat"
+        gp_path = outdir / f"plot_tornado_calc_mse_{slug}.gp"
+        png_path = outdir / f"tornado_calc_mse_{slug}.png"
+
+        with dat_path.open("w", encoding="utf-8") as f:
+            f.write("# y label low_calc_MSE high_calc_MSE abs_span low_center low_half high_center high_half\n")
+            n = len(items)
+            for i, item in enumerate(items):
+                y = n - i
+                low_half = max(item["low_abs"] * 0.5, 1e-14)
+                high_half = max(item["high_abs"] * 0.5, 1e-14)
+                low_center = -low_half
+                high_center = high_half
+                label = item["label"].replace('"', "'")
+                f.write(
+                    f'{y} "{label}" {item["low"]:.12g} {item["high"]:.12g} {item["span_abs"]:.12g} '
+                    f'{low_center:.12g} {low_half:.12g} {high_center:.12g} {high_half:.12g}\n'
+                )
+
+        max_abs = max([item["low_abs"] for item in items] + [item["high_abs"] for item in items] + [1e-12])
+        xmax = max_abs * 1.12
+        xmin = -xmax
+        gp = (
+            'set terminal pngcairo size 1500,900 enhanced font "Arial,18"\n'
+            f'set output "{png_path.name}"\n'
+            'set datafile separator whitespace\n'
+            'set style fill solid 0.82 border rgb "black"\n'
+            'unset key\n'
+            'unset title\n'
+            'set grid x\n'
+            'set style line 1 lc rgb "#BDBDBD"\n'
+            'set style line 2 lc rgb "#F28E2B"\n'
+            'set xlabel "Calculated MSE vs deterministic time series"\n'
+            'set ylabel "Parameters"\n'
+            f'set xrange [{xmin:.12g}:{xmax:.12g}]\n'
+            f'set yrange [0:{len(items)+1}]\n'
+            'set xzeroaxis lw 2 lc rgb "black"\n'
+            'set tics out\n'
+            'set border lw 1.2\n'
+            'set format x "%g"\n'
+            f'plot "{dat_path.name}" using 6:1:7:(0.33):ytic(2) with boxxyerrorbars ls 1, \\\n'
+            f'     "{dat_path.name}" using 8:1:9:(0.33) with boxxyerrorbars ls 2\n'
+        )
+        gp_path.write_text(gp, encoding="utf-8")
+        print(f"[INFO] Wrote calculated-MSE tornado data: {dat_path.name}")
+        print(f"[INFO] Wrote calculated-MSE tornado gnuplot: {gp_path.name}")
+
+        if make_png and gnuplot:
+            if png_path.exists():
+                try:
+                    png_path.unlink()
+                except OSError:
+                    pass
+            try:
+                subprocess.run([gnuplot, gp_path.name], cwd=outdir, check=True)
+                if png_path.exists() and png_path.stat().st_size > 0:
+                    print(f"[INFO] Wrote calculated-MSE tornado PNG by gnuplot: {png_path.name} ({png_path.stat().st_size} bytes)")
+                else:
+                    print(f"[WARN] Calculated-MSE tornado PNG is empty or missing after gnuplot: {png_path.name}")
+            except subprocess.CalledProcessError as exc:
+                print(f"[WARN] gnuplot failed for calculated-MSE tornado {gp_path}: {exc}")
+
 def write_mse_log_sensitivity_plots(
     root: Path,
     runs: List[RunData],
@@ -832,15 +1129,8 @@ def write_mse_log_sensitivity_plots(
 ) -> None:
     """
     Separate non-overwriting plots for d(ln(MSE))/d(ln(p)).
-    Files use tornado_mse_logsens_* and plot_tornado_mse_logsens_* prefixes.
-    This keeps these MSE-based tornado diagrams easy to find and separate from
-    the deterministic-output tornado diagrams.
-
-    If MSE is zero, ln(MSE) is mathematically undefined. In practice,
-    OpenHydroQual can write exact zero MSE for perfect/empty fits, so this
-    function uses a very small positive floor only for the logarithm and records
-    that in the output CSV. If all MSE values are zero, all sensitivities become
-    zero and the CSV/PNG are still written with a clear warning.
+    Files use tornado_mse_logsens_* and plot_tornado_mse_logsens_* prefixes only.
+    Existing tornado_* files are not touched.
     """
     gnuplot = shutil.which("gnuplot")
     det_ohq = find_ohq_file(root / deterministic.folder, ohq_name)
@@ -858,27 +1148,7 @@ def write_mse_log_sensitivity_plots(
         if ohq is not None:
             run_param_values[run.folder] = read_ohq_parameter_values(ohq)
 
-    # Determine a positive floor for log(MSE). This prevents empty outputs when
-    # fit_measures.txt contains zeros. The original MSE values are still written.
-    positive_mse_values: List[float] = []
-    for run in runs:
-        for outname in outputs:
-            v = run.fit.get(outname, {}).get("MSE", float("nan"))
-            if math.isfinite(v) and v > 0:
-                positive_mse_values.append(v)
-
-    if positive_mse_values:
-        mse_log_floor = max(min(positive_mse_values) * 1.0e-6, 1.0e-300)
-    else:
-        mse_log_floor = 1.0e-300
-        print("[WARN] All selected MSE values are zero/non-positive. "
-              "d(ln(MSE))/d(ln(p)) is not physically meaningful; "
-              "writing zero/floored diagnostic tornado outputs.")
-
-    print(f"[INFO] MSE log floor used only for logarithms: {mse_log_floor:.3e}")
-
     rows = []
-    skipped_mse = 0
     for run in runs:
         side = side_label(run.side)
         if side not in {"Low", "High"}:
@@ -896,16 +1166,11 @@ def write_mse_log_sensitivity_plots(
             mse0 = deterministic.fit.get(outname, {}).get("MSE", float("nan"))
             msei = run.fit.get(outname, {}).get("MSE", float("nan"))
             if not (math.isfinite(mse0) and math.isfinite(msei)):
-                skipped_mse += 1
                 continue
-
-            mse0_eff = mse0 if mse0 > 0 else mse_log_floor
-            msei_eff = msei if msei > 0 else mse_log_floor
-            floor_used = (mse0 <= 0) or (msei <= 0)
-
-            sens = (math.log(msei_eff) - math.log(mse0_eff)) / (math.log(pi) - math.log(p0))
+            if mse0 <= 0 or msei <= 0:
+                continue
+            sens = (math.log(msei) - math.log(mse0)) / (math.log(pi) - math.log(p0))
             if not math.isfinite(sens):
-                skipped_mse += 1
                 continue
             rows.append({
                 "output": outname,
@@ -916,30 +1181,19 @@ def write_mse_log_sensitivity_plots(
                 "pi": pi,
                 "MSE0": mse0,
                 "MSEi": msei,
-                "MSE0_log_used": mse0_eff,
-                "MSEi_log_used": msei_eff,
-                "MSE_log_floor": mse_log_floor,
-                "floor_used": "yes" if floor_used else "no",
                 "dlnMSE_dlnP": sens,
             })
 
-    if skipped_mse:
-        print(f"[WARN] MSE log-sensitivity skipped {skipped_mse} rows with missing/invalid MSE values.")
-
     csv_path = outdir / "tornado_mse_logsens.csv"
     with csv_path.open("w", newline="", encoding="utf-8") as f:
-        fieldnames = [
-            "output", "parameter", "side", "folder", "p0", "pi",
-            "MSE0", "MSEi", "MSE0_log_used", "MSEi_log_used",
-            "MSE_log_floor", "floor_used", "dlnMSE_dlnP"
-        ]
+        fieldnames = ["output", "parameter", "side", "folder", "p0", "pi", "MSE0", "MSEi", "dlnMSE_dlnP"]
         w = csv.DictWriter(f, fieldnames=fieldnames)
         w.writeheader()
         w.writerows(rows)
     print(f"[INFO] Wrote MSE log-sensitivity table: {csv_path.name}")
 
     if not rows:
-        print("[WARN] MSE log-sensitivity produced no rows. Check fit_measures.txt and parameter values in OHQ files.")
+        print("[WARN] MSE log-sensitivity produced no rows. ln(MSE) requires MSE > 0 in fit_measures.txt.")
         return
 
     grouped: Dict[Tuple[str, str], Dict[str, dict]] = {}
@@ -976,14 +1230,14 @@ def write_mse_log_sensitivity_plots(
                 y = n - i
                 low_abs = abs(item["low"]) if math.isfinite(item["low"]) else 0.0
                 high_abs = abs(item["high"]) if math.isfinite(item["high"]) else 0.0
-                low_half = max(low_abs * 0.5, 1e-6)
-                high_half = max(high_abs * 0.5, 1e-6)
+                low_half = max(low_abs * 0.5, 1e-14)
+                high_half = max(high_abs * 0.5, 1e-14)
                 low_center = -low_half
                 high_center = high_half
                 label = item["label"].replace('"', "'")
                 f.write(f'{y} "{label}" {item["low"]:.12g} {item["high"]:.12g} {item["span_abs"]:.12g} {low_center:.12g} {low_half:.12g} {high_center:.12g} {high_half:.12g}\n')
 
-        max_abs = max([abs(item["low"]) for item in items if math.isfinite(item["low"])] + [abs(item["high"]) for item in items if math.isfinite(item["high"])] + [1e-6])
+        max_abs = max([abs(item["low"]) for item in items if math.isfinite(item["low"])] + [abs(item["high"]) for item in items if math.isfinite(item["high"])] + [1e-12])
         xmax = max_abs * 1.12
         xmin = -xmax
         gp = (
@@ -1105,6 +1359,8 @@ def main() -> None:
 
     write_fit_tables(runs, outputs, outdir)
     write_summary(runs, outputs, outdir, deterministic)
+    write_calculated_fit_tables(runs, outputs, outdir, deterministic)
+    write_calculated_mse_tornado_plots(outputs, outdir, make_png=(not args.no_gnuplot))
     combined = write_combined_timeseries(runs, outputs, outdir, deterministic)
     write_rank_table(outdir / "sensitivity_vs_deterministic.csv", outdir)
     write_gnuplot_scripts(runs, outputs, combined, outdir, make_png=(not args.no_gnuplot))
@@ -1139,6 +1395,11 @@ def main() -> None:
     print("     rank_sensitivity.csv")
     print("     fit_measures_named.csv")
     print("     fit_measures_selected.csv")
+    print("     calculated_metrics_vs_deterministic.csv")
+    print("     calculated_metrics_selected.csv")
+    print("     tornado_calc_mse.csv")
+    for o in outputs:
+        print(f"     tornado_calc_mse_{clean_name_for_file(o)}.png")
     for tornado_metric in tornado_metrics:
         print(f"     tornado_{tornado_metric}.csv")
     if not args.no_mse_log_sensitivity:

@@ -17,11 +17,10 @@ set -euo pipefail
 #   rel_delta_auc       relative change in time-integrated response
 #   rmse_vs_det         RMSE against deterministic run
 #
-# Extra non-overwriting MSE sensitivity tornado outputs:
-#   tornado_mse_logsens.csv
-#   tornado_mse_logsens_<output>.dat
-#   tornado_mse_logsens_<output>.png
-#   plot_tornado_mse_logsens_<output>.gp
+# Extra non-overwriting MSE sensitivity outputs:
+#   mse_logsens.csv
+#   mse_logsens_<output>.png
+#   plot_mse_logsens_<output>.gp
 
 ROOT="${1:-.}"
 TORNADO_METRIC="${2:-all}"
@@ -73,10 +72,22 @@ echo "Done"
 echo "============================================================"
 echo "Results folder: ${ROOT}/SA_Results"
 echo "Tornado files:"
-find "${ROOT}/SA_Results" -maxdepth 1 \( -name 'tornado_*' -o -name 'plot_tornado_*' \) -printf '  %f\n' 2>/dev/null | sort || true
+find "${ROOT}/SA_Results" -maxdepth 1 \
+  \( -name 'tornado_*' -o -name 'plot_tornado_*' \) \
+  -printf '  %f\n' 2>/dev/null | sort || true
+
 echo ""
 echo "Tornado PNG sizes:"
 find "${ROOT}/SA_Results" -maxdepth 1 -name 'tornado_*.png' -printf '  %f  %s bytes\n' 2>/dev/null | sort || true
+
 echo ""
-echo "MSE tornado/log-sensitivity files:"
-find "${ROOT}/SA_Results" -maxdepth 1 \( -name 'tornado_mse_logsens*' -o -name 'plot_tornado_mse_logsens*' \) -printf '  %f\n' 2>/dev/null | sort || true
+echo "Calculated deterministic-reference metric files:"
+find "${ROOT}/SA_Results" -maxdepth 1 \
+  \( -name 'calculated_metrics_*' -o -name 'tornado_calc_mse*' -o -name 'plot_tornado_calc_mse*' \) \
+  -printf '  %f\n' 2>/dev/null | sort || true
+
+echo ""
+echo "Fit-file MSE log-sensitivity files:"
+find "${ROOT}/SA_Results" -maxdepth 1 \
+  \( -name 'tornado_mse_logsens*' -o -name 'plot_tornado_mse_logsens*' \) \
+  -printf '  %f\n' 2>/dev/null | sort || true
