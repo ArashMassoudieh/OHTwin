@@ -34,6 +34,10 @@ Main outputs:
     SA_Results/tornado_<metric>_<output>.dat
     SA_Results/plot_tornado_<metric>_<output>.gp
     SA_Results/tornado_<metric>_<output>.png
+    SA_Results/tornado_mse_logsens.csv
+    SA_Results/tornado_mse_logsens_<output>.dat
+    SA_Results/plot_tornado_mse_logsens_<output>.gp
+    SA_Results/tornado_mse_logsens_<output>.png
 
 Example:
     python3 sa_compare_outputs.py --root .
@@ -688,8 +692,8 @@ def write_tornado_tables_and_plots(
                 low_abs = item["low_abs"]
                 high_abs = item["high_abs"]
 
-                low_half = max(low_abs * 0.5, 1e-14)
-                high_half = max(high_abs * 0.5, 1e-14)
+                low_half = max(low_abs * 0.5, 1e-6)
+                high_half = max(high_abs * 0.5, 1e-6)
                 low_center = -low_half
                 high_center = high_half
 
@@ -755,6 +759,273 @@ def write_tornado_tables_and_plots(
             except subprocess.CalledProcessError as exc:
                 print(f"[WARN] gnuplot failed for tornado {gp_path}: {exc}")
 
+
+def normalize_param_name(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", name.lower())
+
+
+def parse_key_value_fields(line: str) -> Dict[str, str]:
+    parts = [x.strip() for x in line.strip().split(';', 1)[-1].split(',')]
+    out: Dict[str, str] = {}
+    for part in parts:
+        if '=' not in part:
+            continue
+        k, v = part.split('=', 1)
+        out[k.strip()] = v.strip()
+    return out
+
+
+def read_ohq_parameter_values(path: Path) -> Dict[str, float]:
+    vals: Dict[str, float] = {}
+    if not path.exists():
+        return vals
+    text = path.read_text(encoding='utf-8', errors='replace')
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line.lower().startswith('create parameter'):
+            continue
+        fields = parse_key_value_fields(line)
+        name = fields.get('name', '')
+        value = fields.get('value', '')
+        if not name:
+            continue
+        v = safe_float(value)
+        if math.isfinite(v):
+            vals[normalize_param_name(name)] = v
+    return vals
+
+
+def find_ohq_file(run_dir: Path, preferred_name: str = "") -> Path | None:
+    if preferred_name:
+        p = run_dir / preferred_name
+        if p.exists():
+            return p
+    files = sorted(run_dir.glob('*.ohq')) or sorted(run_dir.glob('*.OHQ'))
+    return files[0] if files else None
+
+
+def pretty_parameter_label(param: str) -> str:
+    aliases = {
+        "RunoffCoeff": "Runoff coeff.",
+        "Manning'sRoughness": "Manning roughness",
+        "EngineeredSoilKsat": "Engineered soil Ksat",
+        "EngineeredSoilAlpha": "Engineered soil α",
+        "EngineeredSoiln": "Engineered soil n",
+        "NativeSoilKsat": "Native soil Ksat",
+        "NativeSoilAlpha": "Native soil α",
+        "NativeSoiln": "Native soil n",
+        "EvapCoeff": "Evap. coeff.",
+    }
+    if param in aliases:
+        return aliases[param]
+    return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", param).replace("_", " ")
+
+
+def write_mse_log_sensitivity_plots(
+    root: Path,
+    runs: List[RunData],
+    outputs: List[str],
+    outdir: Path,
+    deterministic: RunData,
+    ohq_name: str = "",
+    make_png: bool = True,
+) -> None:
+    """
+    Separate non-overwriting plots for d(ln(MSE))/d(ln(p)).
+    Files use tornado_mse_logsens_* and plot_tornado_mse_logsens_* prefixes.
+    This keeps these MSE-based tornado diagrams easy to find and separate from
+    the deterministic-output tornado diagrams.
+
+    If MSE is zero, ln(MSE) is mathematically undefined. In practice,
+    OpenHydroQual can write exact zero MSE for perfect/empty fits, so this
+    function uses a very small positive floor only for the logarithm and records
+    that in the output CSV. If all MSE values are zero, all sensitivities become
+    zero and the CSV/PNG are still written with a clear warning.
+    """
+    gnuplot = shutil.which("gnuplot")
+    det_ohq = find_ohq_file(root / deterministic.folder, ohq_name)
+    if det_ohq is None:
+        print(f"[WARN] MSE log-sensitivity skipped: no .ohq file found in {root / deterministic.folder}")
+        return
+    det_params = read_ohq_parameter_values(det_ohq)
+    if not det_params:
+        print(f"[WARN] MSE log-sensitivity skipped: no parameter values found in {det_ohq}")
+        return
+
+    run_param_values: Dict[str, Dict[str, float]] = {}
+    for run in runs:
+        ohq = find_ohq_file(root / run.folder, ohq_name)
+        if ohq is not None:
+            run_param_values[run.folder] = read_ohq_parameter_values(ohq)
+
+    # Determine a positive floor for log(MSE). This prevents empty outputs when
+    # fit_measures.txt contains zeros. The original MSE values are still written.
+    positive_mse_values: List[float] = []
+    for run in runs:
+        for outname in outputs:
+            v = run.fit.get(outname, {}).get("MSE", float("nan"))
+            if math.isfinite(v) and v > 0:
+                positive_mse_values.append(v)
+
+    if positive_mse_values:
+        mse_log_floor = max(min(positive_mse_values) * 1.0e-6, 1.0e-300)
+    else:
+        mse_log_floor = 1.0e-300
+        print("[WARN] All selected MSE values are zero/non-positive. "
+              "d(ln(MSE))/d(ln(p)) is not physically meaningful; "
+              "writing zero/floored diagnostic tornado outputs.")
+
+    print(f"[INFO] MSE log floor used only for logarithms: {mse_log_floor:.3e}")
+
+    rows = []
+    skipped_mse = 0
+    for run in runs:
+        side = side_label(run.side)
+        if side not in {"Low", "High"}:
+            continue
+        pkey = normalize_param_name(run.param)
+        p0 = det_params.get(pkey, float("nan"))
+        pi = run_param_values.get(run.folder, {}).get(pkey, float("nan"))
+        if not (math.isfinite(p0) and math.isfinite(pi)):
+            print(f"[WARN] MSE log-sensitivity: missing parameter value for {run.folder} / {run.param}")
+            continue
+        if p0 <= 0 or pi <= 0 or abs(math.log(pi) - math.log(p0)) < 1e-30:
+            print(f"[WARN] MSE log-sensitivity: invalid/unchanged p for {run.folder} / {run.param}: p0={p0}, pi={pi}")
+            continue
+        for outname in outputs:
+            mse0 = deterministic.fit.get(outname, {}).get("MSE", float("nan"))
+            msei = run.fit.get(outname, {}).get("MSE", float("nan"))
+            if not (math.isfinite(mse0) and math.isfinite(msei)):
+                skipped_mse += 1
+                continue
+
+            mse0_eff = mse0 if mse0 > 0 else mse_log_floor
+            msei_eff = msei if msei > 0 else mse_log_floor
+            floor_used = (mse0 <= 0) or (msei <= 0)
+
+            sens = (math.log(msei_eff) - math.log(mse0_eff)) / (math.log(pi) - math.log(p0))
+            if not math.isfinite(sens):
+                skipped_mse += 1
+                continue
+            rows.append({
+                "output": outname,
+                "parameter": run.param,
+                "side": side,
+                "folder": run.folder,
+                "p0": p0,
+                "pi": pi,
+                "MSE0": mse0,
+                "MSEi": msei,
+                "MSE0_log_used": mse0_eff,
+                "MSEi_log_used": msei_eff,
+                "MSE_log_floor": mse_log_floor,
+                "floor_used": "yes" if floor_used else "no",
+                "dlnMSE_dlnP": sens,
+            })
+
+    if skipped_mse:
+        print(f"[WARN] MSE log-sensitivity skipped {skipped_mse} rows with missing/invalid MSE values.")
+
+    csv_path = outdir / "tornado_mse_logsens.csv"
+    with csv_path.open("w", newline="", encoding="utf-8") as f:
+        fieldnames = [
+            "output", "parameter", "side", "folder", "p0", "pi",
+            "MSE0", "MSEi", "MSE0_log_used", "MSEi_log_used",
+            "MSE_log_floor", "floor_used", "dlnMSE_dlnP"
+        ]
+        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w.writeheader()
+        w.writerows(rows)
+    print(f"[INFO] Wrote MSE log-sensitivity table: {csv_path.name}")
+
+    if not rows:
+        print("[WARN] MSE log-sensitivity produced no rows. Check fit_measures.txt and parameter values in OHQ files.")
+        return
+
+    grouped: Dict[Tuple[str, str], Dict[str, dict]] = {}
+    for r in rows:
+        grouped.setdefault((r["output"], r["parameter"]), {})[r["side"]] = r
+
+    for outname in outputs:
+        items = []
+        for (o, param), d in grouped.items():
+            if o != outname:
+                continue
+            low = d.get("Low")
+            high = d.get("High")
+            low_val = float(low["dlnMSE_dlnP"]) if low else float("nan")
+            high_val = float(high["dlnMSE_dlnP"]) if high else float("nan")
+            vals = [v for v in (low_val, high_val) if math.isfinite(v)]
+            if not vals:
+                continue
+            span_abs = abs(high_val - low_val) if math.isfinite(low_val) and math.isfinite(high_val) else max(abs(v) for v in vals)
+            items.append({"parameter": param, "label": pretty_parameter_label(param), "low": low_val, "high": high_val, "span_abs": span_abs})
+        items.sort(key=lambda x: x["span_abs"], reverse=True)
+        if not items:
+            print(f"[WARN] No MSE log-sensitivity items for output: {outname}")
+            continue
+
+        slug = clean_name_for_file(outname)
+        dat_path = outdir / f"tornado_mse_logsens_{slug}.dat"
+        gp_path = outdir / f"plot_tornado_mse_logsens_{slug}.gp"
+        png_path = outdir / f"tornado_mse_logsens_{slug}.png"
+        with dat_path.open("w", encoding="utf-8") as f:
+            f.write("# y label low high abs_span low_center low_half high_center high_half\n")
+            n = len(items)
+            for i, item in enumerate(items):
+                y = n - i
+                low_abs = abs(item["low"]) if math.isfinite(item["low"]) else 0.0
+                high_abs = abs(item["high"]) if math.isfinite(item["high"]) else 0.0
+                low_half = max(low_abs * 0.5, 1e-6)
+                high_half = max(high_abs * 0.5, 1e-6)
+                low_center = -low_half
+                high_center = high_half
+                label = item["label"].replace('"', "'")
+                f.write(f'{y} "{label}" {item["low"]:.12g} {item["high"]:.12g} {item["span_abs"]:.12g} {low_center:.12g} {low_half:.12g} {high_center:.12g} {high_half:.12g}\n')
+
+        max_abs = max([abs(item["low"]) for item in items if math.isfinite(item["low"])] + [abs(item["high"]) for item in items if math.isfinite(item["high"])] + [1e-6])
+        xmax = max_abs * 1.12
+        xmin = -xmax
+        gp = (
+            'set terminal pngcairo size 1500,900 enhanced font "Arial,18"\n'
+            f'set output "{png_path.name}"\n'
+            'set datafile separator whitespace\n'
+            'set style fill solid 0.82 border rgb "black"\n'
+            'unset key\n'
+            'unset title\n'
+            'set grid x\n'
+            'set style line 1 lc rgb "#BDBDBD"\n'
+            'set style line 2 lc rgb "#F28E2B"\n'
+            'set xlabel "d(ln(MSE)) / d(ln(p))"\n'
+            'set ylabel "Parameters"\n'
+            f'set xrange [{xmin:.12g}:{xmax:.12g}]\n'
+            f'set yrange [0:{len(items)+1}]\n'
+            'set xzeroaxis lw 2 lc rgb "black"\n'
+            'set tics out\n'
+            'set border lw 1.2\n'
+            'set format x "%g"\n'
+            f'plot "{dat_path.name}" using 6:1:7:(0.33):ytic(2) with boxxyerrorbars ls 1, \\\n'
+            f'     "{dat_path.name}" using 8:1:9:(0.33) with boxxyerrorbars ls 2\n'
+        )
+        gp_path.write_text(gp, encoding="utf-8")
+        print(f"[INFO] Wrote MSE log-sensitivity data: {dat_path.name}")
+        print(f"[INFO] Wrote MSE log-sensitivity gnuplot: {gp_path.name}")
+        if make_png and gnuplot:
+            if png_path.exists():
+                try:
+                    png_path.unlink()
+                except OSError:
+                    pass
+            try:
+                subprocess.run([gnuplot, gp_path.name], cwd=outdir, check=True)
+                if png_path.exists() and png_path.stat().st_size > 0:
+                    print(f"[INFO] Wrote MSE log-sensitivity PNG by gnuplot: {png_path.name} ({png_path.stat().st_size} bytes)")
+                else:
+                    print(f"[WARN] MSE log-sensitivity PNG is empty or missing after gnuplot: {png_path.name}")
+            except subprocess.CalledProcessError as exc:
+                print(f"[WARN] gnuplot failed for MSE log-sensitivity {gp_path}: {exc}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default=".", help="Root folder containing 1_Deterministic, 2_..., etc.")
@@ -764,6 +1035,8 @@ def main() -> None:
     ap.add_argument("--outdir", default="SA_Results")
     ap.add_argument("--outputs", nargs="+", default=DEFAULT_OUTPUTS)
     ap.add_argument("--no-gnuplot", action="store_true", help="Write CSVs and .gp files but do not run gnuplot.")
+    ap.add_argument("--no-mse-log-sensitivity", action="store_true", help="Do not generate separate d(ln(MSE))/d(ln(p)) plots.")
+    ap.add_argument("--ohq-name", default="", help="Optional OHQ filename inside each run folder. If omitted, the first *.ohq is used.")
     tornado_metric_choices = [
         "rel_delta_min",
         "rel_delta_max",
@@ -853,6 +1126,13 @@ def main() -> None:
             runs, outputs, outdir, metric=tornado_metric, make_png=(not args.no_gnuplot)
         )
 
+    if not args.no_mse_log_sensitivity:
+        write_mse_log_sensitivity_plots(
+            root, runs, outputs, outdir, deterministic,
+            ohq_name=args.ohq_name,
+            make_png=(not args.no_gnuplot),
+        )
+
     print(f"[OK] Wrote results to: {outdir}")
     print("     summary_metrics.csv")
     print("     sensitivity_vs_deterministic.csv")
@@ -861,6 +1141,10 @@ def main() -> None:
     print("     fit_measures_selected.csv")
     for tornado_metric in tornado_metrics:
         print(f"     tornado_{tornado_metric}.csv")
+    if not args.no_mse_log_sensitivity:
+        print("     tornado_mse_logsens.csv")
+        for o in outputs:
+            print(f"     tornado_mse_logsens_{clean_name_for_file(o)}.png")
     for o in outputs:
         print(f"     combined_timeseries_{clean_name_for_file(o)}.csv")
         print(f"     plot_{clean_name_for_file(o)}.gp")
