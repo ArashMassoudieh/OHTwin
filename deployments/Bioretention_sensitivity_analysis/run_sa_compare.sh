@@ -17,10 +17,13 @@ set -euo pipefail
 #   rel_delta_auc       relative change in time-integrated response
 #   rmse_vs_det         RMSE against deterministic run
 #
-# Extra non-overwriting MSE sensitivity outputs:
-#   mse_logsens.csv
-#   mse_logsens_<output>.png
-#   plot_mse_logsens_<output>.gp
+# Extra non-overwriting MSE outputs:
+#   calculated_metrics_vs_deterministic.csv
+#   calculated_metrics_selected.csv
+#   tornado_calc_mse.csv
+#   tornado_calc_mse_<output>.png
+#   tornado_mse_logsens.csv
+#   tornado_mse_logsens_<output>.png
 
 ROOT="${1:-.}"
 TORNADO_METRIC="${2:-all}"
@@ -71,6 +74,7 @@ echo "============================================================"
 echo "Done"
 echo "============================================================"
 echo "Results folder: ${ROOT}/SA_Results"
+echo ""
 echo "Tornado files:"
 find "${ROOT}/SA_Results" -maxdepth 1 \
   \( -name 'tornado_*' -o -name 'plot_tornado_*' \) \
