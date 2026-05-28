@@ -674,6 +674,91 @@ def write_mse_log_sensitivity_plots(root: Path, runs: List[RunData], outputs: Li
     write_generic_tornado_from_csv(csv_path, outputs, outdir, "dlnMSE_dlnP", "tornado_mse_logsens_summary.csv", "tornado_mse_logsens", "d(ln(MSE)) / d(ln(p))", make_png)
 
 
+
+def write_noisy_mse_log_sensitivity_plots(root: Path, runs: List[RunData], outputs: List[str], outdir: Path, deterministic: RunData, ohq_name: str = "", make_png: bool = True) -> None:
+    """
+    Same formula as write_mse_log_sensitivity_plots, but writes a separate
+    output family for the case where fit_measures.txt was computed against
+    the SAME noisy deterministic observation set:
+
+        MSE0 = MSE(deterministic simulation, noisy deterministic observations)
+        MSEi = MSE(perturbed simulation,     noisy deterministic observations)
+
+    Files are intentionally named differently so the legacy fit-file
+    log-sensitivity outputs are kept unchanged.
+    """
+    det_ohq = find_ohq_file(root / deterministic.folder, ohq_name)
+    if det_ohq is None:
+        print(f"[WARN] Noisy MSE log-sensitivity skipped: no .ohq file found in {root / deterministic.folder}")
+        return
+    det_params = read_ohq_parameter_values(det_ohq)
+    if not det_params:
+        print(f"[WARN] Noisy MSE log-sensitivity skipped: no parameter values found in {det_ohq}")
+        return
+
+    run_param_values = {}
+    for run in runs:
+        ohq = find_ohq_file(root / run.folder, ohq_name)
+        if ohq is not None:
+            run_param_values[run.folder] = read_ohq_parameter_values(ohq)
+
+    rows = []
+    for run in runs:
+        side = side_label(run.side)
+        if side not in {"Low", "High"}:
+            continue
+        pkey = normalize_param_name(run.param)
+        p0 = det_params.get(pkey, float("nan"))
+        pi = run_param_values.get(run.folder, {}).get(pkey, float("nan"))
+        if not (math.isfinite(p0) and math.isfinite(pi)):
+            print(f"[WARN] Noisy MSE log-sensitivity: missing parameter value for {run.folder} / {run.param}")
+            continue
+        if p0 <= 0 or pi <= 0 or abs(math.log(pi) - math.log(p0)) < 1e-30:
+            print(f"[WARN] Noisy MSE log-sensitivity: invalid/unchanged p for {run.folder} / {run.param}: p0={p0}, pi={pi}")
+            continue
+        for outname in outputs:
+            mse0 = deterministic.fit.get(outname, {}).get("MSE", float("nan"))
+            msei = run.fit.get(outname, {}).get("MSE", float("nan"))
+            if not (math.isfinite(mse0) and math.isfinite(msei)):
+                continue
+            if mse0 <= 0 or msei <= 0:
+                print(f"[WARN] Cannot compute noisy ln(MSE): {run.folder}, {outname}, MSE0={mse0}, MSEi={msei}")
+                continue
+            sens = (math.log(msei) - math.log(mse0)) / (math.log(pi) - math.log(p0))
+            if math.isfinite(sens):
+                rows.append({
+                    "folder": run.folder,
+                    "parameter": run.param,
+                    "side": side,
+                    "output": outname,
+                    "p0": p0,
+                    "pi": pi,
+                    "MSE0_noisy_obs": mse0,
+                    "MSEi_noisy_obs": msei,
+                    "noisy_dlnMSE_dlnP": sens,
+                })
+
+    csv_path = outdir / "tornado_noisy_mse_logsens.csv"
+    with csv_path.open("w", newline="", encoding="utf-8") as f:
+        fieldnames = ["folder", "parameter", "side", "output", "p0", "pi", "MSE0_noisy_obs", "MSEi_noisy_obs", "noisy_dlnMSE_dlnP"]
+        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w.writeheader()
+        w.writerows(rows)
+    print(f"[INFO] Wrote noisy MSE log-sensitivity table: {csv_path.name}")
+    if not rows:
+        print("[WARN] Noisy MSE log-sensitivity produced no rows. ln(MSE) requires MSE > 0 in fit_measures.txt.")
+        return
+    write_generic_tornado_from_csv(
+        csv_path,
+        outputs,
+        outdir,
+        "noisy_dlnMSE_dlnP",
+        "tornado_noisy_mse_logsens_summary.csv",
+        "tornado_noisy_mse_logsens",
+        "Noisy-observation d(ln(MSE)) / d(ln(p))",
+        make_png,
+    )
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default=".", help="Root folder containing 1_Deterministic, 2_..., etc.")
@@ -684,6 +769,7 @@ def main() -> None:
     ap.add_argument("--outputs", nargs="+", default=DEFAULT_OUTPUTS)
     ap.add_argument("--no-gnuplot", action="store_true")
     ap.add_argument("--no-mse-log-sensitivity", action="store_true")
+    ap.add_argument("--no-noisy-mse-log-sensitivity", action="store_true", help="Skip separate noisy-observation fit-file log-sensitivity outputs.")
     ap.add_argument("--ohq-name", default="")
     choices = ["rel_delta_min", "rel_delta_max", "rel_delta_mean", "rel_delta_auc", "rmse_vs_det", "max_abs_diff_vs_det"]
     ap.add_argument("--tornado-metric", default=None, choices=choices)
@@ -744,6 +830,9 @@ def main() -> None:
     if not args.no_mse_log_sensitivity:
         write_mse_log_sensitivity_plots(root, runs, outputs, outdir, deterministic, ohq_name=args.ohq_name, make_png=make_png)
 
+    if not args.no_noisy_mse_log_sensitivity:
+        write_noisy_mse_log_sensitivity_plots(root, runs, outputs, outdir, deterministic, ohq_name=args.ohq_name, make_png=make_png)
+
     print(f"[OK] Wrote results to: {outdir}")
     print("     summary_metrics.csv")
     print("     sensitivity_vs_deterministic.csv")
@@ -761,6 +850,11 @@ def main() -> None:
         print("     tornado_mse_logsens.csv")
         for o in outputs:
             print(f"     tornado_mse_logsens_{clean_name_for_file(o)}.png")
+    if not args.no_noisy_mse_log_sensitivity:
+        print("     tornado_noisy_mse_logsens.csv")
+        print("     tornado_noisy_mse_logsens_summary.csv")
+        for o in outputs:
+            print(f"     tornado_noisy_mse_logsens_{clean_name_for_file(o)}.png")
     for o in outputs:
         print(f"     combined_timeseries_{clean_name_for_file(o)}.csv")
         print(f"     plot_{clean_name_for_file(o)}.gp")
