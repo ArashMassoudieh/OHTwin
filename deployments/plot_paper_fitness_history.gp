@@ -25,6 +25,12 @@ set datafile missing "nan"
 infile  = "Bioretention_assimilation/outputs/calibration/fitness_history.csv"
 outfile = "paper_fitness_history.png"
 
+if (!exists("drift")) drift = 0
+if (drift) {
+    infile  = "Bioretention_assimilation_drift/outputs/calibration/fitness_history.csv"
+    outfile = "paper_fitness_history_drift.png"
+}
+
 # --- output canvas ----------------------------------------------------------
 # Tall portrait for three stacked panels; larger font for paper rendering.
 set terminal pngcairo size 1100,1400 enhanced font "Helvetica,18"
@@ -129,8 +135,13 @@ set format y "%g"
 # calibration has converged and only moves in response to genuine fit
 # changes. Column 17 is `likelihood / sum_w_total`. The first cycle has
 # sum_w ~ 1 and lik/w is meaningless; suppress it via a using-filter.
-set xlabel "Simulated date" offset 0,-0.5
 set format x "%Y-%m"
+# Place a tic every 3 months (3 * 30.4375 days, in seconds) so labels
+# don't collide on the narrow bottom panel.
+set xtics 7889400
+set xlabel "Simulated date" offset 0,-0.5
+# Add bottom margin so x labels and xlabel have room.
+set bmargin 5
 set ylabel "Likelihood / effective N" offset 1,0
 set yrange [*:*]
 set ytics autofreq

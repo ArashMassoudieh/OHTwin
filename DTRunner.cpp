@@ -912,7 +912,7 @@ StageResult DTRunner::runStage(StageKind kind,
 
     ohqSystem->CalcAllInitialValues();
     std::cout << "[Runner] Solving...\n";
-    ohqSystem->Solve();
+    ohqSystem->Solve(true);
 
     // ------------------------------------------------------------------
     // Outputs

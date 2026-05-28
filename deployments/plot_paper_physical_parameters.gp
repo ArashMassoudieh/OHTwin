@@ -22,6 +22,12 @@ set datafile missing "nan"
 infile  = "Bioretention_assimilation/outputs/calibration/parameter_history.csv"
 outfile = "paper_physical_parameters.png"
 
+if (!exists("drift")) drift = 0
+if (drift) {
+    infile  = "Bioretention_assimilation_drift/outputs/calibration/parameter_history.csv"
+    outfile = "paper_physical_parameters_drift.png"
+}
+
 # --- output canvas ----------------------------------------------------------
 # Tall portrait for four stacked panels.
 set terminal pngcairo size 1100,1500 enhanced font "Helvetica,18"
@@ -117,7 +123,12 @@ plot \
 # Panel (d): NativeSoilKsat -- bottom panel, gets x-axis labels
 # =============================================================================
 set format x "%Y-%m"
+# Place a tic every 3 months (3 * 30.4375 days, in seconds) so labels
+# don't collide on the narrow bottom panel.
+set xtics 7889400
 set xlabel "Simulated date" offset 0,-0.5
+# Add bottom margin so x labels and xlabel have room.
+set bmargin 5
 set ylabel "K_{sat,nat} (m/day)" offset 1,0
 set yrange [0:*]
 set ytics autofreq

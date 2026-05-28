@@ -6,8 +6,8 @@
 # calibrated parameter across assimilation cycles, with a horizontal
 # reference line at the truth value (twin-experiment validation).
 #
-#   (a) EngineeredSoilKsat  (truth: 8.0)
-#   (b) NativeSoilAlpha     (truth: 0.9)
+#   (a) EngineeredSoilKsat  (truth: 10.0)
+#   (b) NativeSoilAlpha     (truth: 1.0)
 #   (c) NativeSoilKsat      (truth: 0.01)
 #
 # Panel boxes are placed with `set lmargin/rmargin/tmargin/bmargin at
@@ -17,11 +17,23 @@
 #
 # Run from within the deployment folder:
 #     gnuplot plot_paper_parameter_history.gp
+# For the drift case (uses Bioretention_assimilation_drift, writes
+# paper_parameter_history_drift.png):
+#     gnuplot -e "drift=1" plot_paper_parameter_history.gp
 #
-# Output: paper_parameter_history.png
+# Output: paper_parameter_history[_drift].png
+
+if (!exists("drift")) drift = 0
+if (drift) {
+    assim_dir = "Bioretention_assimilation_drift"
+    suffix    = "_drift"
+} else {
+    assim_dir = "Bioretention_assimilation"
+    suffix    = ""
+}
 
 # ---------- file path ----------
-param_file = "Bioretention_assimilation/outputs/calibration/parameter_history.csv"
+param_file = assim_dir . "/outputs/calibration/parameter_history.csv"
 
 # ---------- truth values (edit these to match your synthetic-truth setup) ----------
 truth_EngK   = 10.0
@@ -33,7 +45,7 @@ set datafile commentschars "#c"   # skip header (starts with 'c' for "cycle")
 
 # ---------- canvas ----------
 set terminal pngcairo size 1800,1500 enhanced font "Helvetica,22"
-set output "paper_parameter_history.png"
+set output "paper_parameter_history" . suffix . ".png"
 
 set multiplot
 
@@ -127,4 +139,4 @@ plot truth_NSKsat with lines ls 2 notitle, \
 unset multiplot
 unset output
 
-print "Wrote paper_parameter_history.png"
+print "Wrote paper_parameter_history" . suffix . ".png"

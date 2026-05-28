@@ -31,6 +31,13 @@ truth_file = "Bioretention_truth/outputs/selected_output.csv"
 assim_file = "Bioretention_assimilation/outputs/selected_output.csv"
 outfile    = "paper_truth_vs_assim_diagnostics.png"
 
+if (!exists("drift")) drift = 0
+if (drift) {
+    truth_file = "Bioretention_truth_drift/outputs/selected_output.csv"
+    assim_file = "Bioretention_assimilation_drift/outputs/selected_output.csv"
+    outfile    = "paper_truth_vs_assim_diagnostics_drift.png"
+}
+
 # --- output canvas ---------------------------------------------------------
 set terminal pngcairo size 1400,950 enhanced font "Helvetica,18"
 set output outfile

@@ -37,6 +37,14 @@ assim_file      = "Bioretention_assimilation/outputs/selected_output.csv"
 reanalysis_file = "Bioretention_assimilation/outputs/reanalysis_output.csv"
 outfile         = "paper_soilmoisture_three_views.png"
 
+if (!exists("drift")) drift = 0
+if (drift) {
+    truth_file      = "Bioretention_truth_drift/outputs/selected_output.csv"
+    assim_file      = "Bioretention_assimilation_drift/outputs/selected_output.csv"
+    reanalysis_file = "Bioretention_assimilation_drift/outputs/reanalysis_output.csv"
+    outfile         = "paper_soilmoisture_three_views_drift.png"
+}
+
 # --- output canvas --------------------------------------------------------
 set terminal pngcairo size 1400,650 enhanced font "Helvetica,18"
 set output outfile

@@ -27,6 +27,12 @@ set datafile missing "nan"
 infile  = "Bioretention_assimilation/outputs/calibration/parameter_history.csv"
 outfile = "paper_sigma_estimates.png"
 
+if (!exists("drift")) drift = 0
+if (drift) {
+    infile  = "Bioretention_assimilation_drift/outputs/calibration/parameter_history.csv"
+    outfile = "paper_sigma_estimates_drift.png"
+}
+
 # --- output canvas ----------------------------------------------------------
 set terminal pngcairo size 1100,650 enhanced font "Helvetica,18"
 set output outfile
@@ -36,6 +42,7 @@ epoch(d) = (d - 25569.0) * 86400.0
 set xdata time
 set timefmt "%s"
 set format x "%Y-%m"
+set xtics 10368000   # 120 days ≈ 4 months
 set xlabel "Simulated date" offset 0,-0.5
 
 # --- y-axis: log-scaled ----------------------------------------------------
