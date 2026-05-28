@@ -24,6 +24,9 @@ set -euo pipefail
 #   tornado_calc_mse_<output>.png
 #   tornado_mse_logsens.csv
 #   tornado_mse_logsens_<output>.png
+#   tornado_noisy_mse_logsens.csv
+#   tornado_noisy_mse_logsens_summary.csv
+#   tornado_noisy_mse_logsens_<output>.png
 
 ROOT="${1:-.}"
 TORNADO_METRIC="${2:-all}"
@@ -94,4 +97,10 @@ echo ""
 echo "Fit-file MSE log-sensitivity files:"
 find "${ROOT}/SA_Results" -maxdepth 1 \
   \( -name 'tornado_mse_logsens*' -o -name 'plot_tornado_mse_logsens*' \) \
+  -printf '  %f\n' 2>/dev/null | sort || true
+
+echo ""
+echo "Noisy-observation fit-file MSE log-sensitivity files:"
+find "${ROOT}/SA_Results" -maxdepth 1 \
+  \( -name 'tornado_noisy_mse_logsens*' -o -name 'plot_tornado_noisy_mse_logsens*' \) \
   -printf '  %f\n' 2>/dev/null | sort || true
