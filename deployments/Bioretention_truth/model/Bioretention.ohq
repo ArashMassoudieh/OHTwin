@@ -1,9 +1,9 @@
-loadtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/main_components.json
-addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/main_components.json
-addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/unsaturated_soil.json
-addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/Pond_Plugin.json
-addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/Sewer_system.json
-addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/soil_evapotranspiration_models.json
+loadtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/main_components.json
+addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/main_components.json
+addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/unsaturated_soil.json
+addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/Pond_Plugin.json
+addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/Sewer_system.json
+addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/soil_evapotranspiration_models.json
 setvalue; object=system, quantity=acceptance_rate, value=0.15
 setvalue; object=system, quantity=add_noise_to_realizations, value=No
 setvalue; object=system, quantity=continue_based_on_file_name, value=
@@ -51,7 +51,7 @@ create block;type=Catch basin,_height=200,_width=200,area=1,bottom_elevation=-1.
 create block;type=Catchment,Evapotranspiration=,ManningCoeff=0.01,Precipitation=Rain,Runoff_coeff=1,Slope=0,Width=0,_height=200,_width=200,area=1,depression_storage=0,depth=0.863691,elevation=0,inflow=,loss_coefficient=0,name=Catchment (1),x=2558,y=514
 create block;type=Soil,Evapotranspiration=Evapotranspiration_Penman (Soil),K_sat_original=10,K_sat_scale_factor=1,MC_to_EC_Threshold_Moisture=0,MC_to_EC_coefficient=0,MC_to_EC_exponent=0,_height=200,_width=200,act_X=0,act_Y=0,alpha=1,aniso_ratio=1,area=100,bottom_elevation=-0.6,depth=0.6,n=1.41,name=Engineered soil,specific_storage=0.01,theta=0.324614,theta_res=0.05,theta_sat=0.4,x=1000,y=900
 create block;type=fixed_head,Storage=100111,_height=200,_width=800,head=-3,name=Groundwater,x=1000,y=2700
-create block;type=Catchment,Evapotranspiration=,ManningCoeff=0.011,Precipitation=Rain,Runoff_coeff=1,Slope=0.01,Width=50,_height=200,_width=500,area=2000,depression_storage=0,depth=8.02361e-08,elevation=0,inflow=,loss_coefficient=0,name=Impervious contributing catchment,x=500,y=400
+create block;type=Catchment,Evapotranspiration=,ManningCoeff=0.011,Precipitation=Rain,Runoff_coeff=0.8,Slope=0.01,Width=50,_height=200,_width=500,area=2500,depression_storage=0,depth=8.02361e-08,elevation=0,inflow=,loss_coefficient=0,name=Impervious contributing catchment,x=500,y=400
 create block;type=Soil,Evapotranspiration=,K_sat_original=0.01,K_sat_scale_factor=1,MC_to_EC_Threshold_Moisture=0,MC_to_EC_coefficient=0,MC_to_EC_exponent=0,_height=200,_width=200,act_X=0,act_Y=0,alpha=1,aniso_ratio=1,area=100,bottom_elevation=-1.86667,depth=0.8,n=1.41,name=Native soil underneath the engineered soil(0:0),specific_storage=0.01,theta=0.385318,theta_res=0.05,theta_sat=0.4,x=1000,y=1500
 create block;type=Soil,Evapotranspiration=,K_sat_original=0.01,K_sat_scale_factor=1,MC_to_EC_Threshold_Moisture=0,MC_to_EC_coefficient=0,MC_to_EC_exponent=0,_height=200,_width=200,act_X=0,act_Y=0,alpha=1,aniso_ratio=1,area=100,bottom_elevation=-2.43333,depth=0.8,n=1.41,name=Native soil underneath the engineered soil(0:1),specific_storage=0.01,theta=0.333835,theta_res=0.05,theta_sat=0.4,x=1000,y=1750
 create block;type=Soil,Evapotranspiration=,K_sat_original=0.01,K_sat_scale_factor=1,MC_to_EC_Threshold_Moisture=0,MC_to_EC_coefficient=0,MC_to_EC_exponent=0,_height=200,_width=200,act_X=0,act_Y=0,alpha=1,aniso_ratio=1,area=100,bottom_elevation=-3,depth=0.8,n=1.41,name=Native soil underneath the engineered soil(0:2),specific_storage=0.01,theta=0.355742,theta_res=0.05,theta_sat=0.4,x=1000,y=2000
