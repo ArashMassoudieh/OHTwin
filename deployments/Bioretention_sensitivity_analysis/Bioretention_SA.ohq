@@ -1,9 +1,9 @@
-loadtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/main_components.json
-addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/main_components.json
-addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/unsaturated_soil.json
-addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/Pond_Plugin.json
-addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/Sewer_system.json
-addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/soil_evapotranspiration_models.json
+loadtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_3-Debug/../../resources/main_components.json
+addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_3-Debug/../../resources/main_components.json
+addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_3-Debug/../../resources/unsaturated_soil.json
+addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_3-Debug/../../resources/Pond_Plugin.json
+addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_3-Debug/../../resources/Sewer_system.json
+addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_3-Debug/../../resources/soil_evapotranspiration_models.json
 setvalue; object=system, quantity=acceptance_rate, value=0.15
 setvalue; object=system, quantity=add_noise_to_realizations, value=No
 setvalue; object=system, quantity=continue_based_on_file_name, value=
@@ -49,7 +49,7 @@ create source;type=Evapotranspiration_Penman (Soil),R_h=Humidity_2010.csv,Temper
 create parameter;type=Parameter,high=1,low=0.6,name=Runoff_Coeff,prior_distribution=normal,value=0.7
 create parameter;type=Parameter,high=0.015,low=0.0095,name=Manning's_Roughness,prior_distribution=normal,value=0.011
 create parameter;type=Parameter,high=20,low=5,name=EngineeredSoilKsat,prior_distribution=log-normal,value=10
-create parameter;type=Parameter,high=1.5,low=0.5,name=EngineeredSoilAlpha,prior_distribution=log-normal,value=1
+create parameter;type=Parameter,high=1.5,low=0.5,name=EngineeredSoilAlpha,prior_distribution=log-normal,value=1.1
 create parameter;type=Parameter,high=1.8,low=1.1,name=EngineeredSoiln,prior_distribution=log-normal,value=1.41
 create parameter;type=Parameter,high=0.1,low=0.009,name=NativeSoilKsat,prior_distribution=log-normal,value=0.01
 create parameter;type=Parameter,high=5,low=0.5,name=NativeSoilAlpha,prior_distribution=log-normal,value=1
@@ -84,10 +84,10 @@ create observation;type=Observation,autocorrelation_time-span=1,comparison_metho
 create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=flow,kernel_Delta0=1,kernel_alpha=1,kernel_tau=1,name=Infiltration rate (m3/day),object=Bioswale pond to soil,observed_data=
 create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=flow,kernel_Delta0=1,kernel_alpha=1,kernel_tau=1,name=Inflow to the pond (m3/day),object=Catchment to bioretention,observed_data=
 create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=flow,kernel_Delta0=1,kernel_alpha=1,kernel_tau=1,name=Overflow (m3/day),object=Overflow,observed_data=
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Weighted Least Squared,error_standard_deviation=1,error_structure=normal,expression=depth,kernel_Delta0=30,kernel_alpha=1,kernel_tau=1,name=Pond water depth (m),object=Pond,observed_data=PondDepthObs_OU_noisy.csv
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Weighted Least Squared,error_standard_deviation=1,error_structure=normal,expression=depth,kernel_Delta0=30,kernel_alpha=1,kernel_tau=1,name=Pond water depth (m),object=Pond,observed_data=
 create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=(Precipitation*1000),kernel_Delta0=1,kernel_alpha=1,kernel_tau=1,name=Precipitation (mm/day),object=Catchment (1),observed_data=
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Weighted Least Squared,error_standard_deviation=1,error_structure=normal,expression=theta,kernel_Delta0=30,kernel_alpha=1,kernel_tau=1,name=Soil Moisture,object=Engineered soil,observed_data=SoilMoistureObs_OU_noisy.csv
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Weighted Least Squared,error_standard_deviation=1,error_structure=normal,expression=flow,kernel_Delta0=30,kernel_alpha=1,kernel_tau=1,name=Underdrain flow (m3/day),object=Underdrain,observed_data=UnderdrainFlowObs_OU_noisy.csv
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Weighted Least Squared,error_standard_deviation=1,error_structure=normal,expression=theta,kernel_Delta0=30,kernel_alpha=1,kernel_tau=1,name=Soil Moisture,object=Engineered soil,observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Weighted Least Squared,error_standard_deviation=1,error_structure=normal,expression=flow,kernel_Delta0=30,kernel_alpha=1,kernel_tau=1,name=Underdrain flow (m3/day),object=Underdrain,observed_data=
 setasparameter; object= Engineered soil, parametername= EngineeredSoilKsat, quantity= K_sat_original
 setasparameter; object= Engineered soil, parametername= EngineeredSoilAlpha, quantity= alpha
 setasparameter; object= Engineered soil, parametername= EngineeredSoiln, quantity= n
