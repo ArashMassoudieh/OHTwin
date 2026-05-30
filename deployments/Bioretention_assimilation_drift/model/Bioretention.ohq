@@ -1,9 +1,9 @@
-loadtemplate; filename = main_components.json
-addtemplate; filename = main_components.json
-addtemplate; filename = unsaturated_soil.json
-addtemplate; filename = Pond_Plugin.json
-addtemplate; filename = Sewer_system.json
-addtemplate; filename = soil_evapotranspiration_models.json
+loadtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/main_components.json
+addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/main_components.json
+addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/unsaturated_soil.json
+addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/Pond_Plugin.json
+addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/Sewer_system.json
+addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/soil_evapotranspiration_models.json
 setvalue; object=system, quantity=acceptance_rate, value=0.15
 setvalue; object=system, quantity=add_noise_to_realizations, value=No
 setvalue; object=system, quantity=continue_based_on_file_name, value=
@@ -46,7 +46,7 @@ setvalue; object=system, quantity=write_interval, value=100
 setvalue; object=system, quantity=write_solution_details, value=No
 create source;type=Precipitation,name=Rain,timeseries=
 create source;type=Evapotranspiration_Penman (Soil),R_h=,Temperature=,gamma=66.8,name=Evapotranspiration_Penman (Soil),solar_radiation=,solar_scale_fact=0.8,wind_scale_fact=0.8,wind_speed=,z0=0.0003,z2=2
-create parameter;type=Parameter,high=20,low=5,name=EngineeredSoilKsat,prior_distribution=log-normal,value=5
+create parameter;type=Parameter,high=20,low=1,name=EngineeredSoilKsat,prior_distribution=log-normal,value=5
 create parameter;type=Parameter,high=0.1,low=0.01,name=NativeSoilKsat,prior_distribution=log-normal,value=0.01
 create parameter;type=Parameter,high=5,low=0.5,name=EngineeredSoilAlpha,prior_distribution=log-normal,value=1
 create parameter;type=Parameter,high=1.8,low=1.2,name=EngineeredSoiln,prior_distribution=normal,value=1.41
