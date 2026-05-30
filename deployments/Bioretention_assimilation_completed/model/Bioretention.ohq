@@ -1,0 +1,100 @@
+loadtemplate; filename = main_components.json
+addtemplate; filename = main_components.json
+addtemplate; filename = unsaturated_soil.json
+addtemplate; filename = Pond_Plugin.json
+addtemplate; filename = Sewer_system.json
+addtemplate; filename = soil_evapotranspiration_models.json
+setvalue; object=system, quantity=acceptance_rate, value=0.15
+setvalue; object=system, quantity=add_noise_to_realizations, value=No
+setvalue; object=system, quantity=continue_based_on_file_name, value=
+setvalue; object=system, quantity=initial_purturbation, value=No
+setvalue; object=system, quantity=initual_purturbation_factor, value=0.05
+setvalue; object=system, quantity=number_of_burnout_samples, value=0
+setvalue; object=system, quantity=number_of_chains, value=8
+setvalue; object=system, quantity=number_of_post_estimate_realizations, value=0
+setvalue; object=system, quantity=number_of_samples, value=1000
+setvalue; object=system, quantity=number_of_threads, value=1
+setvalue; object=system, quantity=perform_global_sensitivity, value=No
+setvalue; object=system, quantity=purturbation_change_scale, value=0.75
+setvalue; object=system, quantity=record_interval, value=1
+setvalue; object=system, quantity=samples_filename, value=mcmc.txt
+setvalue; object=system, quantity=alloutputfile, value=output.txt
+setvalue; object=system, quantity=observed_outputfile, value=observedoutput.txt
+setvalue; object=system, quantity=simulation_end_time, value=40544
+setvalue; object=system, quantity=simulation_start_time, value=40544.7
+setvalue; object=system, quantity=maxpop, value=20
+setvalue; object=system, quantity=ngen, value=4
+setvalue; object=system, quantity=numthreads, value=8
+setvalue; object=system, quantity=outputfile, value=GA_output.txt
+setvalue; object=system, quantity=pcross, value=1
+setvalue; object=system, quantity=pmute, value=0.02
+setvalue; object=system, quantity=shakescale, value=0.05
+setvalue; object=system, quantity=shakescalered, value=0.75
+setvalue; object=system, quantity=c_n_weight, value=1
+setvalue; object=system, quantity=initial_time_step, value=0.01
+setvalue; object=system, quantity=jacobian_method, value=Inverse Jacobian
+setvalue; object=system, quantity=max_timestep_decrease_factor, value=100000
+setvalue; object=system, quantity=max_timestep_increase_factor, value=50
+setvalue; object=system, quantity=maximum_number_of_matrix_inverstions, value=200000
+setvalue; object=system, quantity=maximum_time_allowed, value=86400
+setvalue; object=system, quantity=minimum_timestep, value=1e-06
+setvalue; object=system, quantity=n_threads, value=8
+setvalue; object=system, quantity=nr_timestep_reduction_factor, value=0.75
+setvalue; object=system, quantity=nr_timestep_reduction_factor_fail, value=0.2
+setvalue; object=system, quantity=nr_tolerance, value=0.001
+setvalue; object=system, quantity=write_interval, value=100
+setvalue; object=system, quantity=write_solution_details, value=No
+create source;type=Precipitation,name=Rain,timeseries=
+create source;type=Evapotranspiration_Penman (Soil),R_h=,Temperature=,gamma=66.8,name=Evapotranspiration_Penman (Soil),solar_radiation=,solar_scale_fact=0.8,wind_scale_fact=0.8,wind_speed=,z0=0.0003,z2=2
+create parameter;type=Parameter,high=20,low=5,name=EngineeredSoilKsat,prior_distribution=log-normal,value=5
+create parameter;type=Parameter,high=0.1,low=0.01,name=NativeSoilKsat,prior_distribution=log-normal,value=0.01
+create parameter;type=Parameter,high=5,low=0.5,name=EngineeredSoilAlpha,prior_distribution=log-normal,value=1
+create parameter;type=Parameter,high=1.8,low=1.2,name=EngineeredSoiln,prior_distribution=normal,value=1.41
+create parameter;type=Parameter,high=1,low=0.6,name=RunoffCoeff,prior_distribution=log-normal,value=0.8
+create parameter;type=Parameter,high=1.8,low=1.2,name=NativeSoiln,prior_distribution=log-normal,value=1.41
+create parameter;type=Parameter,high=0.3,low=0.001,name=Std_PondWaterDepth,prior_distribution=log-normal,value=0.1
+create parameter;type=Parameter,high=0.03,low=0.001,name=Std_SoilMoisture,prior_distribution=log-normal,value=0.01
+create parameter;type=Parameter,high=20,low=5,name=Std_UnderdrainFlow,prior_distribution=log-normal,value=0.1
+create block;type=Aggregate_storage_layer,K_sat=1,_height=200,_width=200,area=100,bottom_elevation=-1.3,depth=0.0933002,inflow=,name=Aggregate storage,porosity=0.45,x=1000,y=1200
+create block;type=Catch basin,_height=200,_width=200,area=1,bottom_elevation=-1.6,inflow=,name=Catch Basin,x=1600,y=600
+create block;type=Catchment,Evapotranspiration=,ManningCoeff=0.01,Precipitation=Rain,Runoff_coeff=1,Slope=0,Width=0,_height=200,_width=200,area=1,depression_storage=0,depth=0.863691,elevation=0,inflow=,loss_coefficient=0,name=Catchment (1),x=2558,y=514
+create block;type=Soil,Evapotranspiration=Evapotranspiration_Penman (Soil),K_sat_original=10,K_sat_scale_factor=1,MC_to_EC_Threshold_Moisture=0,MC_to_EC_coefficient=0,MC_to_EC_exponent=0,_height=200,_width=200,act_X=0,act_Y=0,alpha=1,aniso_ratio=1,area=100,bottom_elevation=-0.6,depth=0.6,n=1.41,name=Engineered soil,specific_storage=0.01,theta=0.324614,theta_res=0.05,theta_sat=0.4,x=1000,y=900
+create block;type=fixed_head,Storage=100111,_height=200,_width=800,head=-3,name=Groundwater,x=1000,y=2700
+create block;type=Catchment,Evapotranspiration=,ManningCoeff=0.011,Precipitation=Rain,Runoff_coeff=1,Slope=0.01,Width=50,_height=200,_width=500,area=2500,depression_storage=0,depth=8.02361e-08,elevation=0,inflow=,loss_coefficient=0,name=Impervious contributing catchment,x=204,y=409
+create block;type=Soil,Evapotranspiration=,K_sat_original=0.01,K_sat_scale_factor=1,MC_to_EC_Threshold_Moisture=0,MC_to_EC_coefficient=0,MC_to_EC_exponent=0,_height=200,_width=200,act_X=0,act_Y=0,alpha=1,aniso_ratio=1,area=100,bottom_elevation=-1.86667,depth=0.8,n=1.41,name=Native soil underneath the engineered soil(0:0),specific_storage=0.01,theta=0.385318,theta_res=0.05,theta_sat=0.4,x=1000,y=1500
+create block;type=Soil,Evapotranspiration=,K_sat_original=0.01,K_sat_scale_factor=1,MC_to_EC_Threshold_Moisture=0,MC_to_EC_coefficient=0,MC_to_EC_exponent=0,_height=200,_width=200,act_X=0,act_Y=0,alpha=1,aniso_ratio=1,area=100,bottom_elevation=-2.43333,depth=0.8,n=1.41,name=Native soil underneath the engineered soil(0:1),specific_storage=0.01,theta=0.333835,theta_res=0.05,theta_sat=0.4,x=1000,y=1750
+create block;type=Soil,Evapotranspiration=,K_sat_original=0.01,K_sat_scale_factor=1,MC_to_EC_Threshold_Moisture=0,MC_to_EC_coefficient=0,MC_to_EC_exponent=0,_height=200,_width=200,act_X=0,act_Y=0,alpha=1,aniso_ratio=1,area=100,bottom_elevation=-3,depth=0.8,n=1.41,name=Native soil underneath the engineered soil(0:2),specific_storage=0.01,theta=0.355742,theta_res=0.05,theta_sat=0.4,x=1000,y=2000
+create block;type=Pond,Evapotranspiration=0,Precipitation=Rain,Storage=9.95535e-07,_height=200,_width=200,alpha=250,beta=2,bottom_elevation=0,inflow=,name=Pond,x=900,y=650
+create block;type=fixed_head,Storage=100711,_height=200,_width=200,head=-1.9,name=Receiving water,x=1900,y=700
+create link;from=Aggregate storage,to=Native soil underneath the engineered soil(0:0),type=aggregate_to_soil_link,name=Aggregate to Native Soil(0)
+create link;from=Pond,to=Engineered soil,type=surfacewater_to_soil_link,name=Bioswale pond to soil
+create link;from=Catch Basin,to=Receiving water,type=Sewer_pipe,ManningCoeff=0.011,diameter=0.2,end_elevation=-1.9,length=2,name=Catch basin to Receiving water,start_elevation=-1.5
+create link;from=Impervious contributing catchment,to=Pond,type=Catchment_link,name=Catchment to bioretention
+create link;from=Engineered soil,to=Aggregate storage,type=soil_to_aggregate_link,name=Engineered to aggregate storage
+create link;from=Native soil underneath the engineered soil(0:0),to=Native soil underneath the engineered soil(0:1),type=soil_to_soil_link,name=Native soil underneath the engineered soil(0:0)-Native soil underneath the engineered soil(0:1)
+create link;from=Native soil underneath the engineered soil(0:1),to=Native soil underneath the engineered soil(0:2),type=soil_to_soil_link,name=Native soil underneath the engineered soil(0:1)-Native soil underneath the engineered soil(0:2)
+create link;from=Pond,to=Catch Basin,type=wier,alpha=10000,beta=2.5,crest_elevation=0.2,name=Overflow
+create link;from=Native soil underneath the engineered soil(0:2),to=Groundwater,type=soil_to_fixedhead_link,name=Soil to Groundwater(0)
+create link;from=Aggregate storage,to=Catch Basin,type=Sewer_pipe,ManningCoeff=0.011,diameter=0.2,end_elevation=-0.5,length=10,name=Underdrain,start_elevation=-1.1
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=(0-Evapotranspiration),kernel_Delta0=1,kernel_alpha=1,kernel_tau=1,name=Evaporation,object=Engineered soil,observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=flow,kernel_Delta0=1,kernel_alpha=1,kernel_tau=1,name=Groundwater Recharge (m3/day),object=Soil to Groundwater(0),observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=flow,kernel_Delta0=1,kernel_alpha=1,kernel_tau=1,name=Infiltration rate (m3/day),object=Bioswale pond to soil,observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=flow,kernel_Delta0=1,kernel_alpha=1,kernel_tau=1,name=Inflow to the pond (m3/day),object=Catchment to bioretention,observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=flow,kernel_Delta0=1,kernel_alpha=1,kernel_tau=1,name=Overflow (m3/day),object=Overflow,observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Weighted Least Squared,error_standard_deviation=1,error_structure=normal,expression=depth,kernel_Delta0=30,kernel_alpha=1,kernel_tau=1,name=Pond water depth (m),object=Pond,observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=(Precipitation*1000),kernel_Delta0=1,kernel_alpha=1,kernel_tau=1,name=Precipitation (mm/day),object=Catchment (1),observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Weighted Least Squared,error_standard_deviation=1,error_structure=normal,expression=theta,kernel_Delta0=30,kernel_alpha=1,kernel_tau=1,name=Soil Moisture,object=Engineered soil,observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Weighted Least Squared,error_standard_deviation=1,error_structure=normal,expression=flow,kernel_Delta0=30,kernel_alpha=1,kernel_tau=1,name=Underdrain flow (m3/day),object=Underdrain,observed_data=
+setasparameter; object= Engineered soil, parametername= EngineeredSoilKsat, quantity= K_sat_original
+setasparameter; object= Engineered soil, parametername= EngineeredSoilAlpha, quantity= alpha
+setasparameter; object= Engineered soil, parametername= EngineeredSoiln, quantity= n
+setasparameter; object= Impervious contributing catchment, parametername= RunoffCoeff, quantity= Runoff_coeff
+setasparameter; object= Native soil underneath the engineered soil(0:0), parametername= NativeSoilKsat, quantity= K_sat_original
+setasparameter; object= Native soil underneath the engineered soil(0:0), parametername= NativeSoiln, quantity= n
+setasparameter; object= Native soil underneath the engineered soil(0:1), parametername= NativeSoilKsat, quantity= K_sat_original
+setasparameter; object= Native soil underneath the engineered soil(0:1), parametername= NativeSoiln, quantity= n
+setasparameter; object= Native soil underneath the engineered soil(0:2), parametername= NativeSoilKsat, quantity= K_sat_original
+setasparameter; object= Native soil underneath the engineered soil(0:2), parametername= NativeSoiln, quantity= n
+setasparameter; object= Pond water depth (m), parametername= Std_PondWaterDepth, quantity= error_standard_deviation
+setasparameter; object= Soil Moisture, parametername= Std_SoilMoisture, quantity= error_standard_deviation
+setasparameter; object= Underdrain flow (m3/day), parametername= Std_UnderdrainFlow, quantity= error_standard_deviation
