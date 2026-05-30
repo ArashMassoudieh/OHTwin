@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 1100 760"
+     font-family="Helvetica, Arial, sans-serif">
+
+  <!-- ============ defs: arrow markers ============ -->
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1F4E79"/>
+    </marker>
+    <marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#666666"/>
+    </marker>
+    <marker id="arrow-overflow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#A03020"/>
+    </marker>
+  </defs>
+
+  <!-- ============ background ============ -->
+  <rect width="1100" height="760" fill="white"/>
+
+  <!-- ============ title ============ -->
+  <text x="550" y="34" font-size="22" font-weight="500"
+        text-anchor="middle" fill="#222222">
+    Bioretention cell — block-and-link representation
+  </text>
+
+  <!-- ============ elevation axis (left side) ============ -->
+  <!-- vertical line -->
+  <line x1="92" y1="100" x2="92" y2="690" stroke="#888888" stroke-width="1.2"/>
+  <!-- tick marks at elevations -->
+  <!-- map: surface=0 -> y=200 (top of pond block); -0.6 -> y=300; -1.3 -> y=380;
+       -1.86667 -> y=450; -2.43333 -> y=520; -3.0 -> y=590 -->
+  <g font-size="13" fill="#444444">
+    <line x1="86" y1="200" x2="98" y2="200" stroke="#888888" stroke-width="1.2"/>
+    <text x="80" y="204" text-anchor="end">0.0 m</text>
+
+    <line x1="86" y1="180" x2="98" y2="180" stroke="#888888" stroke-width="1.2"/>
+    <text x="80" y="184" text-anchor="end">+0.2 m (weir)</text>
+
+    <line x1="86" y1="300" x2="98" y2="300" stroke="#888888" stroke-width="1.2"/>
+    <text x="80" y="304" text-anchor="end">−0.6 m</text>
+
+    <line x1="86" y1="350" x2="98" y2="350" stroke="#888888" stroke-width="1.2"/>
+    <text x="80" y="354" text-anchor="end">−0.5 m (riser)</text>
+
+    <line x1="86" y1="380" x2="98" y2="380" stroke="#888888" stroke-width="1.2"/>
+    <text x="80" y="384" text-anchor="end">−1.3 m</text>
+
+    <line x1="86" y1="450" x2="98" y2="450" stroke="#888888" stroke-width="1.2"/>
+    <text x="80" y="454" text-anchor="end">−1.87 m</text>
+
+    <line x1="86" y1="520" x2="98" y2="520" stroke="#888888" stroke-width="1.2"/>
+    <text x="80" y="524" text-anchor="end">−2.43 m</text>
+
+    <line x1="86" y1="590" x2="98" y2="590" stroke="#888888" stroke-width="1.2"/>
+    <text x="80" y="594" text-anchor="end">−3.0 m</text>
+  </g>
+  <text x="40" y="395" font-size="14" fill="#444444"
+        transform="rotate(-90 40 395)" text-anchor="middle">
+    Elevation
+  </text>
+
+  <!-- ============ contributing catchment (top-left, external input) ============ -->
+  <g>
+    <rect x="160" y="80" width="180" height="70" rx="4"
+          fill="#F0E8D8" stroke="#9C7A1F" stroke-width="1.6"/>
+    <text x="250" y="110" font-size="14" font-weight="500"
+          text-anchor="middle" fill="#5C4612">
+      Impervious catchment
+    </text>
+    <text x="250" y="130" font-size="12.5" text-anchor="middle" fill="#5C4612">
+      1000 m², runoff coeff = 1
+    </text>
+  </g>
+
+  <!-- rain symbol over the catchment -->
+  <g stroke="#1F4E79" stroke-width="1.6" fill="none">
+    <line x1="180" y1="55" x2="184" y2="72"/>
+    <line x1="200" y1="50" x2="204" y2="72"/>
+    <line x1="220" y1="55" x2="224" y2="72"/>
+    <line x1="240" y1="50" x2="244" y2="72"/>
+    <line x1="260" y1="55" x2="264" y2="72"/>
+    <line x1="280" y1="50" x2="284" y2="72"/>
+    <line x1="300" y1="55" x2="304" y2="72"/>
+    <line x1="320" y1="50" x2="324" y2="72"/>
+  </g>
+  <text x="250" y="48" font-size="13" font-style="italic"
+        text-anchor="middle" fill="#1F4E79">Precipitation</text>
+
+  <!-- ============ ponding zone ============ -->
+  <g>
+    <!-- pond block, 0 to surface (y=200) above the engineered soil -->
+    <rect x="380" y="170" width="280" height="30" rx="3"
+          fill="#D6E6F2" stroke="#1F4E79" stroke-width="1.6"/>
+    <text x="520" y="190" font-size="14" font-weight="500"
+          text-anchor="middle" fill="#1F4E79">
+      Ponding zone (stage–storage, β = 2)
+    </text>
+
+    <!-- overflow weir crest indicator at +0.2 m (y=180): just a dashed line,
+         the elevation axis already labels +0.2 m (weir) -->
+    <line x1="660" y1="180" x2="700" y2="180"
+          stroke="#A03020" stroke-width="1.8" stroke-dasharray="6 4"/>
+  </g>
+
+  <!-- ============ engineered soil ============ -->
+  <g>
+    <rect x="380" y="200" width="280" height="100" rx="3"
+          fill="#E8DCC0" stroke="#7A5A1A" stroke-width="1.6"/>
+    <text x="520" y="240" font-size="14" font-weight="500"
+          text-anchor="middle" fill="#5C4612">
+      Engineered soil (0.6 m)
+    </text>
+    <text x="520" y="262" font-size="12.5" text-anchor="middle" fill="#5C4612">
+      van Genuchten unsaturated soil
+    </text>
+    <text x="520" y="280" font-size="12.5" text-anchor="middle" fill="#5C4612">
+      K_sat = 10 m/d, θ_sat = 0.4, n = 1.41
+    </text>
+  </g>
+
+  <!-- ============ aggregate storage ============ -->
+  <g>
+    <rect x="380" y="300" width="280" height="80" rx="3"
+          fill="#D8D8D2" stroke="#555555" stroke-width="1.6"/>
+    <text x="520" y="320" font-size="14" font-weight="500"
+          text-anchor="middle" fill="#333333">
+      Aggregate storage (0.7 m)
+    </text>
+    <text x="520" y="338" font-size="12.5" text-anchor="middle" fill="#333333">
+      porosity = 0.45, K_sat = 1 m/d
+    </text>
+
+    <!-- saturated zone shading: from riser crest (-0.5, y=350) down to aggregate
+         bottom (-1.3 m, y=380), a 0.6 m permanently saturated zone. -->
+    <rect x="380" y="350" width="280" height="30"
+          fill="#B8D4F0" fill-opacity="0.45" stroke="none"/>
+    <text x="520" y="372" font-size="11" font-style="italic"
+          text-anchor="middle" fill="#1F4E79">
+      permanently saturated zone (0.6 m)
+    </text>
+  </g>
+
+  <!-- ============ native soil sub-layers ============ -->
+  <g>
+    <rect x="380" y="380" width="280" height="70" rx="3"
+          fill="#E6CFA8" stroke="#7A5A1A" stroke-width="1.4"/>
+    <text x="520" y="420" font-size="13.5" text-anchor="middle" fill="#5C4612">
+      Native soil — layer 1 (0.57 m)
+    </text>
+
+    <rect x="380" y="450" width="280" height="70" rx="3"
+          fill="#E0C798" stroke="#7A5A1A" stroke-width="1.4"/>
+    <text x="520" y="490" font-size="13.5" text-anchor="middle" fill="#5C4612">
+      Native soil — layer 2 (0.57 m)
+    </text>
+
+    <rect x="380" y="520" width="280" height="70" rx="3"
+          fill="#D9BF88" stroke="#7A5A1A" stroke-width="1.4"/>
+    <text x="520" y="560" font-size="13.5" text-anchor="middle" fill="#5C4612">
+      Native soil — layer 3 (0.57 m)
+    </text>
+
+    <!-- bracket on the right side -->
+    <line x1="666" y1="383" x2="676" y2="383" stroke="#5C4612" stroke-width="1.2"/>
+    <line x1="676" y1="383" x2="676" y2="587" stroke="#5C4612" stroke-width="1.2"/>
+    <line x1="666" y1="587" x2="676" y2="587" stroke="#5C4612" stroke-width="1.2"/>
+    <text x="690" y="488" font-size="12.5" fill="#5C4612">
+      K_sat = 0.01 m/d
+    </text>
+    <text x="690" y="506" font-size="12.5" fill="#5C4612">
+      α = 1 m⁻¹ (shared)
+    </text>
+  </g>
+
+  <!-- ============ groundwater (fixed head) ============ -->
+  <g>
+    <rect x="380" y="610" width="280" height="50" rx="3"
+          fill="#BCD4ED" stroke="#1F4E79" stroke-width="1.6"/>
+    <text x="520" y="642" font-size="14" font-weight="500"
+          text-anchor="middle" fill="#1F4E79">
+      Groundwater (fixed head, −3.0 m)
+    </text>
+  </g>
+
+  <!-- ============ catch basin + receiving water (right side) ============ -->
+  <!-- Positioned to roughly align with the elevation axis: catch basin spans
+       from the overflow weir crest (+0.2 m, y=180) down to its bottom (-1.6 m,
+       y ≈ 408). -->
+  <g>
+    <rect x="880" y="180" width="160" height="228" rx="3"
+          fill="#E0E0E0" stroke="#555555" stroke-width="1.4"/>
+    <text x="960" y="206" font-size="13" font-weight="500"
+          text-anchor="middle" fill="#333333">Catch basin</text>
+    <text x="960" y="395" font-size="11" text-anchor="middle" fill="#555555">
+      bottom −1.6 m
+    </text>
+
+    <rect x="880" y="450" width="160" height="50" rx="3"
+          fill="#BCD4ED" stroke="#1F4E79" stroke-width="1.6"/>
+    <text x="960" y="475" font-size="13" font-weight="500"
+          text-anchor="middle" fill="#1F4E79">Receiving water</text>
+    <text x="960" y="494" font-size="11" text-anchor="middle" fill="#1F4E79">
+      fixed head, −1.9 m
+    </text>
+  </g>
+
+  <!-- ============ links: vertical infiltration cascade ============ -->
+  <!-- catchment -> pond -->
+  <path d="M 340 115 C 360 115, 360 175, 380 175"
+        fill="none" stroke="#1F4E79" stroke-width="1.8"
+        marker-end="url(#arrow)"/>
+  <text x="358" y="158" font-size="11" font-style="italic" fill="#1F4E79">runoff</text>
+
+  <!-- pond -> engineered soil -->
+  <line x1="430" y1="200" x2="430" y2="210"
+        stroke="#1F4E79" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <text x="438" y="208" font-size="11" font-style="italic" fill="#1F4E79">infilt.</text>
+
+  <!-- engineered -> aggregate -->
+  <line x1="430" y1="300" x2="430" y2="310"
+        stroke="#1F4E79" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+  <!-- aggregate -> native 1 -->
+  <line x1="430" y1="380" x2="430" y2="390"
+        stroke="#1F4E79" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+  <!-- native 1 -> native 2 -->
+  <line x1="430" y1="450" x2="430" y2="460"
+        stroke="#1F4E79" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+  <!-- native 2 -> native 3 -->
+  <line x1="430" y1="520" x2="430" y2="530"
+        stroke="#1F4E79" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+  <!-- native 3 -> groundwater -->
+  <line x1="430" y1="590" x2="430" y2="615"
+        stroke="#1F4E79" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <text x="438" y="610" font-size="11" font-style="italic" fill="#1F4E79">recharge</text>
+
+  <!-- ============ overflow weir link (pond -> catch basin) ============ -->
+  <path d="M 660 178 C 760 178, 800 195, 880 200"
+        fill="none" stroke="#A03020" stroke-width="2"
+        marker-end="url(#arrow-overflow)"/>
+  <text x="740" y="172" font-size="12.5" font-style="italic" fill="#A03020">
+    overflow weir
+  </text>
+
+  <!-- ============ underdrain link (aggregate -> catch basin) ============ -->
+  <!-- The riser is a vertical pipe inside the aggregate from the invert (-1.1m,
+       y=378 just above the aggregate bottom at 380) up to the riser crest
+       (-0.5m, y=350). Water then exits horizontally to the right at the riser
+       crest elevation and routes to the catch basin. -->
+  <!-- Riser pipe (vertical, inside aggregate) -->
+  <line x1="600" y1="350" x2="600" y2="378" stroke="#1F4E79"
+        stroke-width="3" stroke-linecap="round"/>
+  <!-- riser crest cap -->
+  <line x1="592" y1="350" x2="608" y2="350" stroke="#1F4E79" stroke-width="2.5"/>
+  <!-- Underdrain: from riser crest (600, 350), route horizontally to the
+       catch basin's left side at the same elevation (y=350, ≈ −0.5 m). -->
+  <path d="M 600 350 L 880 350"
+        fill="none" stroke="#1F4E79" stroke-width="2"
+        marker-end="url(#arrow)"/>
+
+  <!-- ============ catch basin -> receiving water ============ -->
+  <line x1="960" y1="408" x2="960" y2="448"
+        stroke="#1F4E79" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+  <!-- ============ Evapotranspiration arrow (from engineered soil upward) ============ -->
+  <path d="M 580 200 L 580 130"
+        fill="none" stroke="#2E7D5B" stroke-width="1.8"
+        stroke-dasharray="5 3" marker-end="url(#arrow-gray)"/>
+  <text x="590" y="138" font-size="12.5" font-style="italic" fill="#2E7D5B">
+    ET (Penman, ×c_E)
+  </text>
+
+  <!-- ============ sensor markers ============ -->
+  <!-- ponding depth sensor: little gauge symbol above the pond -->
+  <g>
+    <circle cx="500" cy="173" r="6" fill="#E0832A" stroke="#7A4810" stroke-width="1.4"/>
+    <text x="500" y="177" font-size="9" font-weight="500"
+          text-anchor="middle" fill="white">D</text>
+    <text x="500" y="158" font-size="11" font-style="italic"
+          text-anchor="middle" fill="#7A4810">depth sensor</text>
+  </g>
+
+  <!-- soil moisture sensor inside engineered soil -->
+  <g>
+    <circle cx="500" cy="250" r="6" fill="#E0832A" stroke="#7A4810" stroke-width="1.4"/>
+    <text x="500" y="254" font-size="9" font-weight="500"
+          text-anchor="middle" fill="white">θ</text>
+  </g>
+
+  <!-- underdrain flow sensor on the underdrain line -->
+  <g>
+    <!-- single, clear underdrain label centered above the link -->
+    <text x="770" y="343" font-size="12.5" font-style="italic"
+          text-anchor="middle" fill="#1F4E79">
+      underdrain (riser at −0.5 m)
+    </text>
+    <!-- sensor symbol and its label below the path -->
+    <circle cx="820" cy="350" r="6" fill="#E0832A" stroke="#7A4810" stroke-width="1.4"/>
+    <text x="820" y="354" font-size="9" font-weight="500"
+          text-anchor="middle" fill="white">Q</text>
+    <text x="820" y="372" font-size="11" font-style="italic"
+          text-anchor="middle" fill="#7A4810">flow sensor</text>
+  </g>
+
+  <!-- ============ legend ============ -->
+  <g transform="translate(150, 690)">
+    <text x="0" y="0" font-size="13" font-weight="500" fill="#222222">Legend</text>
+
+    <line x1="0" y1="14" x2="28" y2="14" stroke="#1F4E79" stroke-width="1.8"
+          marker-end="url(#arrow)"/>
+    <text x="34" y="18" font-size="12" fill="#333333">water transfer (flow link)</text>
+
+    <line x1="200" y1="14" x2="228" y2="14" stroke="#A03020" stroke-width="2"
+          marker-end="url(#arrow-overflow)"/>
+    <text x="234" y="18" font-size="12" fill="#333333">overflow path</text>
+
+    <line x1="370" y1="14" x2="398" y2="14" stroke="#2E7D5B" stroke-width="1.8"
+          stroke-dasharray="5 3" marker-end="url(#arrow-gray)"/>
+    <text x="404" y="18" font-size="12" fill="#333333">evapotranspiration</text>
+
+    <circle cx="555" cy="14" r="6" fill="#E0832A" stroke="#7A4810" stroke-width="1.4"/>
+    <text x="566" y="18" font-size="12" fill="#333333">sensor (assimilated channel)</text>
+
+    <rect x="755" y="8" width="18" height="12" fill="#B8D4F0" fill-opacity="0.45"
+          stroke="none"/>
+    <text x="780" y="18" font-size="12" fill="#333333">saturated zone</text>
+  </g>
+
+</svg>
