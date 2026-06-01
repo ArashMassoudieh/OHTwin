@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream:deployments/Wetland_truth/model/Wetland_BSh_AM.ohq
 loadtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/main_components.json
 addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/main_components.json
 addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/Pond_Plugin.json
@@ -5,6 +6,14 @@ addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_
 addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/evapotranspiration_models.json
 addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/mass_transfer.json
 addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/groundwater.json
+=======
+loadtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/main_components.json
+addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/main_components.json
+addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/Pond_Plugin.json
+addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/Sewer_system.json
+addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/evapotranspiration_models.json
+addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/mass_transfer.json
+>>>>>>> Stashed changes:deployments/Wetland_truth/model/Wetland_AM.ohq
 setvalue; object=system, quantity=acceptance_rate, value=0.15
 setvalue; object=system, quantity=add_noise_to_realizations, value=No
 setvalue; object=system, quantity=continue_based_on_file_name, value=
@@ -44,9 +53,15 @@ setvalue; object=system, quantity=nr_timestep_reduction_factor, value=0.75
 setvalue; object=system, quantity=nr_timestep_reduction_factor_fail, value=0.2
 setvalue; object=system, quantity=nr_tolerance, value=0.001
 setvalue; object=system, quantity=write_interval, value=100
+<<<<<<< Updated upstream:deployments/Wetland_truth/model/Wetland_BSh_AM.ohq
 setvalue; object=system, quantity=write_solution_details, value= Yes
 create source;type=Precipitation,name=Rain,timeseries=/home/arash/Dropbox/Aquifolium/Climate_Data/Sample_Rain_Data.txt
 create source;type=Evapotranspiration_Penmam (S),R_h=/home/arash/Dropbox/Aquifolium/Climate_Data/Humidity_2010.csv,Temperature=/home/arash/Dropbox/Aquifolium/Climate_Data/Temp_2010.csv,gamma=66.8,name=Evapotranspiration_Penmam (S) (1),solar_radiation=/home/arash/Dropbox/Aquifolium/Climate_Data/Solar_2010.csv,solar_scale_fact=1,wind_scale_fact=1,wind_speed=/home/arash/Dropbox/Aquifolium/Climate_Data/Wind_2010.csv,z0=0.0003,z2=2
+=======
+setvalue; object=system, quantity=write_solution_details, value=No
+create source;type=Precipitation,name=Rain,timeseries=/home/arash/Documents/Sample_Rain_Data.txt
+create source;type=Evapotranspiration_Penmam (S),R_h=,Temperature=,gamma=66.8,name=Evapotranspiration_Penmam (S) (1),solar_radiation=,solar_scale_fact=1,wind_scale_fact=1,wind_speed=,z0=0.0003,z2=2
+>>>>>>> Stashed changes:deployments/Wetland_truth/model/Wetland_AM.ohq
 create parameter;type=Parameter,high=0.95,low=0.2,name=CatchmentRunoffCoeff,prior_distribution=log-normal,value=0.75
 create parameter;type=Parameter,high=500000,low=20000,name=WetlandOutletAlpha,prior_distribution=log-normal,value=100000
 create parameter;type=Parameter,high=2,low=0.5,name=PondAlphaMultiplier,prior_distribution=log-normal,value=1

@@ -13,7 +13,7 @@
         "forecast_horizon": "",
         "start_datetime": "2020-01-03T00:00:00",
         "stop_datetime": "",
-        "time_acceleration": 1000,
+        "time_acceleration": 400,
         "state_variables": []
     },
     "observations": {
@@ -26,12 +26,9 @@
             "Wetland mid-stage (m)": 0.1,
             "Wetland outlet stage (m)": 0.1,
             "Wetland outflow (m3/day)": 0.1,
-            "Wetland Cell 1 storage (m3)": 0.1,
-            "Wetland Cell 2 storage (m3)": 0.1,
-            "Wetland Cell 3 storage (m3)": 0.1,
-            "Wetland Cell 4 storage (m3)": 0.1,
-            "Wetland Cell 5 storage (m3)": 0.1,
-            "Wetland Cell 6 storage (m3)": 0.1
+            "Wetland Cell 1 Water depth (m)": 0.1,
+            "Wetland Cell 6 Water depth (m)": 0.1,
+            "HRT": 0.1
         },
         "noise_correlation_time": "6hr"
     }
