@@ -32,5 +32,9 @@
             "Soil Moisture",
             "Pond water depth (m)"
         ]
-    }
+    },
+    "parameter_drift": [
+    {   "parameter": "EngSoilKsat", 
+        "csv": "drift/ksat_drift.csv" }
+    ]
 }

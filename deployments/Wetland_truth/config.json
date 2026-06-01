@@ -12,7 +12,7 @@
         "interval": "1day",
         "forecast_horizon": "",
         "start_datetime": "2020-01-03T00:00:00",
-        "stop_datetime": "",
+        "stop_datetime": "2022-01-03T00:00:00",
         "time_acceleration": 400,
         "state_variables": []
     },
@@ -21,15 +21,19 @@
         "noise_sigma": {
             "default": 0.0,
             "Precipitation (mm/day)": 0.0,
-            "Wetland inflow (m3/day)": 0.1,
-            "Wetland inlet stage (m)": 0.1,
-            "Wetland mid-stage (m)": 0.1,
-            "Wetland outlet stage (m)": 0.1,
+            "Wetland inflow (m3/day)": 0.0,
+            "Wetland inlet stage (m)": 0.0,
+            "Wetland mid-stage (m)": 0.0,
+            "Wetland outlet stage (m)": 0.0,
             "Wetland outflow (m3/day)": 0.1,
             "Wetland Cell 1 Water depth (m)": 0.1,
             "Wetland Cell 6 Water depth (m)": 0.1,
-            "HRT": 0.1
+            "HRT": 0.0
         },
         "noise_correlation_time": "6hr"
-    }
+    },
+    "parameter_drift": [
+    {   "parameter": "Soil_Hydraulic_Conductivity", 
+        "csv": "drift/ksat_drift_wetland.csv" }
+    ]
 }
