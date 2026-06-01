@@ -1,0 +1,35 @@
+{
+    "deployment": {
+        "name": "Wetland_truth",
+        "model_file": "model/Wetland.ohq",
+        "viz_file": "viz_wetland.json",
+        "port": 8088
+    },
+    "runtime": {
+        "weather_source": "openmeteo_historical",
+        "latitude": 38.91088,
+        "longitude": -76.98569,
+        "interval": "1day",
+        "forecast_horizon": "",
+        "start_datetime": "2020-01-03T00:00:00",
+        "stop_datetime": "",
+        "time_acceleration": 1000,
+        "state_variables": []
+    },
+    "observations": {
+        "save_interval": "1hr",
+        "noise_sigma": {
+            "default": 0.0,
+            "Precipitation (mm/day)": 0.0,
+            "Wetland inflow (m3/day)": 0.1,
+            "Wetland inlet stage (m)": 0.1,
+            "Wetland mid-stage (m)": 0.1,
+            "Wetland outlet stage (m)": 0.1,
+            "Wetland outflow (m3/day)": 0.1,
+            "Wetland Cell 1 Water depth (m)": 0.1,
+            "Wetland Cell 6 Water depth (m)": 0.1,
+            "HRT": 0.1
+        },
+        "noise_correlation_time": "6hr"
+    }
+}
