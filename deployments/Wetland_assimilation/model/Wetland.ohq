@@ -1,10 +1,10 @@
-loadtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/main_components.json
-addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/main_components.json
-addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/Pond_Plugin.json
-addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/Sewer_system.json
-addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/evapotranspiration_models.json
-addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/mass_transfer.json
-addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/groundwater.json
+loadtemplate; filename = main_components.json
+addtemplate; filename = main_components.json
+addtemplate; filename = Pond_Plugin.json
+addtemplate; filename = Sewer_system.json
+addtemplate; filename = evapotranspiration_models.json
+addtemplate; filename = mass_transfer.json
+addtemplate; filename = groundwater.json
 setvalue; object=system, quantity=acceptance_rate, value=0.15
 setvalue; object=system, quantity=add_noise_to_realizations, value=No
 setvalue; object=system, quantity=continue_based_on_file_name, value=
@@ -45,13 +45,13 @@ setvalue; object=system, quantity=nr_timestep_reduction_factor_fail, value=0.2
 setvalue; object=system, quantity=nr_tolerance, value=0.001
 setvalue; object=system, quantity=write_interval, value=100
 setvalue; object=system, quantity=write_solution_details, value=Yes
-create source;type=Precipitation,name=Rain,timeseries=/mnt/3rd900/Projects/DrywellDT/deployments/Bioretention_sensitivity_analysis/Rain_2010.txt
-create source;type=Evapotranspiration_Penmam (S),R_h=/mnt/3rd900/Projects/DrywellDT/deployments/Bioretention_sensitivity_analysis/Humidity_2010.csv,Temperature=/mnt/3rd900/Projects/DrywellDT/deployments/Bioretention_sensitivity_analysis/Temp_2010.csv,gamma=66.8,name=Evapotranspiration_Penman (Soil),solar_radiation=/mnt/3rd900/Projects/DrywellDT/deployments/Bioretention_sensitivity_analysis/Solar_2010.csv,solar_scale_fact=1,wind_scale_fact=1,wind_speed=/mnt/3rd900/Projects/DrywellDT/deployments/Bioretention_sensitivity_analysis/Wind_2010.csv,z0=0.0003,z2=2
+create source;type=Precipitation,name=Rain,timeseries=
+create source;type=Evapotranspiration_Penmam (S),R_h=,Temperature=,gamma=66.8,name=Evapotranspiration_Penman (Soil),solar_radiation=,solar_scale_fact=1,wind_scale_fact=1,wind_speed=,z0=0.0003,z2=2
 create parameter;type=Parameter,high=0.95,low=0.2,name=CatchmentRunoffCoeff,prior_distribution=log-normal,value=0.75
 create parameter;type=Parameter,high=500000,low=20000,name=WetlandOutletAlpha,prior_distribution=log-normal,value=100000
 create parameter;type=Parameter,high=2,low=0.5,name=PondAlphaMultiplier,prior_distribution=log-normal,value=1
 create parameter;type=Parameter,high=2,low=0.3,name=Evap_Coefficient,prior_distribution=normal,value=1
-create parameter;type=Parameter,high=0.1,low=0.001,name=Soil_Hydraulic_Conductivity,prior_distribution=log-normal,value=0.01
+create parameter;type=Parameter,high=0.1,low=0.0005,name=Soil_Hydraulic_Conductivity,prior_distribution=log-normal,value=0.01
 create constituent;type=AgeTracker,concentration=0,decay_parameter=0,diffusion_coefficient=0,external_mass_flow_timeseries=,external_source=,inflow_concentration=0,name=AgeTracker_1,stoichiometric_constant=0
 create reaction;type=Reaction,AgeTracker_1:stoichiometric_constant=1,name=aging,rate_expression=1
 create block;type=Catchment,AgeTracker_1:concentration=0,AgeTracker_1:external_mass_flow_timeseries=,AgeTracker_1:external_source=,AgeTracker_1:inflow_concentration=0,Evapotranspiration=,ManningCoeff=0.011,Precipitation=Rain,Runoff_coeff=1,Slope=0,Width=0,_height=200,_width=350,area=1,depression_storage=0,depth=0,elevation=0,inflow=,loss_coefficient=0,name=Rain Gauge,x=2635,y=139
