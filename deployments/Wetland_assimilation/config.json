@@ -29,7 +29,7 @@
             "Wetland outflow (m3/day)": 0.0,
             "Wetland Cell 1 Water depth (m)": 0.0,
             "Wetland Cell 6 Water depth (m)": 0.0,
-	    "HRT"": 0.0
+	    "HRT": 0.0
         },
         "noise_correlation_time": "6hr"
     },
