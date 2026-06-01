@@ -212,3 +212,19 @@ deployments/Bioretention_assimilation_completed/model/output.txt
 deployments/Bioretention_assimilation_completed/model/state.json
 
 deployments/Bioretention_assimilation_completed/viz_bioretention.json
+
+deployments/Wetland_truth/model/errors.txt
+
+deployments/Wetland_truth/model/mapped_modeled_results.txt
+
+deployments/Wetland_truth/model/Objective_Function_TimeSeries.txt
+
+deployments/Wetland_truth/model/objective_function_values.txt
+
+deployments/Wetland_truth/model/observedoutput.txt
+
+deployments/Wetland_truth/model/solution_details.txt
+
+deployments/Wetland_truth/model/output.txt
+
+deployments/Wetland_truth/model/state.json

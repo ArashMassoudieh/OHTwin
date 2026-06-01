@@ -13,7 +13,7 @@
         "forecast_horizon": "",
         "start_datetime": "2020-01-03T00:00:00",
         "stop_datetime": "2022-01-03T00:00:00",
-        "time_acceleration": 1000,
+        "time_acceleration": 400,
         "state_variables": [],
         "keep_debug_outputs": false
     },
@@ -28,7 +28,7 @@
             "Precipitation": 0.0,
             "Underdrain flow": 0.1,
             "inflow to the pond": 0.1,
-            "Soil Moisture": 0.01,
+            "Soil Moisture": 0.05,
             "Evaporation": 0.1
         },
         "noise_correlation_time": "6hr"
