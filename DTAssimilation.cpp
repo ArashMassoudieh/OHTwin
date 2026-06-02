@@ -620,10 +620,37 @@ bool DTAssimilation::runCalibration(QString &errorMessage)
 // archiveGAOutput
 // Append ga_output.txt to ga_output_merged.txt with a cycle-delimiter header.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// archiveGAOutput
+//
+// Purpose:
+//   1. Append the current cycle's ga_output.txt to a cumulative
+//      ga_output_merged.txt file.
+//
+//   2. Optionally preserve all GA-generated files for this cycle under
+//      calibration/ga_cycle_0001, ga_cycle_0002, ...
+//
+// Behavior:
+//   keepDebugOutputs = false
+//       - Maintain only ga_output.txt
+//       - Maintain ga_output_merged.txt
+//       - Do NOT create ga_cycle_xxxx folders
+//
+//   keepDebugOutputs = true
+//       - Maintain ga_output.txt
+//       - Maintain ga_output_merged.txt
+//       - Create ga_cycle_xxxx folders and copy GA artifacts there
+//
+// Notes:
+//   - Cycle 1 truncates the merged file so old runs do not accumulate.
+//   - Cycle 2+ append to the merged file.
+// ---------------------------------------------------------------------------
 bool DTAssimilation::archiveGAOutput(int cycleIndex)
 {
     const QString calibDir =
         QString::fromStdString(m_config.assimilation.calibrationOutputDir);
+
     QDir().mkpath(calibDir);
 
     const QString srcPath  = calibDir + "/ga_output.txt";
@@ -631,82 +658,159 @@ bool DTAssimilation::archiveGAOutput(int cycleIndex)
 
     bool ok = false;
 
-    // 1) Append the main GA text log to a cumulative merged file.
+    // ---------------------------------------------------------------------
+    // PART 1
+    // Append current ga_output.txt to the cumulative merged file.
+    //
+    // First cycle:
+    //     truncate existing merged file
+    //
+    // Later cycles:
+    //     append
+    // ---------------------------------------------------------------------
     QFile src(srcPath);
-    if (src.exists() && src.open(QIODevice::ReadOnly | QIODevice::Text))
+
+    if (src.exists() &&
+        src.open(QIODevice::ReadOnly | QIODevice::Text))
     {
         QFile dest(destPath);
-        if (dest.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text))
+
+        const QIODevice::OpenMode mode =
+            QIODevice::WriteOnly |
+            QIODevice::Text |
+            ((cycleIndex <= 1)
+                 ? QIODevice::Truncate
+                 : QIODevice::Append);
+
+        if (dest.open(mode))
         {
             QTextStream out(&dest);
-            const QString stamp = QDateTime::currentDateTimeUtc()
-                                      .toString("yyyy-MM-dd HH:mm:ss");
-            const QString tNow  = (m_buffer.pointCount() > 0)
-                                     ? QString::number(m_buffer.tMax(), 'f', 6)
-                                     : QStringLiteral("n/a");
 
+            const QString stamp =
+                QDateTime::currentDateTimeUtc()
+                    .toString("yyyy-MM-dd HH:mm:ss");
+
+            const QString tNow =
+                (m_buffer.pointCount() > 0)
+                    ? QString::number(m_buffer.tMax(), 'f', 6)
+                    : QStringLiteral("n/a");
+
+            // Fresh merged file header
+            if (cycleIndex <= 1)
+            {
+                out << "=====================================================\n";
+                out << " OpenHydroTwin Assimilation GA Archive\n";
+                out << " Started: " << stamp << "\n";
+                out << "=====================================================\n\n";
+            }
+
+            // Cycle separator
             out << "=== Cycle " << cycleIndex
                 << " | timestamp " << stamp
                 << " | t_now=" << tNow
                 << " ===\n";
-            out << src.readAll();
+
+            out << QString::fromUtf8(src.readAll());
             out << "\n";
+
             ok = true;
         }
         else
         {
-            std::cerr << "[Assim] could not append GA merged file: "
-                      << destPath.toStdString() << "\n";
+            std::cerr
+                << "[Assim] could not open merged GA file: "
+                << destPath.toStdString()
+                << "\n";
         }
     }
     else
     {
-        std::cerr << "[Assim] GA output not found/readable: "
-                  << srcPath.toStdString() << "\n";
+        std::cerr
+            << "[Assim] GA output not found/readable: "
+            << srcPath.toStdString()
+            << "\n";
     }
 
-    // 2) Preserve every top-level GA artifact before the next calibration
-    // cycle overwrites files like ga_output.txt. This keeps debugging files
-    // visible under calibration/ga_cycle_0001, ga_cycle_0002, ...
-    const QString cycleDir = calibDir + QString("/ga_cycle_%1")
-                                            .arg(cycleIndex, 4, 10, QChar('0'));
+    // ---------------------------------------------------------------------
+    // Production mode:
+    //
+    // Do not keep per-cycle folders.
+    // Return after maintaining ga_output_merged.txt.
+    // ---------------------------------------------------------------------
+    if (!m_config.keepDebugOutputs)
+        return ok;
+
+    // ---------------------------------------------------------------------
+    // PART 2
+    // Debug mode only.
+    //
+    // Preserve all current GA artifacts before the next calibration cycle
+    // overwrites them.
+    //
+    // Example:
+    //
+    // calibration/
+    //     ga_cycle_0001/
+    //     ga_cycle_0002/
+    //     ga_cycle_0003/
+    // ---------------------------------------------------------------------
+    const QString cycleDir =
+        calibDir +
+        QString("/ga_cycle_%1")
+            .arg(cycleIndex, 4, 10, QChar('0'));
+
     QDir().mkpath(cycleDir);
 
     QDir dir(calibDir);
-    const QFileInfoList files = dir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
+
+    const QFileInfoList files =
+        dir.entryInfoList(QDir::Files |
+                          QDir::NoDotAndDotDot);
+
     int copied = 0;
+
     for (const QFileInfo &fi : files)
     {
         const QString name = fi.fileName();
 
-        // Do not recursively/archive generated history/state files as GA
-        // artifacts. Keep actual GA files and any optimizer side outputs.
+        // Skip files that are already long-term history products.
         if (name == "ga_output_merged.txt" ||
             name == "parameter_history.csv" ||
             name.startsWith("state_calibrated_"))
+        {
             continue;
+        }
 
         const QString dst = cycleDir + "/" + name;
-        if (QFileInfo::exists(dst)) QFile::remove(dst);
+
+        if (QFileInfo::exists(dst))
+            QFile::remove(dst);
+
         if (QFile::copy(fi.absoluteFilePath(), dst))
             ++copied;
     }
 
     if (copied > 0)
     {
-        std::cout << "[Assim] preserved " << copied
-                  << " GA artifact(s) in " << cycleDir.toStdString() << "\n";
+        std::cout
+            << "[Assim] preserved "
+            << copied
+            << " GA artifact(s) in "
+            << cycleDir.toStdString()
+            << "\n";
+
         ok = true;
     }
     else
     {
-        std::cerr << "[Assim] WARNING: no GA artifacts were copied from "
-                  << calibDir.toStdString() << "\n";
+        std::cerr
+            << "[Assim] WARNING: no GA artifacts were copied from "
+            << calibDir.toStdString()
+            << "\n";
     }
 
     return ok;
 }
-
 // ---------------------------------------------------------------------------
 // writeParameterLog
 // Append a row to outputs/calibration/parameter_history.csv recording the
