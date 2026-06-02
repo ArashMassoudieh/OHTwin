@@ -100,3 +100,5 @@ setasparameter; object= Wetland Cell 6 - fixed_head (1), parametername= Soil_Hyd
 setasparameter; object= Wetland Cell 3 - fixed_head (1), parametername= Soil_Hydraulic_Conductivity, quantity= hydraulic_conductivity
 setasparameter; object= Wetland Cell 2 - fixed_head (1), parametername= Soil_Hydraulic_Conductivity, quantity= hydraulic_conductivity
 setasparameter; object= Wetland Cell 1 - fixed_head (1), parametername= Soil_Hydraulic_Conductivity, quantity= hydraulic_conductivity
+setasparameter; object= Evapotranspiration_Penman (Soil), parametername= Evap_Coefficient, quantity= solar_scale_fact
+setasparameter; object= Evapotranspiration_Penman (Soil), parametername= Evap_Coefficient, quantity= wind_scale_fact
