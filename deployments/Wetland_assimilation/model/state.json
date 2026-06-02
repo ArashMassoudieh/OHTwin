@@ -1,0 +1,666 @@
+{
+    "Blocks": {
+        "Contributing Catchment": {
+            "AgeTracker_1:concentration": "0",
+            "AgeTracker_1:external_mass_flow_timeseries": "",
+            "AgeTracker_1:external_source": "",
+            "AgeTracker_1:inflow_concentration": "0",
+            "Evapotranspiration": "",
+            "ManningCoeff": "0.011",
+            "Precipitation": "Rain",
+            "Runoff_coeff": "0.75",
+            "Slope": "0.01",
+            "Width": "240",
+            "_height": "200",
+            "_width": "460",
+            "area": "60000",
+            "depression_storage": "0.002",
+            "depth": "0",
+            "elevation": "0",
+            "inflow": "",
+            "loss_coefficient": "0",
+            "name": "Contributing Catchment",
+            "type": "Catchment",
+            "x": "2441",
+            "y": "714"
+        },
+        "Rain Gauge": {
+            "AgeTracker_1:concentration": "0",
+            "AgeTracker_1:external_mass_flow_timeseries": "",
+            "AgeTracker_1:external_source": "",
+            "AgeTracker_1:inflow_concentration": "0",
+            "Evapotranspiration": "",
+            "ManningCoeff": "0.011",
+            "Precipitation": "Rain",
+            "Runoff_coeff": "1",
+            "Slope": "0",
+            "Width": "0",
+            "_height": "200",
+            "_width": "350",
+            "area": "1",
+            "depression_storage": "0",
+            "depth": "0",
+            "elevation": "0",
+            "inflow": "",
+            "loss_coefficient": "0",
+            "name": "Rain Gauge",
+            "type": "Catchment",
+            "x": "2635",
+            "y": "139"
+        },
+        "Receiving Water": {
+            "AgeTracker_1:concentration": "364.618",
+            "AgeTracker_1:external_mass_flow_timeseries": "",
+            "AgeTracker_1:external_source": "",
+            "AgeTracker_1:inflow_concentration": "0",
+            "Storage": "100000",
+            "_height": "200",
+            "_width": "300",
+            "head": "-1",
+            "name": "Receiving Water",
+            "type": "fixed_head",
+            "x": "1663",
+            "y": "-46"
+        },
+        "Wetland Cell 1": {
+            "AgeTracker_1:concentration": "502.2",
+            "AgeTracker_1:external_mass_flow_timeseries": "",
+            "AgeTracker_1:external_source": "",
+            "AgeTracker_1:inflow_concentration": "0",
+            "Evapotranspiration": "Evapotranspiration_Penman (Soil)",
+            "Precipitation": "Rain",
+            "Storage": "0",
+            "_height": "700",
+            "_width": "600",
+            "alpha": "558.75",
+            "alpha_multiplier": "1",
+            "beta": "2",
+            "bottom_elevation": "-0.8",
+            "inflow": "",
+            "name": "Wetland Cell 1",
+            "type": "Pond",
+            "x": "1650",
+            "y": "306"
+        },
+        "Wetland Cell 2": {
+            "AgeTracker_1:concentration": "31.4083",
+            "AgeTracker_1:external_mass_flow_timeseries": "",
+            "AgeTracker_1:external_source": "",
+            "AgeTracker_1:inflow_concentration": "0",
+            "Evapotranspiration": "Evapotranspiration_Penman (Soil)",
+            "Precipitation": "Rain",
+            "Storage": "0",
+            "_height": "400",
+            "_width": "450",
+            "alpha": "362.11",
+            "alpha_multiplier": "1",
+            "beta": "2",
+            "bottom_elevation": "-0.834",
+            "inflow": "",
+            "name": "Wetland Cell 2",
+            "type": "Pond",
+            "x": "831",
+            "y": "630"
+        },
+        "Wetland Cell 3": {
+            "AgeTracker_1:concentration": "-42.408",
+            "AgeTracker_1:external_mass_flow_timeseries": "",
+            "AgeTracker_1:external_source": "",
+            "AgeTracker_1:inflow_concentration": "0",
+            "Evapotranspiration": "Evapotranspiration_Penman (Soil)",
+            "Precipitation": "Rain",
+            "Storage": "0",
+            "_height": "340",
+            "_width": "400",
+            "alpha": "289.77",
+            "alpha_multiplier": "1",
+            "beta": "2",
+            "bottom_elevation": "-0.861",
+            "inflow": "",
+            "name": "Wetland Cell 3",
+            "type": "Pond",
+            "x": "248",
+            "y": "668"
+        },
+        "Wetland Cell 4": {
+            "AgeTracker_1:concentration": "217.994",
+            "AgeTracker_1:external_mass_flow_timeseries": "",
+            "AgeTracker_1:external_source": "",
+            "AgeTracker_1:inflow_concentration": "0",
+            "Evapotranspiration": "Evapotranspiration_Penman (Soil)",
+            "Precipitation": "Rain",
+            "Storage": "0",
+            "_height": "260",
+            "_width": "360",
+            "alpha": "134.24",
+            "alpha_multiplier": "1",
+            "beta": "2",
+            "bottom_elevation": "-0.879",
+            "inflow": "",
+            "name": "Wetland Cell 4",
+            "type": "Pond",
+            "x": "260",
+            "y": "240"
+        },
+        "Wetland Cell 5": {
+            "AgeTracker_1:concentration": "231.969",
+            "AgeTracker_1:external_mass_flow_timeseries": "",
+            "AgeTracker_1:external_source": "",
+            "AgeTracker_1:inflow_concentration": "0",
+            "Evapotranspiration": "Evapotranspiration_Penman (Soil)",
+            "Precipitation": "Rain",
+            "Storage": "0",
+            "_height": "300",
+            "_width": "400",
+            "alpha": "190",
+            "alpha_multiplier": "1",
+            "beta": "2",
+            "bottom_elevation": "-0.9",
+            "inflow": "",
+            "name": "Wetland Cell 5",
+            "type": "Pond",
+            "x": "735",
+            "y": "222"
+        },
+        "Wetland Cell 6": {
+            "AgeTracker_1:concentration": "-187.758",
+            "AgeTracker_1:external_mass_flow_timeseries": "",
+            "AgeTracker_1:external_source": "",
+            "AgeTracker_1:inflow_concentration": "0",
+            "Evapotranspiration": "Evapotranspiration_Penman (Soil)",
+            "Precipitation": "Rain",
+            "Storage": "0",
+            "_height": "260",
+            "_width": "360",
+            "alpha": "26.8",
+            "alpha_multiplier": "1",
+            "beta": "2",
+            "bottom_elevation": "-0.914",
+            "inflow": "",
+            "name": "Wetland Cell 6",
+            "type": "Pond",
+            "x": "1227",
+            "y": "264"
+        },
+        "fixed_head (1)": {
+            "AgeTracker_1:concentration": "364.618",
+            "AgeTracker_1:external_mass_flow_timeseries": "",
+            "AgeTracker_1:external_source": "",
+            "AgeTracker_1:inflow_concentration": "0",
+            "Storage": "101104",
+            "_height": "200",
+            "_width": "200",
+            "head": "-1",
+            "name": "fixed_head (1)",
+            "type": "fixed_head",
+            "x": "959",
+            "y": "1263"
+        }
+    },
+    "Constituents": {
+        "AgeTracker_1": {
+            "concentration": "0",
+            "decay_parameter": "0",
+            "diffusion_coefficient": "0",
+            "external_mass_flow_timeseries": "",
+            "external_source": "",
+            "inflow_concentration": "0",
+            "name": "AgeTracker_1",
+            "stoichiometric_constant": "0",
+            "type": "AgeTracker"
+        }
+    },
+    "Links": {
+        "Catchment runoff to wetland inlet": {
+            "AgeTracker_1:decay_parameter": "0",
+            "from": "Contributing Catchment",
+            "name": "Catchment runoff to wetland inlet",
+            "to": "Wetland Cell 1",
+            "type": "Catchment_link"
+        },
+        "Wetland Cell 1 - fixed_head (1)": {
+            "AgeTracker_1:decay_parameter": "0",
+            "area": "894",
+            "from": "Wetland Cell 1",
+            "hydraulic_conductivity": "0.01",
+            "length": "1",
+            "name": "Wetland Cell 1 - fixed_head (1)",
+            "to": "fixed_head (1)",
+            "type": "surface2groundwater_link"
+        },
+        "Wetland Cell 1 to Wetland Cell 2": {
+            "AgeTracker_1:decay_parameter": "0",
+            "ManningCoeff": "0.035",
+            "from": "Wetland Cell 1",
+            "length": "27.23",
+            "name": "Wetland Cell 1 to Wetland Cell 2",
+            "to": "Wetland Cell 2",
+            "type": "wide_channel",
+            "width": "2"
+        },
+        "Wetland Cell 2 - fixed_head (1)": {
+            "AgeTracker_1:decay_parameter": "0",
+            "area": "604",
+            "from": "Wetland Cell 2",
+            "hydraulic_conductivity": "0.01",
+            "length": "1",
+            "name": "Wetland Cell 2 - fixed_head (1)",
+            "to": "fixed_head (1)",
+            "type": "surface2groundwater_link"
+        },
+        "Wetland Cell 2 to Wetland Cell 3": {
+            "AgeTracker_1:decay_parameter": "0",
+            "ManningCoeff": "0.035",
+            "from": "Wetland Cell 2",
+            "length": "23.45",
+            "name": "Wetland Cell 2 to Wetland Cell 3",
+            "to": "Wetland Cell 3",
+            "type": "wide_channel",
+            "width": "2"
+        },
+        "Wetland Cell 3 - fixed_head (1)": {
+            "AgeTracker_1:decay_parameter": "0",
+            "area": "499",
+            "from": "Wetland Cell 3",
+            "hydraulic_conductivity": "0.01",
+            "length": "1",
+            "name": "Wetland Cell 3 - fixed_head (1)",
+            "to": "fixed_head (1)",
+            "type": "surface2groundwater_link"
+        },
+        "Wetland Cell 3 to Wetland Cell 4": {
+            "AgeTracker_1:decay_parameter": "0",
+            "ManningCoeff": "0.035",
+            "from": "Wetland Cell 3",
+            "length": "18.85",
+            "name": "Wetland Cell 3 to Wetland Cell 4",
+            "to": "Wetland Cell 4",
+            "type": "wide_channel",
+            "width": "1.5"
+        },
+        "Wetland Cell 4 - fixed_head (1)": {
+            "AgeTracker_1:decay_parameter": "0",
+            "area": "236",
+            "from": "Wetland Cell 4",
+            "hydraulic_conductivity": "0.01",
+            "length": "1",
+            "name": "Wetland Cell 4 - fixed_head (1)",
+            "to": "fixed_head (1)",
+            "type": "surface2groundwater_link"
+        },
+        "Wetland Cell 4 to Wetland Cell 5": {
+            "AgeTracker_1:decay_parameter": "0",
+            "ManningCoeff": "0.035",
+            "from": "Wetland Cell 4",
+            "length": "16.92",
+            "name": "Wetland Cell 4 to Wetland Cell 5",
+            "to": "Wetland Cell 5",
+            "type": "wide_channel",
+            "width": "1.5"
+        },
+        "Wetland Cell 5 - fixed_head (1)": {
+            "AgeTracker_1:decay_parameter": "0",
+            "area": "342",
+            "from": "Wetland Cell 5",
+            "hydraulic_conductivity": "0.01",
+            "length": "1",
+            "name": "Wetland Cell 5 - fixed_head (1)",
+            "to": "fixed_head (1)",
+            "type": "surface2groundwater_link"
+        },
+        "Wetland Cell 5 to Wetland Cell 6": {
+            "AgeTracker_1:decay_parameter": "0",
+            "ManningCoeff": "0.035",
+            "from": "Wetland Cell 5",
+            "length": "12.74",
+            "name": "Wetland Cell 5 to Wetland Cell 6",
+            "to": "Wetland Cell 6",
+            "type": "wide_channel",
+            "width": "1"
+        },
+        "Wetland Cell 6 - fixed_head (1)": {
+            "AgeTracker_1:decay_parameter": "0",
+            "area": "49",
+            "from": "Wetland Cell 6",
+            "hydraulic_conductivity": "0.01",
+            "length": "1",
+            "name": "Wetland Cell 6 - fixed_head (1)",
+            "to": "fixed_head (1)",
+            "type": "surface2groundwater_link"
+        },
+        "Wetland outlet weir": {
+            "AgeTracker_1:decay_parameter": "0",
+            "alpha": "100000",
+            "beta": "2.5",
+            "crest_elevation": "0",
+            "from": "Wetland Cell 6",
+            "name": "Wetland outlet weir",
+            "to": "Receiving Water",
+            "type": "wier"
+        }
+    },
+    "Objective Functions": {
+    },
+    "Observations": {
+        "HRT": {
+            "autocorrelation_time-span": "1",
+            "comparison_method": "Least Squared",
+            "error_standard_deviation": "1",
+            "error_structure": "normal",
+            "expression": "AgeTracker_1:concentration",
+            "kernel_Delta0": "1",
+            "kernel_alpha": "1",
+            "kernel_tau": "1",
+            "name": "HRT",
+            "object": "Wetland Cell 6",
+            "observed_data": "",
+            "type": "Observation"
+        },
+        "Precipitation (mm/day)": {
+            "autocorrelation_time-span": "1",
+            "comparison_method": "Least Squared",
+            "error_standard_deviation": "1",
+            "error_structure": "normal",
+            "expression": "(Precipitation*1000)",
+            "kernel_Delta0": "1",
+            "kernel_alpha": "1",
+            "kernel_tau": "1",
+            "name": "Precipitation (mm/day)",
+            "object": "Rain Gauge",
+            "observed_data": "",
+            "type": "Observation"
+        },
+        "Wetland Cell 1 Water depth (m)": {
+            "autocorrelation_time-span": "1",
+            "comparison_method": "Least Squared",
+            "error_standard_deviation": "1",
+            "error_structure": "normal",
+            "expression": "depth",
+            "kernel_Delta0": "1",
+            "kernel_alpha": "1",
+            "kernel_tau": "1",
+            "name": "Wetland Cell 1 Water depth (m)",
+            "object": "Wetland Cell 1",
+            "observed_data": "",
+            "type": "Observation"
+        },
+        "Wetland Cell 6 Water depth (m)": {
+            "autocorrelation_time-span": "1",
+            "comparison_method": "Least Squared",
+            "error_standard_deviation": "1",
+            "error_structure": "normal",
+            "expression": "depth",
+            "kernel_Delta0": "1",
+            "kernel_alpha": "1",
+            "kernel_tau": "1",
+            "name": "Wetland Cell 6 Water depth (m)",
+            "object": "Wetland Cell 6",
+            "observed_data": "",
+            "type": "Observation"
+        },
+        "Wetland inflow (m3/day)": {
+            "autocorrelation_time-span": "1",
+            "comparison_method": "Least Squared",
+            "error_standard_deviation": "1",
+            "error_structure": "normal",
+            "expression": "flow",
+            "kernel_Delta0": "1",
+            "kernel_alpha": "1",
+            "kernel_tau": "1",
+            "name": "Wetland inflow (m3/day)",
+            "object": "Catchment runoff to wetland inlet",
+            "observed_data": "",
+            "type": "Observation"
+        },
+        "Wetland inlet stage (m)": {
+            "autocorrelation_time-span": "1",
+            "comparison_method": "Weighted Least Squared",
+            "error_standard_deviation": "1",
+            "error_structure": "normal",
+            "expression": "depth",
+            "kernel_Delta0": "30",
+            "kernel_alpha": "1",
+            "kernel_tau": "1",
+            "name": "Wetland inlet stage (m)",
+            "object": "Wetland Cell 1",
+            "observed_data": "",
+            "type": "Observation"
+        },
+        "Wetland mid-stage (m)": {
+            "autocorrelation_time-span": "1",
+            "comparison_method": "Weighted Least Squared",
+            "error_standard_deviation": "1",
+            "error_structure": "normal",
+            "expression": "depth",
+            "kernel_Delta0": "30",
+            "kernel_alpha": "1",
+            "kernel_tau": "1",
+            "name": "Wetland mid-stage (m)",
+            "object": "Wetland Cell 3",
+            "observed_data": "",
+            "type": "Observation"
+        },
+        "Wetland outflow (m3/day)": {
+            "autocorrelation_time-span": "1",
+            "comparison_method": "Weighted Least Squared",
+            "error_standard_deviation": "1",
+            "error_structure": "normal",
+            "expression": "flow",
+            "kernel_Delta0": "30",
+            "kernel_alpha": "1",
+            "kernel_tau": "1",
+            "name": "Wetland outflow (m3/day)",
+            "object": "Wetland outlet weir",
+            "observed_data": "",
+            "type": "Observation"
+        },
+        "Wetland outlet stage (m)": {
+            "autocorrelation_time-span": "1",
+            "comparison_method": "Weighted Least Squared",
+            "error_standard_deviation": "1",
+            "error_structure": "normal",
+            "expression": "depth",
+            "kernel_Delta0": "30",
+            "kernel_alpha": "1",
+            "kernel_tau": "1",
+            "name": "Wetland outlet stage (m)",
+            "object": "Wetland Cell 6",
+            "observed_data": "",
+            "type": "Observation"
+        }
+    },
+    "Parameters": {
+        "CatchmentRunoffCoeff": {
+            "high": "0.95",
+            "low": "0.2",
+            "name": "CatchmentRunoffCoeff",
+            "prior_distribution": "log-normal",
+            "type": "Parameter",
+            "value": "0.75"
+        },
+        "Evap_Coefficient": {
+            "high": "2",
+            "low": "0.3",
+            "name": "Evap_Coefficient",
+            "prior_distribution": "normal",
+            "type": "Parameter",
+            "value": "1"
+        },
+        "PondAlphaMultiplier": {
+            "high": "2",
+            "low": "0.5",
+            "name": "PondAlphaMultiplier",
+            "prior_distribution": "log-normal",
+            "type": "Parameter",
+            "value": "1"
+        },
+        "Soil_Hydraulic_Conductivity": {
+            "high": "0.1",
+            "low": "0.0005",
+            "name": "Soil_Hydraulic_Conductivity",
+            "prior_distribution": "log-normal",
+            "type": "Parameter",
+            "value": "0.01"
+        },
+        "WetlandOutletAlpha": {
+            "high": "500000",
+            "low": "20000",
+            "name": "WetlandOutletAlpha",
+            "prior_distribution": "log-normal",
+            "type": "Parameter",
+            "value": "100000"
+        }
+    },
+    "Reaction Parameters": {
+    },
+    "Reactions": {
+        "aging": {
+            "AgeTracker_1:stoichiometric_constant": "1",
+            "name": "aging",
+            "rate_expression": "1",
+            "type": "Reaction"
+        }
+    },
+    "Set As Parameters": [
+        {
+            "Object": "Contributing Catchment",
+            "Parameter": "CatchmentRunoffCoeff",
+            "Quantity": "Runoff_coeff"
+        },
+        {
+            "Object": "Wetland Cell 1",
+            "Parameter": "PondAlphaMultiplier",
+            "Quantity": "alpha_multiplier"
+        },
+        {
+            "Object": "Wetland Cell 2",
+            "Parameter": "PondAlphaMultiplier",
+            "Quantity": "alpha_multiplier"
+        },
+        {
+            "Object": "Wetland Cell 3",
+            "Parameter": "PondAlphaMultiplier",
+            "Quantity": "alpha_multiplier"
+        },
+        {
+            "Object": "Wetland Cell 4",
+            "Parameter": "PondAlphaMultiplier",
+            "Quantity": "alpha_multiplier"
+        },
+        {
+            "Object": "Wetland Cell 5",
+            "Parameter": "PondAlphaMultiplier",
+            "Quantity": "alpha_multiplier"
+        },
+        {
+            "Object": "Wetland Cell 6",
+            "Parameter": "PondAlphaMultiplier",
+            "Quantity": "alpha_multiplier"
+        },
+        {
+            "Object": "Wetland outlet weir",
+            "Parameter": "WetlandOutletAlpha",
+            "Quantity": "alpha"
+        },
+        {
+            "Object": "Wetland Cell 4 - fixed_head (1)",
+            "Parameter": "Soil_Hydraulic_Conductivity",
+            "Quantity": "hydraulic_conductivity"
+        },
+        {
+            "Object": "Wetland Cell 5 - fixed_head (1)",
+            "Parameter": "Soil_Hydraulic_Conductivity",
+            "Quantity": "hydraulic_conductivity"
+        },
+        {
+            "Object": "Wetland Cell 6 - fixed_head (1)",
+            "Parameter": "Soil_Hydraulic_Conductivity",
+            "Quantity": "hydraulic_conductivity"
+        },
+        {
+            "Object": "Wetland Cell 3 - fixed_head (1)",
+            "Parameter": "Soil_Hydraulic_Conductivity",
+            "Quantity": "hydraulic_conductivity"
+        },
+        {
+            "Object": "Wetland Cell 2 - fixed_head (1)",
+            "Parameter": "Soil_Hydraulic_Conductivity",
+            "Quantity": "hydraulic_conductivity"
+        },
+        {
+            "Object": "Wetland Cell 1 - fixed_head (1)",
+            "Parameter": "Soil_Hydraulic_Conductivity",
+            "Quantity": "hydraulic_conductivity"
+        }
+    ],
+    "Settings": {
+        "acceptance_rate": "0.15",
+        "add_noise_to_realizations": "No",
+        "alloutputfile": "output.txt",
+        "c_n_weight": "1",
+        "continue_based_on_file_name": "",
+        "initial_purturbation": "No",
+        "initial_time_step": "0.01",
+        "initual_purturbation_factor": "0.05",
+        "jacobian_method": "Inverse Jacobian",
+        "max_timestep_decrease_factor": "100000",
+        "max_timestep_increase_factor": "50",
+        "maximum_number_of_matrix_inverstions": "200000",
+        "maximum_time_allowed": "86400",
+        "maxpop": "30",
+        "minimum_timestep": "1e-06",
+        "n_threads": "8",
+        "ngen": "10",
+        "nr_timestep_reduction_factor": "0.75",
+        "nr_timestep_reduction_factor_fail": "0.2",
+        "nr_tolerance": "0.001",
+        "number_of_burnout_samples": "0",
+        "number_of_chains": "8",
+        "number_of_post_estimate_realizations": "0",
+        "number_of_samples": "1000",
+        "number_of_threads": "1",
+        "numthreads": "2",
+        "observed_outputfile": "observedoutput.txt",
+        "outputfile": "GA_output.txt",
+        "pcross": "1",
+        "perform_global_sensitivity": "No",
+        "pmute": "0.02",
+        "purturbation_change_scale": "0.75",
+        "record_interval": "1",
+        "samples_filename": "mcmc.txt",
+        "shakescale": "0.05",
+        "shakescalered": "0.75",
+        "simulation_end_time": "40542.8",
+        "simulation_start_time": "40543.5",
+        "write_interval": "100",
+        "write_solution_details": "Yes"
+    },
+    "Sources": {
+        "Evapotranspiration_Penman (Soil)": {
+            "R_h": "",
+            "Temperature": "",
+            "gamma": "66.8",
+            "name": "Evapotranspiration_Penman (Soil)",
+            "solar_radiation": "",
+            "solar_scale_fact": "1",
+            "type": "Evapotranspiration_Penmam (S)",
+            "wind_scale_fact": "1",
+            "wind_speed": "",
+            "z0": "0.0003",
+            "z2": "2"
+        },
+        "Rain": {
+            "name": "Rain",
+            "timeseries": "",
+            "type": "Precipitation"
+        }
+    },
+    "Templates": [
+        "/home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/main_components.json",
+        "/home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/Pond_Plugin.json",
+        "/home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/Sewer_system.json",
+        "/home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/evapotranspiration_models.json",
+        "/home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/mass_transfer.json",
+        "/home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/groundwater.json"
+    ]
+}

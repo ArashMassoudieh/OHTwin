@@ -230,3 +230,17 @@ deployments/Wetland_truth/model/output.txt
 deployments/Wetland_truth/model/state.json
 
 deployments/Wetland_sensitivity_analysis/Simulations/
+
+deployments/Wetland_assimilation/model/errors.txt
+
+deployments/Wetland_assimilation/model/fit_measures.txt
+
+deployments/Wetland_assimilation/model/mapped_modeled_results.txt
+
+deployments/Wetland_assimilation/model/Objective_Function_TimeSeries.txt
+
+deployments/Wetland_assimilation/model/objective_function_values.txt
+
+deployments/Wetland_assimilation/model/observedoutput.txt
+
+deployments/Wetland_assimilation/model/output.txt
