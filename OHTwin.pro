@@ -106,7 +106,9 @@ equals(OHQ_FROM_SOURCE, 1) {
 
 # ── Platform libs ────────────────────────────────────────────────
 linux {
-    DEFINES += ARMA_USE_LAPACK ARMA_USE_BLAS GSL
+DEFINES += ARMA_USE_LAPACK ARMA_USE_BLAS GSL
+    QMAKE_CXXFLAGS += -fopenmp
+    QMAKE_LFLAGS   += -fopenmp
     LIBS += -larmadillo -llapack -lblas -lgsl -lgomp
 }
 
