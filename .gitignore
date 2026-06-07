@@ -244,3 +244,5 @@ deployments/Wetland_assimilation/model/objective_function_values.txt
 deployments/Wetland_assimilation/model/observedoutput.txt
 
 deployments/Wetland_assimilation/model/output.txt
+
+build-qmake/
