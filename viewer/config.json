@@ -3,9 +3,9 @@
     "refresh_seconds": 10,
 
     "assimilation": {
-        "ga_merged_url":    "http://localhost:8089/outputs/calibration/ga_output_merged.txt",
-        "observed_csv_url": "http://localhost:8088/outputs/selected_output.csv",
-        "modeled_csv_url":  "http://localhost:8089/outputs/selected_output.csv",
+        "ga_merged_url":    "http://localhost:8085/outputs/calibration/ga_output_merged.txt",
+        "observed_csv_url": "http://localhost:8084/outputs/selected_output.csv",
+        "modeled_csv_url":  "http://localhost:8085/outputs/selected_output.csv",
 
         "x_axis": "t_now",
 
