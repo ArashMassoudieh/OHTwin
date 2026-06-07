@@ -244,3 +244,5 @@ deployments/Wetland_assimilation/model/objective_function_values.txt
 deployments/Wetland_assimilation/model/observedoutput.txt
 
 deployments/Wetland_assimilation/model/output.txt
+
+viewer/build/Desktop_Qt_6_8_2-Release/.qtc_clangd/.cache/clangd/index/

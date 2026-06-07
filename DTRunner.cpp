@@ -1167,6 +1167,19 @@ bool DTRunner::mergeIntoSelectedOutput(const TimeSeriesSet<double> &advanceObs,
               << merged.size() << " series, "
               << merged.maxnumpoints() << " max rows\n";
 
+    for (size_t i = 0; i < merged.size(); ++i) {
+        const auto &ts = merged[i];
+        for (size_t j = 1; j < ts.size(); ++j) {
+            if (ts.getTime(j) < ts.getTime(j-1)) {
+                std::cerr << "[Runner] NON-MONOTONIC in '" << ts.name()
+                << "' at idx " << j << ": " << ts.getTime(j-1)
+                << " -> " << ts.getTime(j)
+                << " (advanceStart=" << cutoffTime << ")\n";
+                break;
+            }
+        }
+    }
+
     return true;
 }
 
