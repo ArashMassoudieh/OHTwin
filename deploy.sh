@@ -32,14 +32,32 @@ set -e
 
 # --- Configuration ---------------------------------------------------------
 EC2_USER="ubuntu"
-EC2_HOST="ec2-34-221-236-134.us-west-2.compute.amazonaws.com"
-EC2_PUBLIC_IP="34.221.236.134"
+# Elastic IP (openhydrotwin.com). Stable across instance stop/start, unlike
+# the auto-assigned public IPv4, which is why we pin the EIP here.
+EC2_PUBLIC_IP="52.42.223.42"
+EC2_HOST="${EC2_PUBLIC_IP}"
 PEM_FILE="/home/arash/Dropbox/AWS (Selective Sync Conflict)/ArashLinux.pem"
 
 LOCAL_PROJECT="/home/arash/Projects/DrywellDT"
 LOCAL_VIEWER="${LOCAL_PROJECT}/viewer"
-QT_LIB_DIR="/home/arash/Qt/6.8.2/gcc_64/lib"
+
+# Qt install (Qt-installer layout). Bump QT_VER on a Qt upgrade and every
+# Qt path below follows.
+QT_VER="6.8.3"
+QT_ROOT="/home/arash/Qt/${QT_VER}"
+QT_DESKTOP="${QT_ROOT}/gcc_64"
+QT_WASM="${QT_ROOT}/wasm_singlethread"
+QMAKE_DESKTOP="${QT_DESKTOP}/bin/qmake"
+QMAKE_WASM="${QT_WASM}/bin/qmake"
+
+QT_LIB_DIR="${QT_DESKTOP}/lib"
 OHQ_LIB_DIR="${LOCAL_PROJECT}/libs/release"
+
+# Emscripten environment for the WebAssembly viewer build. Qt 6.8.x expects
+# emsdk 3.1.56. Set SKIP_VIEWER_BUILD=1 to reuse the already-built viewer
+# (e.g. SKIP_VIEWER_BUILD=1 ./deploy.sh ...) and bypass emscripten entirely.
+EMSDK_ENV="/home/arash/Projects/emsdk/emsdk_env.sh"
+SKIP_VIEWER_BUILD="${SKIP_VIEWER_BUILD:-0}"
 
 # Project name (from .pro: TARGET = OHTwin) and build output path
 # (from .pro: BUILD_DIR = $$PWD/build-qmake, DESTDIR = $$BUILD_DIR/bin).
@@ -70,6 +88,31 @@ declare -A OUTPUTS_PORT=(
 declare -A VIEWER_PORT=(
     [Bioretention_truth]=9084
     [Bioretention_assimilation]=9085
+)
+
+# --- Viewer pages ----------------------------------------------------------
+# Viewer pages are decoupled from deployments: we generate three pages from
+# the two underlying deployments. Each page has:
+#   kind  -> which template to use (forward | assimilation)
+#   port  -> viewer (HTTP) port for the page
+#   src   -> deployment whose outputs/ the page reads (for relative URL subst)
+# The 'forecast' page is a forward viewer pointed at the assimilation
+# deployment's outputs (it reads that runner's forecast_viz.* files).
+VIEWER_PAGES=(truth assimilation forecast)
+declare -A PAGE_KIND=(
+    [truth]=forward
+    [assimilation]=assimilation
+    [forecast]=forward
+)
+declare -A PAGE_PORT=(
+    [truth]=9084
+    [assimilation]=9085
+    [forecast]=9086
+)
+declare -A PAGE_SRC=(
+    [truth]=Bioretention_truth
+    [assimilation]=Bioretention_assimilation
+    [forecast]=Bioretention_assimilation
 )
 
 # --- Convenience ----------------------------------------------------------
@@ -131,7 +174,7 @@ done
 section "Building OHTwin runner (Release)..."
 mkdir -p "${RUNNER_BUILD}"
 cd "${RUNNER_BUILD}"
-/home/arash/Qt/6.8.2/gcc_64/bin/qmake \
+"${QMAKE_DESKTOP}" \
     "${PRO_FILE}" \
     CONFIG+=release CONFIG-=debug
 make -j"$(nproc)"
@@ -142,13 +185,32 @@ log "Runner built: ${RUNNER_BIN}"
 # Step 2 — Build viewer (WebAssembly Release)
 # =============================================================================
 section "Building viewer (WebAssembly Release)..."
-mkdir -p "${VIEWER_BUILD}"
-cd "${VIEWER_BUILD}"
-/home/arash/Qt/6.8.2/wasm_singlethread/bin/qmake \
-    "${LOCAL_VIEWER}/OHTwinViewer.pro" \
-    CONFIG+=release CONFIG-=debug
-make -j"$(nproc)"
-log "Viewer built."
+if [[ "${SKIP_VIEWER_BUILD}" == "1" ]]; then
+    warn "SKIP_VIEWER_BUILD=1 set — reusing existing viewer in ${VIEWER_BUILD}"
+    [[ -f "${VIEWER_BUILD}/OHTwinViewer.wasm" ]] || \
+        err "No existing viewer at ${VIEWER_BUILD}/OHTwinViewer.wasm to reuse"
+else
+    # Source emsdk so em++/emcc are on PATH. emsdk_env.sh is noisy and can
+    # return nonzero, so shield it from set -e.
+    if [[ -f "${EMSDK_ENV}" ]]; then
+        set +e
+        # shellcheck disable=SC1090
+        source "${EMSDK_ENV}" >/dev/null 2>&1
+        set -e
+    else
+        err "emsdk env not found at ${EMSDK_ENV}. Edit EMSDK_ENV, or run with SKIP_VIEWER_BUILD=1 to reuse the existing viewer."
+    fi
+    command -v em++ >/dev/null 2>&1 || \
+        err "em++ not on PATH after sourcing emsdk. Check the emsdk install (Qt 6.8.x needs emsdk 3.1.56), or run with SKIP_VIEWER_BUILD=1."
+
+    mkdir -p "${VIEWER_BUILD}"
+    cd "${VIEWER_BUILD}"
+    "${QMAKE_WASM}" \
+        "${LOCAL_VIEWER}/OHTwinViewer.pro" \
+        CONFIG+=release CONFIG-=debug
+    make -j"$(nproc)"
+    log "Viewer built."
+fi
 
 # =============================================================================
 # Step 3 — Stage shared libs
@@ -170,7 +232,7 @@ if [[ -d "${OHQ_LIB_DIR}" ]]; then
     cp "${OHQ_LIB_DIR}"/*.so* "${BUNDLE_DIR}/lib/" 2>/dev/null || true
 fi
 mkdir -p "${BUNDLE_DIR}/plugins/tls"
-cp "/home/arash/Qt/6.8.2/gcc_64/plugins/tls/libqopensslbackend.so" \
+cp "${QT_DESKTOP}/plugins/tls/libqopensslbackend.so" \
    "${BUNDLE_DIR}/plugins/tls/"
 
 # =============================================================================
@@ -229,11 +291,11 @@ cat > "${BUNDLE_DIR}/viewer_config_forward.template.json" << 'EOF'
     "mode": "forward",
     "refresh_seconds": 300,
     "forward": {
-        "csv_url":                "/__DEPLOYMENT__/outputs/selected_output.csv",
-        "viz_url":                "/__DEPLOYMENT__/outputs/viz.svg",
-        "viz_state_url":          "/__DEPLOYMENT__/outputs/viz_state.json",
-        "forecast_viz_url":       "/__DEPLOYMENT__/outputs/forecast_viz.svg",
-        "forecast_viz_state_url": "/__DEPLOYMENT__/outputs/forecast_viz_state.json"
+        "csv_url":                "__SRC_BASE__/outputs/selected_output.csv",
+        "viz_url":                "__SRC_BASE__/outputs/viz.svg",
+        "viz_state_url":          "__SRC_BASE__/outputs/viz_state.json",
+        "forecast_viz_url":       "__SRC_BASE__/outputs/forecast_viz.svg",
+        "forecast_viz_state_url": "__SRC_BASE__/outputs/forecast_viz_state.json"
     }
 }
 EOF
@@ -245,9 +307,9 @@ cat > "${BUNDLE_DIR}/viewer_config_assimilation.template.json" << 'EOF'
     "mode": "assimilation",
     "refresh_seconds": 10,
     "assimilation": {
-        "ga_merged_url":    "/__DEPLOYMENT__/outputs/calibration/ga_output_merged.txt",
-        "observed_csv_url": "/__TRUTH_DEPLOYMENT__/outputs/selected_output.csv",
-        "modeled_csv_url":  "/__DEPLOYMENT__/outputs/selected_output.csv",
+        "ga_merged_url":    "__SRC_BASE__/outputs/calibration/ga_output_merged.txt",
+        "observed_csv_url": "__TRUTH_BASE__/outputs/selected_output.csv",
+        "modeled_csv_url":  "__SRC_BASE__/outputs/selected_output.csv",
         "x_axis": "t_now",
         "fitness_metrics": ["nse", "nmse"],
         "parameter_panel": {
@@ -310,12 +372,9 @@ ENDSSH
 # Step 7 — Per-deployment push
 # =============================================================================
 for d in "${DEPLOYMENTS[@]}"; do
-    role=$(role_of "$d")
     outputs_port="${OUTPUTS_PORT[$d]}"
-    viewer_port="${VIEWER_PORT[$d]}"
-    truth_port="${OUTPUTS_PORT[Bioretention_truth]}"   # assim viewer needs this
 
-    section "Deploying ${d} (role=${role}, outputs=${outputs_port}, viewer=${viewer_port})"
+    section "Deploying ${d} (outputs=${outputs_port})"
 
     # 7a — rsync the deployment directory, excluding runtime dirs.
     log "  Rsyncing deployment directory..."
@@ -341,43 +400,15 @@ mkdir -p "/home/ubuntu/drywelldt/deployments/${D}/snapshots"
 chmod -R o+rx "/home/ubuntu/drywelldt/deployments/${D}/outputs"
 ENDSSH
 
-    # 7c — generate per-deployment viewer.
-    log "  Generating viewer (role=${role})..."
-    VIEW_STAGE="${BUNDLE_DIR}/viewers/${d}"
-    rm -rf "${VIEW_STAGE}"
-    mkdir -p "${VIEW_STAGE}"
-    cp "${VIEWER_BUILD}/OHTwinViewer.html" \
-       "${VIEWER_BUILD}/OHTwinViewer.js"   \
-       "${VIEWER_BUILD}/OHTwinViewer.wasm" \
-       "${VIEWER_BUILD}/qtloader.js"          \
-       "${VIEWER_BUILD}/qtlogo.svg"           \
-       "${VIEW_STAGE}/"
-
-    if [[ "$role" == "truth" ]]; then
-        sed -e "s|__DEPLOYMENT__|${d}|g" \
-            "${BUNDLE_DIR}/viewer_config_forward.template.json" \
-            > "${VIEW_STAGE}/config.json"
-    else
-        sed -e "s|__DEPLOYMENT__|${d}|g" \
-            -e "s|__TRUTH_DEPLOYMENT__|Bioretention_truth|g" \
-            "${BUNDLE_DIR}/viewer_config_assimilation.template.json" \
-            > "${VIEW_STAGE}/config.json"
-    fi
-
-    # 7d — push viewer to /var/www/drywelldt/<role>/
-    log "  Pushing viewer files to /var/www/drywelldt/${role}/..."
-    ssh "${SSH_OPTS[@]}" "mkdir -p /var/www/drywelldt/${role} && rm -f /var/www/drywelldt/${role}/*"
-    scp "${SCP_OPTS[@]}" "${VIEW_STAGE}"/* \
-        "${EC2_USER}@${EC2_HOST}:/var/www/drywelldt/${role}/"
-
-    # 7e — install nginx server blocks (one for outputs, one for viewer).
-    log "  Installing nginx server blocks (${outputs_port} outputs, ${viewer_port} viewer)..."
+    # 7c — install nginx OUTPUTS server block for this deployment.
+    #       (Viewer pages are generated separately in Step 7.5.)
+    log "  Installing nginx outputs block (port ${outputs_port})..."
     ssh "${SSH_OPTS[@]}" bash -s -- \
-        "${d}" "${role}" "${outputs_port}" "${viewer_port}" << 'ENDSSH'
+        "${d}" "${outputs_port}" << 'ENDSSH'
 set -e
-D="$1"; ROLE="$2"; OUT_PORT="$3"; VIEW_PORT="$4"
+D="$1"; OUT_PORT="$2"
 
-sudo tee "/etc/nginx/sites-available/drywelldt-${D}" > /dev/null << EOF
+sudo tee "/etc/nginx/sites-available/drywelldt-outputs-${D}" > /dev/null << EOF
 # Outputs server for ${D}
 server {
     listen ${OUT_PORT};
@@ -390,12 +421,69 @@ server {
         add_header Cross-Origin-Embedder-Policy require-corp always;
     }
 }
+EOF
 
-# Viewer page for ${D}
+sudo ln -sf "/etc/nginx/sites-available/drywelldt-outputs-${D}" \
+            "/etc/nginx/sites-enabled/drywelldt-outputs-${D}"
+ENDSSH
+done
+
+# =============================================================================
+# Step 7.5 — Generate viewer pages (decoupled from deployments)
+# =============================================================================
+# Three pages from two deployments:
+#   truth      -> forward viewer over Bioretention_truth outputs        (9084)
+#   assimilation -> assim viewer over Bioretention_assimilation outputs (9085)
+#   forecast   -> forward viewer over Bioretention_assimilation outputs (9086)
+# URLs are absolute (http://IP:PORT/outputs/...) so each page reaches the
+# correct outputs origin regardless of which port the page itself is served on.
+for page in "${VIEWER_PAGES[@]}"; do
+    kind="${PAGE_KIND[$page]}"
+    vport="${PAGE_PORT[$page]}"
+    src="${PAGE_SRC[$page]}"
+    src_out="${OUTPUTS_PORT[$src]}"
+    truth_out="${OUTPUTS_PORT[Bioretention_truth]}"
+
+    section "Generating viewer page '${page}' (kind=${kind}, port=${vport}, reads ${src} outputs on ${src_out})"
+
+    VIEW_STAGE="${BUNDLE_DIR}/viewers/${page}"
+    rm -rf "${VIEW_STAGE}"
+    mkdir -p "${VIEW_STAGE}"
+    cp "${VIEWER_BUILD}/OHTwinViewer.html" \
+       "${VIEWER_BUILD}/OHTwinViewer.js"   \
+       "${VIEWER_BUILD}/OHTwinViewer.wasm" \
+       "${VIEWER_BUILD}/qtloader.js"          \
+       "${VIEWER_BUILD}/qtlogo.svg"           \
+       "${VIEW_STAGE}/"
+
+    if [[ "$kind" == "forward" ]]; then
+        sed -e "s|__SRC_BASE__|http://${EC2_PUBLIC_IP}:${src_out}|g" \
+            "${BUNDLE_DIR}/viewer_config_forward.template.json" \
+            > "${VIEW_STAGE}/config.json"
+    else
+        sed -e "s|__SRC_BASE__|http://${EC2_PUBLIC_IP}:${src_out}|g" \
+            -e "s|__TRUTH_BASE__|http://${EC2_PUBLIC_IP}:${truth_out}|g" \
+            "${BUNDLE_DIR}/viewer_config_assimilation.template.json" \
+            > "${VIEW_STAGE}/config.json"
+    fi
+
+    log "  Pushing viewer files to /var/www/drywelldt/${page}/..."
+    ssh "${SSH_OPTS[@]}" "mkdir -p /var/www/drywelldt/${page} && rm -f /var/www/drywelldt/${page}/*"
+    scp "${SCP_OPTS[@]}" "${VIEW_STAGE}"/* \
+        "${EC2_USER}@${EC2_HOST}:/var/www/drywelldt/${page}/"
+
+    log "  Installing nginx viewer block (port ${vport})..."
+    ssh "${SSH_OPTS[@]}" bash -s -- \
+        "${page}" "${vport}" << 'ENDSSH'
+set -e
+PAGE="$1"; VIEW_PORT="$2"
+
+sudo tee "/etc/nginx/sites-available/drywelldt-viewer-${PAGE}" > /dev/null << EOF
+# Viewer page '${PAGE}'
 server {
     listen ${VIEW_PORT};
     server_name _;
-    root /var/www/drywelldt/${ROLE};
+    root /var/www/drywelldt/${PAGE};
     index OHTwinViewer.html;
     location / {
         try_files \$uri \$uri/ =404;
@@ -405,8 +493,8 @@ server {
 }
 EOF
 
-sudo ln -sf "/etc/nginx/sites-available/drywelldt-${D}" \
-            "/etc/nginx/sites-enabled/drywelldt-${D}"
+sudo ln -sf "/etc/nginx/sites-available/drywelldt-viewer-${PAGE}" \
+            "/etc/nginx/sites-enabled/drywelldt-viewer-${PAGE}"
 ENDSSH
 done
 
@@ -438,15 +526,20 @@ ENDSSH
 # =============================================================================
 section "Deployment complete"
 echo
-for d in "${DEPLOYMENTS[@]}"; do
-    role=$(role_of "$d")
-    op="${OUTPUTS_PORT[$d]}"
-    vp="${VIEWER_PORT[$d]}"
-    echo "  ${d} (${role}):"
-    echo "    Viewer:  http://${EC2_PUBLIC_IP}:${vp}/OHTwinViewer.html"
-    echo "    Outputs: http://${EC2_PUBLIC_IP}:${op}/outputs/"
-    echo
+echo "  Viewer pages:"
+for page in "${VIEWER_PAGES[@]}"; do
+    vp="${PAGE_PORT[$page]}"
+    src="${PAGE_SRC[$page]}"
+    echo "    ${page} (reads ${src}):"
+    echo "      http://${EC2_PUBLIC_IP}:${vp}/OHTwinViewer.html"
 done
+echo
+echo "  Outputs:"
+for d in "${DEPLOYMENTS[@]}"; do
+    op="${OUTPUTS_PORT[$d]}"
+    echo "    ${d}: http://${EC2_PUBLIC_IP}:${op}/outputs/"
+done
+echo
 echo "To watch logs:"
 echo "  ssh -i \"${PEM_FILE}\" ${EC2_USER}@${EC2_HOST}"
 for d in "${DEPLOYMENTS[@]}"; do
