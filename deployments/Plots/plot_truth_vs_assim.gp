@@ -1,10 +1,27 @@
 # Auto-fixed: 9-observation truth/assimilation/reanalysis plot.
 # Uses CSV headers with column("...") so observation order cannot be mixed.
 # Assumes all three files share the selected_output/reanalysis header names.
+#
+# Run from within deployments/:
+#     gnuplot plot_truth_vs_assim.gp
+# For the drift case (uses Bioretention_*_drift folders, writes
+# truth_vs_assim_drift.png):
+#     gnuplot -e "drift=1" plot_truth_vs_assim.gp
 
-truth_file      = "Bioretention_truth/outputs/selected_output.csv"
-assim_file      = "Bioretention_assimilation/outputs/selected_output.csv"
-reanalysis_file = "Bioretention_assimilation/outputs/reanalysis_output.csv"
+if (!exists("drift")) drift = 0
+if (drift) {
+    truth_dir = "Bioretention_truth_drift"
+    assim_dir = "Bioretention_assimilation_drift"
+    suffix    = "_drift"
+} else {
+    truth_dir = "Bioretention_truth"
+    assim_dir = "Bioretention_assimilation"
+    suffix    = ""
+}
+
+truth_file      = truth_dir . "/outputs/selected_output.csv"
+assim_file      = assim_dir . "/outputs/selected_output.csv"
+reanalysis_file = assim_dir . "/outputs/reanalysis_output.csv"
 
 set datafile separator comma
 set xdata time
@@ -19,7 +36,7 @@ set style line 2 lc rgb "#d62728" lw 1.4 pt 7 ps 0.25
 set style line 3 lc rgb "#2ca02c" lw 1.4 pt 7 ps 0.25
 
 set terminal pngcairo size 1800,1500 enhanced font "Helvetica,12"
-set output "truth_vs_assim.png"
+set output "truth_vs_assim" . suffix . ".png"
 set multiplot layout 3,3 title "Truth Twin vs Assimilation Twin vs Reanalysis — selected outputs" font "Helvetica,16"
 
 set title "Evaporation"
@@ -95,4 +112,4 @@ plot \
      reanalysis_file using (($1-25569)*86400):(column(" Underdrain flow (m3/day)")) with linespoints ls 3 title "reanalysis"
 
 unset multiplot
-print "Wrote truth_vs_assim.png"
+print "Wrote truth_vs_assim" . suffix . ".png"
