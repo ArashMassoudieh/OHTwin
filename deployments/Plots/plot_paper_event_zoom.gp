@@ -6,11 +6,25 @@
 #
 # Run from within deployments/:
 #     gnuplot plot_paper_event_zoom.gp
+# For the drift case (uses Bioretention_*_drift folders, writes
+# paper_event_zoom_drift.png):
+#     gnuplot -e "drift=1" plot_paper_event_zoom.gp
 #
 
-truth_file      = "Bioretention_truth/outputs/selected_output.csv"
-assim_file      = "Bioretention_assimilation/outputs/selected_output.csv"
-reanalysis_file = "Bioretention_assimilation/outputs/reanalysis_output.csv"
+if (!exists("drift")) drift = 0
+if (drift) {
+    truth_dir = "Bioretention_truth_drift"
+    assim_dir = "Bioretention_assimilation_drift"
+    suffix    = "_drift"
+} else {
+    truth_dir = "Bioretention_truth"
+    assim_dir = "Bioretention_assimilation"
+    suffix    = ""
+}
+
+truth_file      = truth_dir . "/outputs/selected_output.csv"
+assim_file      = assim_dir . "/outputs/selected_output.csv"
+reanalysis_file = assim_dir . "/outputs/reanalysis_output.csv"
 
 set datafile separator ","
 set datafile commentschars "#t"
@@ -34,7 +48,7 @@ x0 = (x0_serial - 25569) * 86400
 x1 = (x1_serial - 25569) * 86400
 
 set terminal pngcairo size 1800,1600 enhanced font "Helvetica,22"
-set output "paper_event_zoom.png"
+set output "paper_event_zoom" . suffix . ".png"
 
 set multiplot
 
@@ -119,4 +133,4 @@ plot truth_file      using (($11-25569)*86400):12 with linespoints ls 1 notitle,
 
 unset multiplot
 unset output
-print "Wrote paper_event_zoom.png"
+print "Wrote paper_event_zoom" . suffix . ".png"

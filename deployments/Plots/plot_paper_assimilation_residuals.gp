@@ -6,11 +6,25 @@
 #
 # Run from within deployments/:
 #     gnuplot plot_paper_assimilation_residuals.gp
+# For the drift case (uses Bioretention_*_drift folders, writes
+# paper_assimilation_residuals_drift.png):
+#     gnuplot -e "drift=1" plot_paper_assimilation_residuals.gp
 #
 
-truth_file      = "Bioretention_truth/outputs/selected_output.csv"
-assim_file      = "Bioretention_assimilation/outputs/selected_output.csv"
-reanalysis_file = "Bioretention_assimilation/outputs/reanalysis_output.csv"
+if (!exists("drift")) drift = 0
+if (drift) {
+    truth_dir = "Bioretention_truth_drift"
+    assim_dir = "Bioretention_assimilation_drift"
+    suffix    = "_drift"
+} else {
+    truth_dir = "Bioretention_truth"
+    assim_dir = "Bioretention_assimilation"
+    suffix    = ""
+}
+
+truth_file      = truth_dir . "/outputs/selected_output.csv"
+assim_file      = assim_dir . "/outputs/selected_output.csv"
+reanalysis_file = assim_dir . "/outputs/reanalysis_output.csv"
 
 set datafile separator ","
 set datafile commentschars "#t"
@@ -31,11 +45,11 @@ x1_serial = 43862
 x0 = (x0_serial - 25569) * 86400
 x1 = (x1_serial - 25569) * 86400
 
-ta = "< paste -d, Bioretention_truth/outputs/selected_output.csv Bioretention_assimilation/outputs/selected_output.csv"
-tr = "< paste -d, Bioretention_truth/outputs/selected_output.csv Bioretention_assimilation/outputs/reanalysis_output.csv"
+ta = "< paste -d, " . truth_file . " " . assim_file
+tr = "< paste -d, " . truth_file . " " . reanalysis_file
 
 set terminal pngcairo size 1800,1500 enhanced font "Helvetica,22"
-set output "paper_assimilation_residuals.png"
+set output "paper_assimilation_residuals" . suffix . ".png"
 
 set multiplot
 
@@ -110,4 +124,4 @@ plot [x0:x1] 0 with lines ls 3 notitle, \
 
 unset multiplot
 unset output
-print "Wrote paper_assimilation_residuals.png"
+print "Wrote paper_assimilation_residuals" . suffix . ".png"

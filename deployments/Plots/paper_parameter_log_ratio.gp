@@ -1,16 +1,28 @@
 #!/usr/bin/env gnuplot
 #
-# plot_paper_parameter_relative_error.gp
+# paper_parameter_log_ratio.gp
 # Updated to plot log parameter ratios instead of percent error.
 # Percent error becomes visually unstable for small truth values such as
 # NativeSoilKsat; log10(estimated/truth) gives all parameters the same
 # interpretable reference line: zero means exact recovery.
 #
 # Run from within deployments/:
-#     gnuplot plot_paper_parameter_relative_error.gp
+#     gnuplot paper_parameter_log_ratio.gp
+# For the drift case (uses Bioretention_*_drift folders, writes
+# paper_parameter_log_ratio_drift.png):
+#     gnuplot -e "drift=1" paper_parameter_log_ratio.gp
 #
 
-param_file = "Bioretention_assimilation/outputs/calibration/parameter_history.csv"
+if (!exists("drift")) drift = 0
+if (drift) {
+    assim_dir = "Bioretention_assimilation_drift"
+    suffix    = "_drift"
+} else {
+    assim_dir = "Bioretention_assimilation"
+    suffix    = ""
+}
+
+param_file = assim_dir . "/outputs/calibration/parameter_history.csv"
 
 # Truth values: keep synchronized with plot_paper_parameter_history.gp.
 truth_EngK   = 10.0
@@ -21,7 +33,7 @@ set datafile separator ","
 set datafile commentschars "#c"
 
 set terminal pngcairo size 1800,1500 enhanced font "Helvetica,22"
-set output "paper_parameter_log_ratio.png"
+set output "paper_parameter_log_ratio" . suffix . ".png"
 
 set multiplot
 
@@ -85,4 +97,4 @@ plot 0 with lines ls 2 notitle, \
 
 unset multiplot
 unset output
-print "Wrote paper_parameter_log_ratio.png"
+print "Wrote paper_parameter_log_ratio" . suffix . ".png"
