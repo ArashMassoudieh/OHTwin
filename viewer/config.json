@@ -1,6 +1,6 @@
 {
     "mode": "assimilation",
-    "refresh_seconds": 10,
+    "refresh_seconds": 300,
 
     "assimilation": {
         "ga_merged_url":    "http://localhost:8085/outputs/calibration/ga_output_merged.txt",

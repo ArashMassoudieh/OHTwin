@@ -43,7 +43,7 @@ LOCAL_VIEWER="${LOCAL_PROJECT}/viewer"
 
 # Qt install (Qt-installer layout). Bump QT_VER on a Qt upgrade and every
 # Qt path below follows.
-QT_VER="6.8.3"
+QT_VER="6.8.2"
 QT_ROOT="/home/arash/Qt/${QT_VER}"
 QT_DESKTOP="${QT_ROOT}/gcc_64"
 QT_WASM="${QT_ROOT}/wasm_singlethread"
@@ -56,7 +56,7 @@ OHQ_LIB_DIR="${LOCAL_PROJECT}/libs/release"
 # Emscripten environment for the WebAssembly viewer build. Qt 6.8.x expects
 # emsdk 3.1.56. Set SKIP_VIEWER_BUILD=1 to reuse the already-built viewer
 # (e.g. SKIP_VIEWER_BUILD=1 ./deploy.sh ...) and bypass emscripten entirely.
-EMSDK_ENV="/home/arash/Projects/emsdk/emsdk_env.sh"
+EMSDK_ENV="/home/arash/emsdk/emsdk_env.sh"
 SKIP_VIEWER_BUILD="${SKIP_VIEWER_BUILD:-0}"
 
 # Project name (from .pro: TARGET = OHTwin) and build output path
@@ -305,7 +305,7 @@ EOF
 cat > "${BUNDLE_DIR}/viewer_config_assimilation.template.json" << 'EOF'
 {
     "mode": "assimilation",
-    "refresh_seconds": 10,
+    "refresh_seconds": 300,
     "assimilation": {
         "ga_merged_url":    "__SRC_BASE__/outputs/calibration/ga_output_merged.txt",
         "observed_csv_url": "__TRUTH_BASE__/outputs/selected_output.csv",
@@ -417,6 +417,7 @@ server {
         alias /home/ubuntu/drywelldt/deployments/${D}/outputs/;
         add_header Access-Control-Allow-Origin * always;
         add_header Cache-Control no-cache always;
+        add_header Cross-Origin-Resource-Policy cross-origin always;
         add_header Cross-Origin-Opener-Policy same-origin always;
         add_header Cross-Origin-Embedder-Policy require-corp always;
     }

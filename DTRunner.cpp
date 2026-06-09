@@ -675,6 +675,19 @@ bool DTRunner::runOnce()
         const double cutoffSerial = toOHQDaySerial(advanceStart);
 
         // ------------------------------------------------------------
+        // Source selection: when a forecast ran, it spans [t, t+1+H] and
+        // already contains the Advance window [t, t+1] as its first day.
+        // Use the forecast block as the single source for the CSV and skip
+        // the Advance contribution (the overlapping day is identical by
+        // construction). Fall back to Advance-only when forecast is
+        // disabled or failed.
+        // ------------------------------------------------------------
+        const bool useForecastBlock = forecast.ok && (m_forecastDays > 0.0);
+
+        TimeSeriesSet<double> primary =
+            useForecastBlock ? forecast.observed : advance.observed;
+
+        // ------------------------------------------------------------
         // Step 0: OHQ's observed-output series record the integration's
         //         t=0 sample as 0 (initial-state placeholder before the
         //         first solver step). Left in place this produces a
@@ -685,25 +698,24 @@ bool DTRunner::runOnce()
         //         comparable values. No-op if a series has fewer than
         //         two points.
         // ------------------------------------------------------------
-        TimeSeriesSet<double> advanceClean = advance.observed;
-        for (size_t s = 0; s < advanceClean.size(); ++s)
+        for (size_t s = 0; s < primary.size(); ++s)
         {
-            TimeSeries<double> &ts = advanceClean[s];
+            TimeSeries<double> &ts = primary[s];
             if (ts.size() >= 2)
                 ts.setValue(0, ts.getValue(1));
         }
 
         // ------------------------------------------------------------
-        // Step 1: resample Advance observed outputs to the configured
-        //         observation cadence (m_obsSaveIntervalDays).
+        // Step 1: resample observed outputs to the configured observation
+        //         cadence (m_obsSaveIntervalDays).
         // ------------------------------------------------------------
-        TimeSeriesSet<double> advanceProcessed =
-            advanceClean.make_uniform(m_obsSaveIntervalDays);
+        TimeSeriesSet<double> primaryProcessed =
+            primary.make_uniform(m_obsSaveIntervalDays);
 
         // ------------------------------------------------------------
-        // Step 2: apply correlated multiplicative log-normal noise
-        //         using an OU process whose state persists across
-        //         cycles (m_ouState). No-op if sigma == 0.
+        // Step 2: apply correlated multiplicative log-normal noise using
+        //         an OU process whose state persists across cycles
+        //         (m_ouState). No-op if sigma == 0.
         // ------------------------------------------------------------
         if (m_config.observations.noiseSigma > 0.0 ||
             !m_config.observations.noiseSigmaByPattern.empty())
@@ -711,22 +723,19 @@ bool DTRunner::runOnce()
             const double tauDays =
                 static_cast<double>(m_config.observations.noiseCorrelationTimeMs)
                 / (86400.0 * 1000.0);
-            applyOUNoiseStateful(advanceProcessed,
+            applyOUNoiseStateful(primaryProcessed,
                                  m_config.observations.noiseSigma,
                                  tauDays);
         }
 
         // ------------------------------------------------------------
-        // Step 3: forecast tail left clean. The Truth Twin doesn't run
-        //         a forecast stage anyway; if a future config does and
-        //         needs noise, snapshot/restore m_ouState around a
-        //         noised forecast block here.
+        // Step 3: single block in, empty forecast tail. The merge knocks
+        //         out the previous cycle's block at (advanceStart - eps)
+        //         and writes this cycle's full [t, t+1+H] block fresh.
         // ------------------------------------------------------------
         TimeSeriesSet<double> emptyForecast;
-        const TimeSeriesSet<double> &forecastObs =
-            forecast.ok ? forecast.observed : emptyForecast;
 
-        if (!mergeIntoSelectedOutput(advanceProcessed, forecastObs, cutoffSerial))
+        if (!mergeIntoSelectedOutput(primaryProcessed, emptyForecast, cutoffSerial))
             std::cerr << "[Runner] selected_output.csv merge failed (continuing).\n";
 
         // ------------------------------------------------------------
@@ -736,7 +745,6 @@ bool DTRunner::runOnce()
         if (!writeMetadataSidecar())
             std::cerr << "[Runner] selected_output_meta.json write failed (continuing).\n";
     }
-
     // ------------------------------------------------------------------
     // Advance timing for next cycle
     // ------------------------------------------------------------------
@@ -1077,6 +1085,28 @@ bool DTRunner::mergeIntoSelectedOutput(const TimeSeriesSet<double> &advanceObs,
     if (fi.exists() && fi.size() > 0)
     {
         TimeSeriesSet<double> loaded(selectedOutputFile.toStdString(), true);
+        if (!loaded.file_not_found) {
+            merged = loaded;
+            // DIAG: what did we actually read back?
+            if (!merged.empty()) {
+                const auto &ts = merged[0];
+                std::cerr << "[DIAG] loaded '" << ts.name() << "' size=" << ts.size()
+                          << " t[0]=" << (ts.size()? ts.getTime(0):-1)
+                          << " t[last]=" << (ts.size()? ts.getTime(ts.size()-1):-1)
+                          << " cutoff=" << (cutoffTime - kBoundaryEpsilonDays) << "\n";
+            }
+            const size_t before = merged.empty()?0:merged[0].size();
+
+            std::cerr << "[DIAG2] elem[0].t=" << merged[0][0].t
+                      << " getTime(0)=" << merged[0].getTime(0)
+                      << " | elem[last].t=" << merged[0][merged[0].size()-1].t
+                      << " getTime(last)=" << merged[0].getTime(merged[0].size()-1) << "\n";
+
+            merged.knockout(cutoffTime - kBoundaryEpsilonDays);
+            const size_t after = merged.empty()?0:merged[0].size();
+            std::cerr << "[DIAG] knockout dropped " << (before-after)
+                      << " points (before=" << before << " after=" << after << ")\n";
+        }
         if (loaded.file_not_found)
         {
             std::cerr << "[Runner] mergeIntoSelectedOutput: failed to read "
