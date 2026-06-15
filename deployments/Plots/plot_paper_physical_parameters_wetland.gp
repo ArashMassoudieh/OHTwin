@@ -18,7 +18,7 @@ set timefmt "%s"
 
 # Truth/baseline values from Wetland.ohq parameter definitions.
 true_runoff = 0.75
-true_outlet_alpha = 1.0
+true_outlet_alpha = 20000.0
 true_pond_alpha_mult = 1.0
 true_evap = 1.0
 true_soil_ksat = 0.01
@@ -35,15 +35,15 @@ ps = 1.0
 lw_line = 2.2
 lw_truth = 2.2
 
-# Expected parameter_history.csv columns:
+# Actual parameter_history.csv columns:
 # 1 cycle, 2 timestamp, 3 t_now
 # 4 CatchmentRunoffCoeff
-# 5 WetlandOutletAlpha
-# 6 PondAlphaMultiplier
-# 7 Evap_Coefficient
+# 5 Evap_Coefficient
+# 6 Outflow_Std
+# 7 PondAlphaMultiplier
 # 8 Soil_Hydraulic_Conductivity
 # 9 Stage_Std
-# 10 Outflow_Std
+# 10 WetlandOutletAlpha
 
 set format x ""
 unset xlabel
@@ -60,7 +60,7 @@ set format y "10^{%T}"
 set yrange [*:*]
 set title "(b) Wetland outlet alpha" font "Helvetica,18"
 plot true_outlet_alpha with lines dt 2 lc rgb c_truth lw lw_truth notitle, \
-     infile using (epoch($3)):5 with linespoints lc rgb c_est lw lw_line pt 7 ps ps notitle
+     infile using (epoch($3)):10 with linespoints lc rgb c_est lw lw_line pt 7 ps ps notitle
 unset logscale y
 set format y "%g"
 
@@ -68,13 +68,13 @@ set ylabel "Pond {/Symbol a} multiplier (-)" offset 1,0
 set yrange [0:*]
 set title "(c) Pond alpha multiplier" font "Helvetica,18"
 plot true_pond_alpha_mult with lines dt 2 lc rgb c_truth lw lw_truth notitle, \
-     infile using (epoch($3)):6 with linespoints lc rgb c_est lw lw_line pt 7 ps ps notitle
+     infile using (epoch($3)):7 with linespoints lc rgb c_est lw lw_line pt 7 ps ps notitle
 
 set ylabel "Evaporation coefficient (-)" offset 1,0
 set yrange [0:*]
 set title "(d) Evaporation coefficient" font "Helvetica,18"
 plot true_evap with lines dt 2 lc rgb c_truth lw lw_truth notitle, \
-     infile using (epoch($3)):7 with linespoints lc rgb c_est lw lw_line pt 7 ps ps notitle
+     infile using (epoch($3)):5 with linespoints lc rgb c_est lw lw_line pt 7 ps ps notitle
 
 set format x "%Y-%m"
 set xtics 7889400 rotate by -30 offset 0,-0.3

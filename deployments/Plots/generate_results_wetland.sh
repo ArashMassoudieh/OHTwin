@@ -20,6 +20,14 @@ python3 build_fitness_history_wetland.py \
     --ga  "Wetland_assimilation/outputs/calibration/ga_output_merged.txt" \
     --out "Wetland_assimilation/outputs/calibration/fitness_history_wetland.csv"
 
+
+echo "[generate_results_wetland] preparing normalized wetland plot inputs ..."
+python3 prepare_wetland_plot_inputs.py \
+    --truth "Wetland_truth/outputs/selected_output.csv" \
+    --assim "Wetland_assimilation/outputs/selected_output.csv" \
+    --reanalysis "Wetland_assimilation/outputs/reanalysis_output.csv" \
+    --outdir "Wetland_assimilation/outputs/paper_plot_inputs"
+
 echo "[generate_results_wetland] rendering paper_fitness_history_wetland.png ..."
 gnuplot plot_paper_fitness_history_wetland.gp
 

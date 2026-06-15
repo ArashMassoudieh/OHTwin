@@ -37,9 +37,9 @@ lw_line = 2.2
 
 set title "Estimated channel noise standard deviations" font "Helvetica,18"
 
-# Expected columns: 9 Stage_Std, 10 Outflow_Std
+# Actual columns: 9 Stage_Std, 6 Outflow_Std
 plot \
-    infile using (epoch($3)):9  with linespoints lc rgb c_stage lw lw_line pt 7 ps ps title "Stage", \
-    infile using (epoch($3)):10 with linespoints lc rgb c_flow  lw lw_line pt 9 ps ps title "Outflow"
+    infile using (epoch($3)):9 with linespoints lc rgb c_stage lw lw_line pt 7 ps ps title "Stage", \
+    infile using (epoch($3)):6 with linespoints lc rgb c_flow  lw lw_line pt 9 ps ps title "Outflow"
 
 unset output
