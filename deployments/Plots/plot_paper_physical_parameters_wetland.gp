@@ -18,10 +18,11 @@ set timefmt "%s"
 
 # Truth/baseline values from Wetland.ohq parameter definitions.
 true_runoff = 0.75
-true_outlet_alpha = 20000.0
+true_outlet_alpha = 100000.0
 true_pond_alpha_mult = 1.0
 true_evap = 1.0
 true_soil_ksat = 0.01
+ksat_truth_file = "Wetland_truth/drift/ksat_drift_wetland.csv"
 
 set multiplot layout 3,2
 set grid xtics ytics lc rgb "#cccccc" lw 0.8
@@ -87,7 +88,7 @@ set format y "10^{%T}"
 set yrange [*:*]
 set title "(e) Soil hydraulic conductivity" font "Helvetica,18"
 set key top right inside box opaque samplen 2 spacing 1.2 font "Helvetica,16" width 0
-plot true_soil_ksat with lines dt 2 lc rgb c_truth lw lw_truth title "Synthetic truth", \
+plot ksat_truth_file using (epoch($1)):2 with lines dt 2 lc rgb c_truth lw lw_truth title "Synthetic truth", \
      infile using (epoch($3)):8 with linespoints lc rgb c_est lw lw_line pt 7 ps ps title "Estimated"
 unset logscale y
 set format y "%g"

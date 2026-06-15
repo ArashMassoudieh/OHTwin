@@ -15,6 +15,14 @@ cd "$SCRIPT_DIR"
 
 echo "[generate_results_wetland] working directory: $(pwd)"
 
+
+# Optional bundled drift truth file for soil Ksat.
+# In the deployment this normally lives under Wetland_truth/drift/.
+if [[ -f "ksat_drift_wetland.csv" && ! -f "Wetland_truth/drift/ksat_drift_wetland.csv" ]]; then
+    mkdir -p "Wetland_truth/drift"
+    cp "ksat_drift_wetland.csv" "Wetland_truth/drift/ksat_drift_wetland.csv"
+fi
+
 echo "[generate_results_wetland] building fitness_history_wetland.csv ..."
 python3 build_fitness_history_wetland.py \
     --ga  "Wetland_assimilation/outputs/calibration/ga_output_merged.txt" \
