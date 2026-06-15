@@ -51,6 +51,9 @@ gnuplot plot_paper_truth_vs_assim_wetland.gp
 echo "[generate_results_wetland] rendering paper_truth_vs_assim_diagnostics_wetland.png ..."
 gnuplot plot_paper_truth_vs_assim_diagnostics_wetland.gp
 
+echo "[generate_results_wetland] rendering paper_wetland_hrt_full_period.png ..."
+gnuplot plot_paper_wetland_hrt_full_period.gp
+
 echo "[generate_results_wetland] rendering paper_wetland_stage_three_views.png ..."
 gnuplot plot_paper_wetland_stage_three_views.gp
 
