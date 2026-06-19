@@ -1,0 +1,16 @@
+{
+    "deployment": {
+        "name": "R",
+        "model_file": "model/R_LF.ohq",
+        "viz_file": "viz_r.json",
+        "port": 8082
+    },
+    "runtime": {
+        "weather_source": "openmeteo",
+        "latitude": 38.91088,
+        "longitude": -76.98569,
+        "interval": "1day",
+        "forecast_horizon": "6day",
+        "state_variables": []
+    }
+}
