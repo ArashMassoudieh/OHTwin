@@ -3,12 +3,12 @@
     "x": 0,
     "y": 0,
     "width": 1220,
-    "height": 940
+    "height": 590
   },
   "components": [
     {
       "id": "title",
-      "label": "Rosemead Bioswale R \u2014 full-depth model",
+      "label": "Rosemead Bioswale R_LF \u2014 low-flow / reduced-depth model",
       "x": 390,
       "y": 14,
       "width": 440,
@@ -350,7 +350,7 @@
       "id": "gw",
       "label": "Groundwater",
       "x": 80,
-      "y": 875,
+      "y": 505,
       "width": 1045,
       "height": 42,
       "block": "GW",
@@ -389,9 +389,9 @@
     },
     {
       "id": "depth_note",
-      "label": "Deep rows: 9\u201331",
+      "label": "Deep rows: 9\u201311",
       "x": 515,
-      "y": 830,
+      "y": 460,
       "width": 145,
       "height": 26,
       "draw": [
@@ -489,7 +489,7 @@
         "j": {
           "range": [
             9,
-            31
+            11
           ]
         }
       },
@@ -502,12 +502,12 @@
         "y": {
           "counter": "j",
           "range": [
-            335,
-            820
+            330,
+            405
           ]
         },
         "width": 72,
-        "height": 13,
+        "height": 18,
         "fill_max": 1,
         "bind": {
           "fill_value": {
@@ -551,7 +551,7 @@
         "r": {
           "range": [
             9,
-            31
+            11
           ]
         },
         "c": {
@@ -576,12 +576,12 @@
         "y": {
           "counter": "r",
           "range": [
-            335,
-            820
+            330,
+            405
           ]
         },
         "width": 28,
-        "height": 13,
+        "height": 16,
         "fill_max": 1,
         "bind": {
           "fill_value": {
@@ -625,7 +625,7 @@
         "r": {
           "range": [
             9,
-            31
+            11
           ]
         },
         "c": {
@@ -650,12 +650,12 @@
         "y": {
           "counter": "r",
           "range": [
-            335,
-            820
+            330,
+            405
           ]
         },
         "width": 28,
-        "height": 13,
+        "height": 16,
         "fill_max": 1,
         "bind": {
           "fill_value": {
@@ -945,7 +945,7 @@
     },
     {
       "link": "UEngineered - GW",
-      "from": "UEngineered (31)",
+      "from": "UEngineered (11)",
       "to": "GW",
       "attach": "auto",
       "style": "line",
@@ -992,7 +992,7 @@
       },
       "template": {
         "link": "LeftBottom - GW (${i})",
-        "from": "LeftBottom (31$${i})",
+        "from": "LeftBottom (11$${i})",
         "to": "GW",
         "attach": "auto",
         "style": "line",
@@ -1015,7 +1015,7 @@
       },
       "template": {
         "link": "RightBottom - GW (${i})",
-        "from": "RightBottom (31$${i})",
+        "from": "RightBottom (11$${i})",
         "to": "GW",
         "attach": "auto",
         "style": "line",
