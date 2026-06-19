@@ -2,7 +2,7 @@
     "deployment": {
         "name": "R",
         "model_file": "model/R.ohq",
-        "viz_file": "viz_R.json",
+        "viz_file": "viz_r.json",
         "port": 8086
     },
     "runtime": {
