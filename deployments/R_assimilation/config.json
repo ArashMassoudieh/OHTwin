@@ -3,7 +3,7 @@
         "name": "R_assimilation",
         "model_file": "model/R_LF.ohq",
         "viz_file": "viz_r_lf.json",
-        "port": 8086
+        "port": 8092
     },
     "runtime": {
         "weather_source": "openmeteo_historical",
