@@ -1,8 +1,8 @@
 {
     "deployment": {
         "name": "R_assimilation",
-        "model_file": "model/R.ohq",
-        "viz_file": "viz_r.json",
+        "model_file": "model/R_LF.ohq",
+        "viz_file": "viz_r_lf.json",
         "port": 8086
     },
     "runtime": {
