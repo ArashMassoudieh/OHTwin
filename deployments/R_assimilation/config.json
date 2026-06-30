@@ -1,0 +1,47 @@
+{
+    "deployment": {
+        "name": "R_assimilation",
+        "model_file": "model/R.ohq",
+        "viz_file": "viz_r.json",
+        "port": 8086
+    },
+    "runtime": {
+        "weather_source": "openmeteo_historical",
+        "latitude": 38.91088,
+        "longitude": -76.98569,
+        "interval": "1day",
+        "forecast_horizon": "",
+        "start_datetime": "2020-01-03T00:00:00",
+        "stop_datetime": "2022-01-03T00:00:00",
+        "time_acceleration": 200,
+        "state_variables": [],
+        "keep_debug_outputs": false,
+        "advance_to_observations": true
+    },
+    "observations": {
+        "save_interval": "1hr",
+        "noise_sigma": {
+            "default": 0.0,
+            "Precipitation (mm/day)": 0.0,
+            "Catchment Water Depth (m)": 0.0,
+            "Soil Moisture M1": 0.0,
+            "Soil Moisture M2": 0.0,
+            "Soil Moisture M3": 0.0,
+            "Overflow (m3/day)": 0.0
+        },
+        "noise_correlation_time": "6hr"
+    },
+    "assimilation": {
+        "truth_csv_url": "http://localhost:8091/outputs/selected_output.csv",
+        "truth_meta_url": "http://localhost:8091/outputs/selected_output_meta.json",
+        "poll_interval": "3day",
+        "calibration_output_dir": "outputs/calibration",
+        "calibration_observations": [
+            "Catchment Water Depth (m)",
+            "Soil Moisture M1",
+            "Soil Moisture M2",
+            "Soil Moisture M3",
+            "Overflow (m3/day)"
+        ]
+    }
+}

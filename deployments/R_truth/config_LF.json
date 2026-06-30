@@ -1,0 +1,34 @@
+{
+    "deployment": {
+        "name": "R",
+        "model_file": "model/R_LF.ohq",
+        "viz_file": "viz_r_lf.json",
+        "port": 8086
+    },
+    "runtime": {
+        "weather_source": "openmeteo_historical",
+        "latitude": 38.91088,
+        "longitude": -76.98569,
+        "interval": "1day",
+        "forecast_horizon": "",
+        "start_datetime": "2020-01-03T00:00:00",
+        "stop_datetime": "2022-01-03T00:00:00",
+        "time_acceleration": 200,
+        "state_variables": [],
+        "keep_debug_outputs": false
+    },
+    "observations": {
+        "save_interval": "1hr",
+        "noise_sigma": {
+            "default": 0.0,
+	    "Precipitation (mm/day)": 0.0,
+	    "Catchment Water Depth (m)": 0.1,
+	    "Soil Moisture M1": 0.05,
+	    "Soil Moisture M2": 0.05,
+	    "Soil Moisture M3": 0.05,
+	    "Overflow (m3/day)": 0.1
+        },
+        "noise_correlation_time": "6hr"
+    }
+}
+
