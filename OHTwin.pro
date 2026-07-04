@@ -130,6 +130,7 @@ SOURCES += \
     DTConfig.cpp \
     DTObservationBuffer.cpp \
     DTRunner.cpp \
+    DTStreamingMCMC.cpp \
     DTWeather.cpp \
     RunLogger.cpp \
     VizRenderer.cpp \
@@ -198,6 +199,7 @@ HEADERS += \
     DTConfig.h \
     DTObservationBuffer.h \
     DTRunner.h \
+    DTStreamingMCMC.h \
     DTWeather.h \
     RunLogger.h \
     VizRenderer.h \
