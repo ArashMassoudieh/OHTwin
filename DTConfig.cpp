@@ -458,6 +458,77 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
                     assimilation.calibrationObservations
                         .push_back(v.toString().toStdString());
         }
+
+        // --- method (optional; default "GA") ---
+        // Inverse solver selection: "GA" (deterministic, deployed default)
+        // or "MCMC" (streaming Bayesian, DTStreamingMCMC). An unrecognized
+        // value is a hard config error rather than a silent GA fallback.
+        if (as.contains("method") && as["method"].isString())
+        {
+            const QString m = as["method"].toString().trimmed().toUpper();
+            if (m == "GA" || m == "MCMC")
+            {
+                assimilation.method = m.toStdString();
+            }
+            else
+            {
+                errorMessage = "config.json assimilation.method must be "
+                               "\"GA\" or \"MCMC\", got: "
+                               + as["method"].toString();
+                return false;
+            }
+        }
+
+        // --- mcmc_budget / mcmc_budget_margin (optional) ---
+        // Wall-clock sampling budget per calibration cycle (Tcal, spec
+        // Sec. 3.8). Same duration syntax as poll_interval ("30sec",
+        // "5min", ...). If mcmc_budget is present it is used as the
+        // absolute per-cycle deadline; otherwise the budget is derived at
+        // runtime as (wall-clock calibration cadence - mcmc_budget_margin),
+        // where the margin absorbs prep (snapshot load, weather fetch,
+        // observation push), publication, and up to one forward-solve of
+        // deadline overshoot. Both are ignored when method == "GA".
+        const QString budgetQ = as.value("mcmc_budget").toString().trimmed();
+        if (!budgetQ.isEmpty())
+        {
+            QString budgetErr;
+            const qint64 budgetMs =
+                parseIntervalMs(budgetQ.toStdString(), budgetErr);
+            if (budgetMs < 0)
+            {
+                errorMessage =
+                    "config.json assimilation.mcmc_budget error: " + budgetErr;
+                return false;
+            }
+            assimilation.mcmcBudgetMs = budgetMs;
+        }
+
+        const QString marginQ = as.value("mcmc_budget_margin").toString().trimmed();
+        if (!marginQ.isEmpty())
+        {
+            QString marginErr;
+            const qint64 marginMs =
+                parseIntervalMs(marginQ.toStdString(), marginErr);
+            if (marginMs < 0)
+            {
+                errorMessage =
+                    "config.json assimilation.mcmc_budget_margin error: "
+                    + marginErr;
+                return false;
+            }
+            assimilation.mcmcBudgetMarginMs = marginMs;
+        }
+
+        // --- posterior_snapshot_path (optional) ---
+        // Cross-cycle posterior exchange file (pooled samples or carried
+        // chain states, spec Sec. 3.9). Defaults to
+        // calibration_output_dir/posterior_latest.json.
+        const QString postQ =
+            as.value("posterior_snapshot_path").toString().trimmed();
+        assimilation.posteriorSnapshotPath =
+            postQ.isEmpty()
+                ? assimilation.calibrationOutputDir + "/posterior_latest.json"
+                : resolvePath(postQ).toStdString();
     }
 
     // --- parameter_drift (optional) ---
@@ -592,7 +663,21 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
                   << (assimilation.truthMetaUrl.empty() ? "(none)" : assimilation.truthMetaUrl)
                   << "\n"
                   << "[Config] assim.poll_int    : "
-                  << assimilation.pollIntervalMs << " ms\n";
+                  << assimilation.pollIntervalMs << " ms\n"
+                  << "[Config] assim.method      : " << assimilation.method << "\n";
+
+        if (assimilation.method == "MCMC")
+        {
+            if (assimilation.mcmcBudgetMs > 0)
+                std::cout << "[Config] assim.mcmc_budget : "
+                          << assimilation.mcmcBudgetMs << " ms (absolute)\n";
+            else
+                std::cout << "[Config] assim.mcmc_budget : cadence - "
+                          << assimilation.mcmcBudgetMarginMs << " ms margin\n";
+
+            std::cout << "[Config] assim.posterior   : "
+                      << assimilation.posteriorSnapshotPath << "\n";
+        }
     }
     else
     {

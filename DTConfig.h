@@ -114,6 +114,25 @@ struct AssimilationConfig
     // Names of observations to use in GA misfit. Empty => use all
     // observations matched in the buffer (backward-compatible).
     std::vector<std::string> calibrationObservations;
+
+    // --- inverse solver selection ---
+    // "GA"   : deterministic genetic-algorithm mode (deployed default)
+    // "MCMC" : streaming Bayesian mode (DTStreamingMCMC)
+    std::string method = "GA";
+
+    // --- MCMC wall-clock budget (Tcal, spec Sec. 3.8) ---
+    // Per-cycle sampling deadline = cycle start + budget. If
+    // mcmcBudgetMs > 0 it is used directly; otherwise the budget is
+    // derived as (wall-clock calibration cadence - mcmcBudgetMarginMs),
+    // where the margin absorbs prep (snapshot load, weather fetch,
+    // observation push), publication, and up to one forward-solve of
+    // deadline overshoot. Ignored when method == "GA".
+    qint64 mcmcBudgetMs       = 0;
+    qint64 mcmcBudgetMarginMs = 30000;
+
+    // Path of the posterior snapshot exchanged between cycles. Empty =>
+    // calibrationOutputDir + "/posterior_latest.json".
+    std::string posteriorSnapshotPath;
 };
 
 // ---------------------------------------------------------------------------
