@@ -135,6 +135,8 @@ struct AssimilationConfig
     std::string posteriorSnapshotPath;
 };
 
+
+
 // ---------------------------------------------------------------------------
 // DTConfig
 //
@@ -248,6 +250,15 @@ public:
     // is omitted from config.json, defaults yield no noise and saving at
     // the runtime interval (i.e., behaves identically to a forward twin).
     ObservationConfig observations;
+
+    struct LoggingConfig
+    {
+        bool        enabled    = false;
+        std::string filePath;               // resolved; default outputs/debug.log
+        std::vector<std::string> categories; // empty => all except mcmc_trace
+        int         flushEvery = 50;
+        bool        truncate   = true;
+    } logging;
 
     // --- data assimilation (forward twin) ---
     // Controls observation polling and (eventually) calibration. The whole

@@ -145,6 +145,7 @@ struct DTPosteriorSummary
     std::vector<double>              stdev;
     std::vector<std::vector<double>> covariance;    // joint, np x np
     std::vector<double>              p025, p50, p975; // credible interval bounds
+    std::vector<double>              p10, p90;         // GA-comparable band (viewer)
 };
 
 // ---------------------------------------------------------------------------
@@ -204,6 +205,20 @@ public:
     bool writePosteriorSnapshot(const QString &path,
                                 const DTCycleResult &result,
                                 QString &errorMessage);
+
+    // Append one compact JSON line for this cycle to the cumulative
+    // history file consumed by the viewer (point estimate, posterior
+    // percentiles, diagnostics -- never samples, so the file stays ~1 KB
+    // per cycle). tNow is the calibration window end (OHQ day-serial).
+    // The file is truncated when this is the deployment's first cycle
+    // (m_cycleIndex == 1), mirroring archiveGAOutput. Provisional cycles
+    // are recorded with converged=false and NO percentile fields, so
+    // transit dispersion is structurally absent from the plot data.
+    // Non-const: parameter(int) accessor.
+    bool appendHistoryRecord(const QString &path,
+                             const DTCycleResult &result,
+                             double tNow,
+                             QString &errorMessage);
 
     // Chooses among ColdStart / ProvisionalResume / RatioReseed / WarmStart
     // from what loadPosteriorSnapshot() found plus the drift flag

@@ -38,6 +38,7 @@
 
 #include "DTConfig.h"
 #include "DTRunner.h"
+#include "DTDebugLog.h"
 
 #include <QCommandLineOption>
 #include <QCommandLineParser>
@@ -47,6 +48,7 @@
 #include <algorithm>
 #include <climits>
 #include <iostream>
+
 
 int main(int argc, char *argv[])
 {
@@ -114,6 +116,22 @@ int main(int argc, char *argv[])
         std::cerr << "[Main] Failed to load config: "
                   << configError.toStdString() << "\n";
         return 1;
+    }
+
+    {
+        QString logErr;
+        if (!DTDebugLog::instance().configure(
+                QString::fromStdString(config.logging.filePath),
+                config.logging.enabled,
+                config.logging.categories,
+                config.logging.flushEvery,
+                config.logging.truncate,
+                logErr))
+        {
+            std::cerr << "[Main] debug log setup failed: "
+                      << logErr.toStdString() << "\n";
+            return 1;
+        }
     }
 
     // ------------------------------------------------------------------

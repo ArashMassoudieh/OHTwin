@@ -1,6 +1,6 @@
 /*
  * OpenHydroTwin
- * Copyright (C) 2026  Arash Massoudieh
+ * Copyright (C) 2026  Enviro
  *
  * This file is part of OpenHydroTwin.
  *
@@ -27,6 +27,7 @@
 #include <QTimer>
 #include "System.h"
 #include <atomic>
+#include <QDateTime>
 
 class DTConfig;
 class RunLogger;
@@ -116,7 +117,23 @@ private:
     std::atomic<qint64> m_bufferPointCount{0};
     qint64 m_pollIntervalWallClockMs = 0;
     int m_cyclesCompleted = 0;
+    // Calibration pipeline: runCalibration dispatches on
+    // m_config.assimilation.method after solver-agnostic prep.
     bool runCalibration(QString &errorMessage);
+    bool prepareCalibrationSystem(System &sys,
+                                  double &tStart, double &tEnd,
+                                  const QDateTime &calStart,
+                                  QString &errorMessage);
+    bool runCalibrationGA(System &sys,
+                          double tStart, double tEnd,
+                          const QDateTime &calStart,
+                          QString &errorMessage);
+    bool runCalibrationMCMC(System &sys,
+                            double tStart, double tEnd,
+                            const QDateTime &calStart,
+                            QString &errorMessage);
+    void recordCalibrationFailure(const QDateTime &calStart,
+                                  const QString &errorMessage);
     bool archiveGAOutput(int cycleIndex);
     QString m_latestSnapshotPath;
     bool writeParameterLog(const System &sys, int cycleIndex);

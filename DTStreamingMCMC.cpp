@@ -19,6 +19,7 @@
  */
 
 #include "DTStreamingMCMC.h"
+#include "DTDebugLog.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -188,6 +189,19 @@ bool DTStreamingMCMC::loadPosteriorSnapshot(const QString &path,
     }
 
     m_havePrevSnapshot = true;
+
+    {
+        DTDebugLog &dlog = DTDebugLog::instance();
+        if (dlog.enabled(DTDebugLog::Category::Snapshot))
+            dlog.log(DTDebugLog::Category::Snapshot,
+                     QString("posterior loaded: %1 (%2, %3 rows, cycle=%4, "
+                             "pertcoeff %5)")
+                         .arg(path)
+                         .arg(m_prevWasProvisional ? "provisional" : "full")
+                         .arg(m_prevSamples.size())
+                         .arg(m_cycleIndex)
+                         .arg(m_prevPertcoeff.empty() ? "absent" : "carried"));
+    }
     return true;
 }
 
@@ -222,6 +236,8 @@ bool DTStreamingMCMC::writePosteriorSnapshot(const QString &path,
         summary["p025"]  = toJsonArray(result.summary.p025);
         summary["p50"]   = toJsonArray(result.summary.p50);
         summary["p975"]  = toJsonArray(result.summary.p975);
+        summary["p10"]   = toJsonArray(result.summary.p10);
+        summary["p90"]   = toJsonArray(result.summary.p90);
         root["summary"]  = summary;
     }
     else
@@ -257,6 +273,84 @@ bool DTStreamingMCMC::writePosteriorSnapshot(const QString &path,
     {
         errorMessage = "failed to commit posterior snapshot: " + path;
         return false;
+    }
+
+    {
+        DTDebugLog &dlog = DTDebugLog::instance();
+        if (dlog.enabled(DTDebugLog::Category::Snapshot))
+            dlog.log(DTDebugLog::Category::Snapshot,
+                     QString("posterior written: %1 (%2, samples=%3, "
+                             "chains=%4)")
+                         .arg(path)
+                         .arg(result.converged ? "full" : "provisional")
+                         .arg(result.pooledSamples.size())
+                         .arg(result.chainParams.size()));
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+bool DTStreamingMCMC::appendHistoryRecord(const QString &path,
+                                          const DTCycleResult &result,
+                                          double tNow,
+                                          QString &errorMessage)
+{
+    QJsonObject rec;
+    rec["cycle"]     = m_cycleIndex;
+    rec["timestamp"] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    rec["t_now"]     = tNow;
+    rec["converged"] = result.converged;
+
+    const unsigned int np = MCMC_Settings.number_of_parameters;
+    QJsonArray names;
+    for (unsigned int i = 0; i < np; ++i)
+        names.append(QString::fromStdString(parameter(i)->GetName()));
+    rec["parameter_names"] = names;
+
+    rec["point_estimate"] = toJsonArray(result.pointEstimate);
+
+    // Percentile fields exist ONLY for converged cycles: a provisional
+    // record carries no dispersion at all, so no downstream plot can
+    // render transit spread as a credible band (Sec. 3.9).
+    if (result.converged)
+    {
+        rec["mean"] = toJsonArray(result.summary.mean);
+        rec["p10"]  = toJsonArray(result.summary.p10);
+        rec["p90"]  = toJsonArray(result.summary.p90);
+        rec["p025"] = toJsonArray(result.summary.p025);
+        rec["p975"] = toJsonArray(result.summary.p975);
+    }
+
+    rec["ess"]                = result.effectiveSampleSize;
+    rec["plateaued_fraction"] = result.plateauedFraction;
+    rec["acceptance_rate"]    = result.acceptanceRate;
+    rec["pool_size"]          = static_cast<double>(result.pooledSamples.size());
+    rec["sweeps"]             = static_cast<double>(result.totalSweeps);
+    rec["evaluations"]        = static_cast<double>(result.totalEvaluations);
+
+    // First cycle of a fresh deployment truncates (mirrors
+    // archiveGAOutput); resumed deployments (cycle restored from the
+    // posterior snapshot) append, preserving history across restarts.
+    QFile file(path);
+    const QIODevice::OpenMode mode =
+        QIODevice::WriteOnly |
+        (m_cycleIndex <= 1 ? QIODevice::Truncate : QIODevice::Append);
+    if (!file.open(mode))
+    {
+        errorMessage = "cannot open posterior history for writing: " + path;
+        return false;
+    }
+    file.write(QJsonDocument(rec).toJson(QJsonDocument::Compact));
+    file.write("\n");
+    file.close();
+
+    {
+        DTDebugLog &dlog = DTDebugLog::instance();
+        if (dlog.enabled(DTDebugLog::Category::Snapshot))
+            dlog.log(DTDebugLog::Category::Snapshot,
+                     QString("history record appended: %1 (cycle=%2, %3)")
+                         .arg(path).arg(m_cycleIndex)
+                         .arg(result.converged ? "full" : "provisional"));
     }
     return true;
 }
@@ -331,6 +425,24 @@ bool DTStreamingMCMC::initializeCycle(SeedMode mode, QString &errorMessage)
     // parallel pass. (seedRatioWeighted, once implemented, is the
     // exception: it computes pi_t per candidate as a side effect and
     // will pre-fill logp to avoid a second solve.)
+    {
+        DTDebugLog &dlog = DTDebugLog::instance();
+        if (dlog.enabled(DTDebugLog::Category::MCMC))
+        {
+            static const char *modeNames[] =
+                { "cold_start", "warm_start", "ratio_reseed",
+                 "provisional_resume" };
+            dlog.log(DTDebugLog::Category::MCMC,
+                     QString("initializeCycle: cycle=%1 mode=%2 chains=%3 "
+                             "params=%4 pertcoeff=%5")
+                         .arg(m_cycleIndex)
+                         .arg(modeNames[static_cast<int>(mode)])
+                         .arg(nc).arg(np)
+                         .arg(m_prevPertcoeff.size() == np
+                                  ? "carried" : "range-init"));
+        }
+    }
+
     bool ok = false;
     switch (mode)
     {
@@ -367,6 +479,30 @@ bool DTStreamingMCMC::initializeCycle(SeedMode mode, QString &errorMessage)
     for (DTChainState &chain : m_chains)
         chain.trace.push_back(chain.logp);
 
+    {
+        DTDebugLog &dlog = DTDebugLog::instance();
+        if (dlog.enabled(DTDebugLog::Category::MCMC))
+        {
+            double lo = 1e300, hi = -1e300;
+            int dead = 0;
+            for (const DTChainState &chain : m_chains)
+            {
+                lo = std::min(lo, chain.logp);
+                hi = std::max(hi, chain.logp);
+                if (chain.logp <= -1e299) ++dead;
+            }
+            dlog.log(DTDebugLog::Category::MCMC,
+                     QString("seeds evaluated: logp range [%1, %2], "
+                             "failed solves=%3/%4")
+                         .arg(lo).arg(hi).arg(dead).arg(nc));
+        }
+        if (dlog.enabled(DTDebugLog::Category::MCMCTrace))
+            for (size_t c = 0; c < m_chains.size(); ++c)
+                dlog.log(DTDebugLog::Category::MCMCTrace,
+                         QString("seed chain=%1 logp=%2")
+                             .arg(c).arg(m_chains[c].logp));
+    }
+
     return true;
 }
 
@@ -400,6 +536,15 @@ DTCycleResult DTStreamingMCMC::runCycle(const QDateTime &deadline)
     // absorbs this. If the deadline is already past at entry, the body
     // never runs and the zero-sweep publication path below still yields
     // a well-formed provisional result.
+    DTDebugLog &dlog = DTDebugLog::instance();
+    if (dlog.enabled(DTDebugLog::Category::MCMC))
+        dlog.log(DTDebugLog::Category::MCMC,
+                 QString("runCycle: cycle=%1 chains=%2 threads=%3 "
+                         "deadline=%4")
+                     .arg(m_cycleIndex).arg(nc)
+                     .arg(MCMC_Settings.numberOfThreads)
+                     .arg(deadline.toString(Qt::ISODateWithMs)));
+
     const int clockStride = std::max(1, streamSettings.stepsPerClockCheck);
     while (true)
     {
@@ -438,7 +583,27 @@ DTCycleResult DTStreamingMCMC::runCycle(const QDateTime &deadline)
         ++m_sweepIndex;
 
         if (m_sweepIndex % std::max(1, streamSettings.adaptationBlock) == 0)
+        {
             adaptProposalScale();
+
+            // Heartbeat at adaptation cadence: where is the ensemble?
+            if (dlog.enabled(DTDebugLog::Category::MCMC))
+            {
+                std::vector<double> lps;
+                lps.reserve(m_chains.size());
+                for (const DTChainState &chain : m_chains)
+                    lps.push_back(chain.logp);
+                std::nth_element(lps.begin(),
+                                 lps.begin() + lps.size() / 2, lps.end());
+                dlog.log(DTDebugLog::Category::MCMC,
+                         QString("heartbeat: sweep=%1 plateaued=%2 "
+                                 "median_logp=%3 evals=%4")
+                             .arg(m_sweepIndex)
+                             .arg(plateauedFraction())
+                             .arg(lps[lps.size() / 2])
+                             .arg(m_evaluationCount));
+            }
+        }
     }
 
     // ---- publication (Sec. 3.9, Alg. 1 24-29) ----
@@ -487,6 +652,30 @@ DTCycleResult DTStreamingMCMC::runCycle(const QDateTime &deadline)
 
     ++m_cycleIndex;
     logCycleDiagnostics(result);
+
+    if (dlog.enabled(DTDebugLog::Category::MCMC))
+        dlog.log(DTDebugLog::Category::MCMC,
+                 QString("cycle %1 published: %2 plateaued=%3 pool=%4 "
+                         "accept=%5 sweeps=%6 evals=%7")
+                     .arg(m_cycleIndex)
+                     .arg(result.converged ? "FULL" : "PROVISIONAL")
+                     .arg(result.plateauedFraction)
+                     .arg(result.pooledSamples.size())
+                     .arg(result.acceptanceRate)
+                     .arg(result.totalSweeps)
+                     .arg(result.totalEvaluations));
+
+    if (dlog.enabled(DTDebugLog::Category::MCMC))
+    {
+        QString counts;
+        for (int c = 0; c < static_cast<int>(m_chains.size()); ++c)
+            counts += QString("%1:%2 ").arg(c)
+                          .arg(m_chains[c].samples.size());
+        dlog.log(DTDebugLog::Category::MCMC,
+                 QString("retained per chain: %1").arg(counts.trimmed()));
+    }
+
+    DTDebugLog::instance().flush();   // cycle boundary: make the log durable
 
     return result;
 }
@@ -739,6 +928,18 @@ bool DTStreamingMCMC::stepChain(int c, std::mt19937_64 &rng)
     }
     ++chain.proposedInWindow;
 
+    {
+        DTDebugLog &dlog = DTDebugLog::instance();
+        if (dlog.enabled(DTDebugLog::Category::MCMCTrace))
+            dlog.log(DTDebugLog::Category::MCMCTrace,
+                     QString("step chain=%1 %2 logp_prop=%3 logJ=%4 "
+                             "logp_cur=%5 stuck=%6")
+                         .arg(c)
+                         .arg(accepted ? "ACC" : "rej")
+                         .arg(logp0).arg(logJ)
+                         .arg(chain.logp).arg(chain.stuckCounter));
+    }
+
     // Classifier input: one trace point per step, accepted or not
     // (a rejected step re-records the current level, exactly as the
     // base driver re-records Params[k] on rejection).
@@ -875,11 +1076,31 @@ void DTStreamingMCMC::classifyChain(int c, qint64 sweepIndex)
     if (plateaued)
     {
         if (chain.phase == ChainPhase::Climbing)
+        {
             chain.plateauOnsetStep = static_cast<int>(sweepIndex);
+            DTDebugLog &dlog = DTDebugLog::instance();
+            if (dlog.enabled(DTDebugLog::Category::MCMC))
+                dlog.log(DTDebugLog::Category::MCMC,
+                         QString("chain %1 PLATEAUED at sweep %2 "
+                                 "(logp=%3, trend=%4, scatter=%5)")
+                             .arg(c).arg(sweepIndex)
+                             .arg(chain.logp).arg(totalTrend).arg(s));
+        }
         chain.phase = ChainPhase::Plateaued;
     }
     else
     {
+        if (chain.phase == ChainPhase::Plateaued)
+        {
+            DTDebugLog &dlog = DTDebugLog::instance();
+            if (dlog.enabled(DTDebugLog::Category::MCMC))
+                dlog.log(DTDebugLog::Category::MCMC,
+                         QString("chain %1 REVERTED to climbing at sweep %2 "
+                                 "(logp=%3, trend=%4, scatter=%5) — "
+                                 "target moved under the chain?")
+                             .arg(c).arg(sweepIndex)
+                             .arg(chain.logp).arg(totalTrend).arg(s));
+        }
         // Includes Plateaued -> Climbing reversion (target moved under
         // the chain). Already-retained samples are kept -- they were drawn
         // while genuinely plateaued -- but retention stops until the chain
@@ -998,6 +1219,24 @@ void DTStreamingMCMC::adaptProposalScale()
 
     if (prop == 0) return;
 
+    const double blockRate =
+        static_cast<double>(acc) / static_cast<double>(prop);
+    {
+        DTDebugLog &dlog = DTDebugLog::instance();
+        if (dlog.enabled(DTDebugLog::Category::MCMC))
+            dlog.log(DTDebugLog::Category::MCMC,
+                     QString("adapt block: rate=%1 target=%2 %3 "
+                             "(pertcoeff[0]=%4)")
+                         .arg(blockRate)
+                         .arg(MCMC_Settings.acceptance_rate)
+                         .arg(quorumHolds()
+                                  ? "FROZEN (quorum holds)"
+                                  : (blockRate > MCMC_Settings.acceptance_rate
+                                         ? "-> enlarge steps"
+                                         : "-> shrink steps"))
+                         .arg(pertcoeff.empty() ? 0.0 : pertcoeff[0]));
+    }
+
     // Freeze the proposal kernel once a quorum has plateaued: continued
     // adaptation while samples are being retained violates (strictly)
     // the invariance the pooled posterior rests on. Before quorum, the
@@ -1007,7 +1246,7 @@ void DTStreamingMCMC::adaptProposalScale()
     // stays accurate.
     if (quorumHolds()) return;
 
-    const double rate = static_cast<double>(acc) / static_cast<double>(prop);
+    const double rate = blockRate;
     if (rate > MCMC_Settings.acceptance_rate)
     {
         // Accepting too often: proposals too timid -- enlarge steps.
@@ -1090,6 +1329,8 @@ DTPosteriorSummary DTStreamingMCMC::computeSummary(
     summary.p025.assign(np, 0.0);
     summary.p50.assign(np, 0.0);
     summary.p975.assign(np, 0.0);
+    summary.p10.assign(np, 0.0);
+    summary.p90.assign(np, 0.0);
     std::vector<double> column(n);
     const auto percentile = [&column, n](double q) -> double
     {
@@ -1107,6 +1348,8 @@ DTPosteriorSummary DTStreamingMCMC::computeSummary(
         summary.p025[i] = percentile(0.025);
         summary.p50[i]  = percentile(0.50);
         summary.p975[i] = percentile(0.975);
+        summary.p10[i]  = percentile(0.10);
+        summary.p90[i]  = percentile(0.90);
     }
 
     return summary;

@@ -396,6 +396,35 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
     }
 
     // ------------------------------------------------------------------
+    // logging{} (optional; deep-debug file log, see DTDebugLog)
+    // ------------------------------------------------------------------
+    if (root.contains("logging"))
+    {
+        if (!root.value("logging").isObject())
+        {
+            errorMessage = "config.json 'logging' must be a JSON object";
+            return false;
+        }
+        const QJsonObject lg = root.value("logging").toObject();
+
+        logging.enabled = lg.value("enabled").toBool(false);
+
+        const QString fileQ = lg.value("file").toString().trimmed();
+        logging.filePath =
+            resolvePath(fileQ.isEmpty() ? "outputs/debug.log" : fileQ)
+                .toStdString();
+
+        if (lg.contains("categories") && lg["categories"].isArray())
+            for (const QJsonValue &v : lg["categories"].toArray())
+                if (v.isString())
+                    logging.categories.push_back(
+                        v.toString().toStdString());
+
+        logging.flushEvery = lg.value("flush_every").toInt(50);
+        logging.truncate   = lg.value("truncate").toBool(true);
+    }
+
+    // ------------------------------------------------------------------
     // assimilation{} (optional; controls observation polling & calibration)
     // ------------------------------------------------------------------
     // Defaults: disabled. The block being absent means the forward twin

@@ -38,6 +38,7 @@
 #include <iostream>
 #include <QThread>
 #include "RunLogger.h"
+#include "DTStreamingMCMC.h"
 
 DTAssimilation::DTAssimilation(const DTConfig &config, QObject *parent)
     : QObject(parent)
@@ -153,468 +154,6 @@ void DTAssimilation::onPollTick()
     }
 }
 
-// ---------------------------------------------------------------------------
-// runCalibration
-// Loads a System from the latest snapshot, pushes buffered observations into
-// matching Observations, runs the GA inverse solver, and writes a calibrated
-// snapshot. Mirrors the structure of MainWindow::oninverserun() in OHQ.
-// ---------------------------------------------------------------------------
-bool DTAssimilation::runCalibration(QString &errorMessage)
-{
-    const QDateTime calStart = QDateTime::currentDateTimeUtc();
-    std::cout << "[Assim] [" << calStart.toString(Qt::ISODate).toStdString() << "] "
-              << "calibration cycle " << (m_cyclesCompleted + 1) << " starting\n";
-
-    // Guard: need a snapshot to calibrate against.
-    if (m_latestSnapshotPath.isEmpty())
-    {
-        errorMessage = "no forward snapshot available yet — calibration skipped";
-        return false;
-    }
-    if (!QFileInfo::exists(m_latestSnapshotPath))
-    {
-        errorMessage = "snapshot path does not exist: " + m_latestSnapshotPath;
-        return false;
-    }
-
-    std::cout << "[Assim] loading snapshot: "
-              << m_latestSnapshotPath.toStdString() << "\n";
-
-    // 1. Load System from the latest snapshot.
-    System sys;
-
-    // Settings template must be loaded before LoadfromJson, otherwise the
-    // Settings vector is empty and named Settings objects (Optimizer, MCMC,
-    // Solver Settings, General Settings) won't be available via sys.object().
-    // Mirrors what DTRunner does on the forward simulation path.
-    const std::string defaultTemplatePath =
-        QCoreApplication::applicationDirPath().toStdString() + "/../../resources/";
-    const std::string settingsFile = defaultTemplatePath + "settings.json";
-    sys.SetDefaultTemplatePath(defaultTemplatePath);
-    if (!sys.ReadSystemSettingsTemplate(settingsFile))
-    {
-        errorMessage = "failed to load settings template from " + QString::fromStdString(settingsFile);
-        if (m_runLogger)
-        {
-            m_runLogger->recordRun(
-                RunLogger::RunType::AssimCalibration,
-                m_cyclesCompleted + 1,
-                calStart, QDateTime::currentDateTimeUtc(),
-                -1.0, -1.0,                                // no valid sim window
-                m_latestSnapshotPath,
-                QString(),
-                RunLogger::Status::Failed,
-                errorMessage);
-        }
-        return false;
-
-    }
-
-    if (!sys.LoadfromJson(m_latestSnapshotPath))
-    {
-        errorMessage = "System::LoadfromJson failed for " + m_latestSnapshotPath;
-        if (m_runLogger)
-        {
-            m_runLogger->recordRun(
-                RunLogger::RunType::AssimCalibration,
-                m_cyclesCompleted + 1,
-                calStart, QDateTime::currentDateTimeUtc(),
-                -1.0, -1.0,                                // no valid sim window
-                m_latestSnapshotPath,
-                QString(),
-                RunLogger::Status::Failed,
-                errorMessage);
-        }
-        return false;
-    }
-
-    // 2. Pre-flight checks (mirrors MainWindow::oninverserun).
-    if (sys.ParametersCount() == 0)
-    {
-        errorMessage = "no Parameters defined in model — calibration skipped";
-        if (m_runLogger)
-        {
-            m_runLogger->recordRun(
-                RunLogger::RunType::AssimCalibration,
-                m_cyclesCompleted + 1,
-                calStart, QDateTime::currentDateTimeUtc(),
-                -1.0, -1.0,                                // no valid sim window
-                m_latestSnapshotPath,
-                QString(),
-                RunLogger::Status::Failed,
-                errorMessage);
-        }
-        return false;
-    }
-    ErrorHandler errs = sys.VerifyAllQuantities();
-    if (errs.Count() != 0)
-    {
-        std::cerr << "[Assim] verification errors (" << errs.Count() << "):\n";
-        for (int i = 0; i < errs.Count(); ++i)
-        {
-            _error *e = errs[i];
-            if (!e) continue;
-            std::cerr << "  [" << i << "] "
-                      << "object='" << e->objectname << "' "
-                      << "class='"  << e->cls        << "' "
-                      << "func='"   << e->funct      << "' "
-                      << "code="    << e->code       << ": "
-                      << e->description << "\n";
-        }
-        errorMessage = "model has verification errors";
-
-        if (m_runLogger)
-        {
-            m_runLogger->recordRun(
-                RunLogger::RunType::AssimCalibration,
-                m_cyclesCompleted + 1,
-                calStart, QDateTime::currentDateTimeUtc(),
-                -1.0, -1.0,                                // no valid sim window
-                m_latestSnapshotPath,
-                QString(),
-                RunLogger::Status::Failed,
-                errorMessage);
-        }
-        return false;
-    }
-
-    // 3. Push buffered observations into the System Observations selected
-    //    for calibration. If the config's calibration_observations list is
-    //    empty, fall back to "use all matched" (backward-compatible).
-    //    Observations not in the list have no observed_data set, so they
-    //    contribute zero to the GA misfit but still get simulated and
-    //    written to outputs for client-side visualization.
-    const auto &selected = m_config.assimilation.calibrationObservations;
-    const bool useAll = selected.empty();
-
-    int matched = 0;
-    int skipped = 0;
-    for (unsigned int i = 0; i < sys.ObservationsCount(); ++i)
-    {
-        Observation *obs = sys.observation(i);
-        const std::string name = obs->GetName();
-
-        if (!useAll &&
-            std::find(selected.begin(), selected.end(), name) == selected.end())
-        {
-            ++skipped;
-            continue;
-        }
-
-        TimeSeries<double> series = m_buffer.series(name);
-        if (series.size() == 0) continue;
-        obs->Variable("observed_data")->SetTimeSeries(series);
-        ++matched;
-    }
-    if (matched == 0)
-    {
-        errorMessage = "no buffered observations matched any selected "
-                       "Observation by name";
-        if (m_runLogger)
-        {
-            m_runLogger->recordRun(
-                RunLogger::RunType::AssimCalibration,
-                m_cyclesCompleted + 1,
-                calStart, QDateTime::currentDateTimeUtc(),
-                -1.0, -1.0,                                // no valid sim window
-                m_latestSnapshotPath,
-                QString(),
-                RunLogger::Status::Failed,
-                errorMessage);
-        }
-        return false;
-    }
-    std::cout << "[Assim] pushed observed_data into " << matched
-              << " observation(s)";
-    if (!useAll) std::cout << " (skipped " << skipped << " not in calibration list)";
-    std::cout << "\n";
-
-    // 4. Standard inverse-run prep (mirrors oninverserun).
-    // ===== ADD THIS BLOCK HERE =====
-    // Adjust the simulation window to span all buffered observations,
-    // so the GA evaluates each candidate over the full data window.
-    // The temporal kernel handles down-weighting of older observations.
-    if (m_buffer.pointCount() == 0)
-    {
-        errorMessage = "buffer is empty — nothing to calibrate against";
-        return false;
-    }
-    const double tStart = m_buffer.tMin();
-    const double tEnd   = m_buffer.tMax();
-
-    // Read snapshot's window *before* we override it, for diagnostic
-    double snapshotStart = -1.0, snapshotEnd = -1.0;
-    if (Object *gs = sys.object("General Settings"))
-    {
-        try {
-            snapshotStart = std::stod(gs->Variable("simulation_start_time")->GetProperty());
-            snapshotEnd   = std::stod(gs->Variable("simulation_end_time")->GetProperty());
-        } catch (...) {}
-    }
-
-    Object *generalSettings = sys.object("General Settings");
-    if (!generalSettings)
-    {
-        errorMessage = "no 'General Settings' object found in System";
-        if (m_runLogger)
-        {
-            m_runLogger->recordRun(
-                RunLogger::RunType::AssimCalibration,
-                m_cyclesCompleted + 1,
-                calStart, QDateTime::currentDateTimeUtc(),
-                -1.0, -1.0,                                // no valid sim window
-                m_latestSnapshotPath,
-                QString(),
-                RunLogger::Status::Failed,
-                errorMessage);
-        }
-        return false;
-
-    }
-    generalSettings->Variable("simulation_start_time")
-        ->SetProperty(std::to_string(tStart));
-    generalSettings->Variable("simulation_end_time")
-        ->SetProperty(std::to_string(tEnd));
-
-    // Belt-and-suspenders: also set on System directly. SetSystemSettings
-    // will then propagate from the (now updated) Settings vector.
-    sys.SetProp("simulation_start_time", tStart);
-    sys.SetProp("simulation_end_time",   tEnd);
-    sys.SetSystemSettings();
-    sys.SetSilent(true);
-    // Inject precipitation covering the calibration window so the GA's
-    // forward solves see the same forcing the truth twin saw.
-    {
-        // Convert OHQ day-serial to QDateTime.
-        // ⚠ NEEDS YOUR EXISTING HELPER — see note below
-        const QDateTime windowStart =
-            QDateTime::fromMSecsSinceEpoch(
-                static_cast<qint64>((tStart - 25569.0) * 86400000.0),
-                Qt::UTC);
-        const QDateTime windowEnd =
-            QDateTime::fromMSecsSinceEpoch(
-                static_cast<qint64>((tEnd - 25569.0) * 86400000.0),
-                Qt::UTC);
-
-        std::cout << "[Assim] fetching precipitation for "
-                  << windowStart.toString(Qt::ISODate).toStdString()
-                  << " → "
-                  << windowEnd.toString(Qt::ISODate).toStdString() << "\n";
-
-        CPrecipitation precip = DTWeather::fetchPrecipitation(
-            m_config.weatherSource,
-            m_config.latitude,
-            m_config.longitude,
-            windowStart, windowEnd);
-
-        DTWeather::injectPrecipitation(&sys, precip);
-
-        const std::string etSource = "Evapotranspiration_Penman (Soil)";
-
-        const auto temp = DTWeather::fetchWeatherVariable(
-            m_config.weatherSource, "temperature_2m",
-            m_config.latitude, m_config.longitude, windowStart, windowEnd);
-        DTWeather::injectWeather(&sys, etSource, "Temperature", temp);
-
-        auto rh = DTWeather::fetchWeatherVariable(
-            m_config.weatherSource, "relative_humidity_2m",
-            m_config.latitude, m_config.longitude, windowStart, windowEnd);
-
-        rh = rh/100.0;
-        DTWeather::injectWeather(&sys, etSource, "R_h", rh);
-
-        const auto wind = DTWeather::fetchWeatherVariable(
-            m_config.weatherSource, "windspeed_10m",
-            m_config.latitude, m_config.longitude, windowStart, windowEnd);
-        DTWeather::injectWeather(&sys, etSource, "wind_speed", wind);
-
-        const auto rad = DTWeather::fetchWeatherVariable(
-            m_config.weatherSource, "shortwave_radiation",
-            m_config.latitude, m_config.longitude, windowStart, windowEnd);
-        DTWeather::injectWeather(&sys, etSource, "solar_radiation", rad);
-    }
-
-    std::cout << "[Assim] ===== Calibration window =====\n"
-              << "[Assim]   buffer span:        " << tStart << " → " << tEnd
-              << "  (" << (tEnd - tStart) << " days, "
-              << m_buffer.pointCount() << " buffered points across "
-              << m_buffer.variableCount() << " series)\n"
-              << "[Assim]   snapshot was:       " << snapshotStart
-              << " → " << snapshotEnd
-              << "  (" << (snapshotEnd - snapshotStart) << " days)\n"
-              << "[Assim]   GA window now:      " << tStart << " → " << tEnd
-              << "  (" << (tEnd - tStart) << " days)\n";
-
-    // Verify the override stuck after SetSystemSettings()
-    if (Object *gs = sys.object("General Settings"))
-    {
-        try {
-            const double finalStart = std::stod(gs->Variable("simulation_start_time")->GetProperty());
-            const double finalEnd   = std::stod(gs->Variable("simulation_end_time")->GetProperty());
-            std::cout << "[Assim]   verified post-set:  "
-                      << finalStart << " → " << finalEnd << "\n";
-            if (std::abs(finalStart - tStart) > 1e-6 ||
-                std::abs(finalEnd   - tEnd  ) > 1e-6)
-                std::cerr << "[Assim] WARNING: simulation window was overwritten\n";
-        } catch (...) {}
-    }
-    std::cout << "[Assim] ==============================\n";
-
-
-    // 5. GA setup.
-    CGA<System> ga(&sys);
-    Object *settings = sys.object("Optimizer");
-    if (!settings)
-    {
-        errorMessage = "no 'Optimizer' object found in System "
-                       "(this should not happen — Settings template loaded successfully)";
-        return false;
-    }
-    ga.SetParameters(settings);
-
-    sys.SetSystemSettings();
-
-
-
-    std::cout << "[Assim] simulation window for GA: "
-              << tStart << " → " << tEnd
-              << " (" << (tEnd - tStart) << " days, "
-              << m_buffer.pointCount() << " buffered points)\n";
-
-    std::cout << "[Assim] GA configured from Settings 'Optimizer' ("
-              << settings->GetVars()->size() << " quans)\n";
-
-    const QString calibDir =
-        QString::fromStdString(m_config.assimilation.calibrationOutputDir);
-    QDir().mkpath(calibDir);
-    ga.filenames.pathname       = calibDir.toStdString() + "/";
-    ga.filenames.outputfilename = "ga_output.txt";
-
-    // 6. Warm-start from previous cycle's terminal population, if available.
-    const QString prevOutput = calibDir + "/ga_output.txt";
-    if (m_cyclesCompleted > 0 && QFileInfo::exists(prevOutput))
-    {
-        ga.filenames.getfromfilename = prevOutput.toStdString();
-        ga.getinifromoutput(prevOutput.toStdString());
-        ga.getinitialpop(prevOutput.toStdString());
-        std::cout << "[Assim] warm-starting from "
-                  << prevOutput.toStdString() << "\n";
-    }
-    else
-    {
-        std::cout << "[Assim] cold-start GA (first calibration cycle)\n";
-    }
-
-    sys.SetParameterEstimationMode(parameter_estimation_options::inverse_model);
-
-    // 7. Run.
-    std::cout << "[Assim] running GA...\n";
-    ga.optimize();
-
-    sys.SetParameterEstimationMode();   // reset to default
-
-    // 8. Transfer results onto sys (for snapshot writing).
-    sys.TransferResultsFrom(&ga.Model_out);
-    sys.Parameters() = ga.Model_out.Parameters();
-    sys.SetOutputItems();
-
-    ga.Model_out.Solve();   // or whatever the forward path's solve call is
-
-    // Make sure the deployment output directory exists before writing
-    // reanalysis_output.csv. Without this, the write call can silently fail
-    // on a fresh deployment or when outputDir was cleaned.
-    const QString outputDir = QString::fromStdString(m_config.outputDir);
-    QDir().mkpath(outputDir);
-
-    const QString reanalysisPath = outputDir + "/reanalysis_output.csv";
-    ga.Model_out.GetObservedOutputs().write(reanalysisPath.toStdString());
-
-    if (QFileInfo::exists(reanalysisPath))
-    {
-        std::cout << "[Assim] reanalysis written: "
-                  << reanalysisPath.toStdString() << "\n";
-    }
-    else
-    {
-        std::cerr << "[Assim] WARNING: reanalysis_output.csv was not created at "
-                  << reanalysisPath.toStdString() << "\n";
-    }
-
-    // 9. Archive GA output to the merged file and preserve per-cycle GA
-    // artifacts before the next cycle overwrites ga_output.txt.
-    const int archiveCycle = m_cyclesCompleted + 1;
-    if (!archiveGAOutput(archiveCycle))
-    {
-        std::cerr << "[Assim] failed to archive GA output for cycle "
-                  << archiveCycle << "\n";
-    }
-
-    // 10. Write a new state snapshot reflecting the calibrated parameters.
-    // In debug mode each cycle is timestamped and kept; otherwise we
-    // overwrite a single fixed file so the calibration dir stays bounded
-    // on long runs. DTRunner picks up whatever path is signaled.
-    QString newSnapshotPath;
-    if (m_config.keepDebugOutputs)
-    {
-        const QString stamp = QDateTime::currentDateTimeUtc()
-        .toString("yyyyMMdd_HHmmss");
-        newSnapshotPath = calibDir + "/state_calibrated_" + stamp + ".json";
-    }
-    else
-    {
-        newSnapshotPath = calibDir + "/state_calibrated_latest.json";
-    }
-    if (!sys.SavetoJson(newSnapshotPath.toStdString(), {}, false, false))
-    {
-        errorMessage = "failed to write calibrated snapshot: " + newSnapshotPath;
-        if (m_runLogger)
-        {
-            m_runLogger->recordRun(
-                RunLogger::RunType::AssimCalibration,
-                m_cyclesCompleted + 1,
-                calStart, QDateTime::currentDateTimeUtc(),
-                -1.0, -1.0,                                // no valid sim window
-                m_latestSnapshotPath,
-                QString(),
-                RunLogger::Status::Failed,
-                errorMessage);
-        }
-        return false;
-    }
-
-    ++m_cyclesCompleted;
-    std::cout << "[Assim] calibration cycle " << m_cyclesCompleted
-              << " completed: " << newSnapshotPath.toStdString() << "\n";
-
-    const QDateTime calEnd = QDateTime::currentDateTimeUtc();
-    const qint64 elapsedMs = calStart.msecsTo(calEnd);
-    std::cout << "[Assim] [" << calEnd.toString(Qt::ISODate).toStdString() << "] "
-              << "calibration cycle " << m_cyclesCompleted
-              << " finished in " << (elapsedMs / 1000.0) << " sec\n";
-
-    writeParameterLog(sys, m_cyclesCompleted);
-
-    if (m_runLogger)
-    {
-        std::cout << "[Assim] writing run_log row, runLogger ptr=" << m_runLogger << "\n";
-        m_runLogger->recordRun(
-            RunLogger::RunType::AssimCalibration,
-            m_cyclesCompleted,
-            calStart, calEnd,
-            tStart, tEnd,
-            m_latestSnapshotPath,
-            newSnapshotPath,
-            RunLogger::Status::Ok);
-    }
-    else
-    {
-        std::cout << "[Assim] runLogger is NULL — calibration not logged\n";
-    }
-
-    emit calibrationCompleted(newSnapshotPath);
-
-    return true;
-}
 
 // ---------------------------------------------------------------------------
 // archiveGAOutput
@@ -917,4 +456,690 @@ void DTAssimilation::stopTimer()
 {
     if (m_pollTimer.isActive()) m_pollTimer.stop();
     m_started = false;
+}
+
+// ---------------------------------------------------------------------------
+// recordCalibrationFailure
+// One run_log row for a calibration cycle that failed before producing a
+// valid simulation window or snapshot. Factored out of the (previously
+// repeated) failure blocks in runCalibration.
+// ---------------------------------------------------------------------------
+void DTAssimilation::recordCalibrationFailure(const QDateTime &calStart,
+                                              const QString  &errorMessage)
+{
+    if (!m_runLogger) return;
+    m_runLogger->recordRun(
+        RunLogger::RunType::AssimCalibration,
+        m_cyclesCompleted + 1,
+        calStart, QDateTime::currentDateTimeUtc(),
+        -1.0, -1.0,                                // no valid sim window
+        m_latestSnapshotPath,
+        QString(),
+        RunLogger::Status::Failed,
+        errorMessage);
+}
+
+// ---------------------------------------------------------------------------
+// runCalibration
+// Thin dispatcher: shared, solver-agnostic preparation of the calibration
+// System (prepareCalibrationSystem), then the inverse solve per the
+// configured method — GA (deployed default) or MCMC (streaming Bayesian).
+// ---------------------------------------------------------------------------
+bool DTAssimilation::runCalibration(QString &errorMessage)
+{
+    const QDateTime calStart = QDateTime::currentDateTimeUtc();
+    std::cout << "[Assim] [" << calStart.toString(Qt::ISODate).toStdString() << "] "
+              << "calibration cycle " << (m_cyclesCompleted + 1) << " starting\n";
+
+    System sys;
+    double tStart = -1.0, tEnd = -1.0;
+    if (!prepareCalibrationSystem(sys, tStart, tEnd, calStart, errorMessage))
+        return false;
+
+    if (m_config.assimilation.method == "MCMC")
+        return runCalibrationMCMC(sys, tStart, tEnd, calStart, errorMessage);
+
+    return runCalibrationGA(sys, tStart, tEnd, calStart, errorMessage);
+}
+
+// ---------------------------------------------------------------------------
+// prepareCalibrationSystem
+// Solver-agnostic calibration prep, shared by the GA and MCMC branches:
+//   1. load the Settings template and the latest forward snapshot
+//   2. pre-flight checks (parameters present, quantities verify)
+//   3. push buffered observations into the selected Observations
+//   4. patch the simulation window to the buffer span and inject weather
+//      forcing covering it
+// On success, sys is ready for an inverse solve over [tStart, tEnd].
+// ---------------------------------------------------------------------------
+bool DTAssimilation::prepareCalibrationSystem(System &sys,
+                                              double &tStart,
+                                              double &tEnd,
+                                              const QDateTime &calStart,
+                                              QString &errorMessage)
+{
+    // Guard: need a snapshot to calibrate against.
+    if (m_latestSnapshotPath.isEmpty())
+    {
+        errorMessage = "no forward snapshot available yet — calibration skipped";
+        return false;
+    }
+    if (!QFileInfo::exists(m_latestSnapshotPath))
+    {
+        errorMessage = "snapshot path does not exist: " + m_latestSnapshotPath;
+        return false;
+    }
+
+    std::cout << "[Assim] loading snapshot: "
+              << m_latestSnapshotPath.toStdString() << "\n";
+
+    // 1. Load System from the latest snapshot.
+    //
+    // Settings template must be loaded before LoadfromJson, otherwise the
+    // Settings vector is empty and named Settings objects (Optimizer, MCMC,
+    // Solver Settings, General Settings) won't be available via sys.object().
+    // Mirrors what DTRunner does on the forward simulation path.
+    const std::string defaultTemplatePath =
+        QCoreApplication::applicationDirPath().toStdString() + "/../../resources/";
+    const std::string settingsFile = defaultTemplatePath + "settings.json";
+    sys.SetDefaultTemplatePath(defaultTemplatePath);
+    if (!sys.ReadSystemSettingsTemplate(settingsFile))
+    {
+        errorMessage = "failed to load settings template from "
+                       + QString::fromStdString(settingsFile);
+        recordCalibrationFailure(calStart, errorMessage);
+        return false;
+    }
+
+    if (!sys.LoadfromJson(m_latestSnapshotPath))
+    {
+        errorMessage = "System::LoadfromJson failed for " + m_latestSnapshotPath;
+        recordCalibrationFailure(calStart, errorMessage);
+        return false;
+    }
+
+    // 2. Pre-flight checks (mirrors MainWindow::oninverserun).
+    if (sys.ParametersCount() == 0)
+    {
+        errorMessage = "no Parameters defined in model — calibration skipped";
+        recordCalibrationFailure(calStart, errorMessage);
+        return false;
+    }
+    ErrorHandler errs = sys.VerifyAllQuantities();
+    if (errs.Count() != 0)
+    {
+        std::cerr << "[Assim] verification errors (" << errs.Count() << "):\n";
+        for (int i = 0; i < errs.Count(); ++i)
+        {
+            _error *e = errs[i];
+            if (!e) continue;
+            std::cerr << "  [" << i << "] "
+                      << "object='" << e->objectname << "' "
+                      << "class='"  << e->cls        << "' "
+                      << "func='"   << e->funct      << "' "
+                      << "code="    << e->code       << ": "
+                      << e->description << "\n";
+        }
+        errorMessage = "model has verification errors";
+        recordCalibrationFailure(calStart, errorMessage);
+        return false;
+    }
+
+    // 3. Push buffered observations into the System Observations selected
+    //    for calibration. If the config's calibration_observations list is
+    //    empty, fall back to "use all matched" (backward-compatible).
+    //    Observations not in the list have no observed_data set, so they
+    //    contribute zero to the misfit but still get simulated and
+    //    written to outputs for client-side visualization.
+    const auto &selected = m_config.assimilation.calibrationObservations;
+    const bool useAll = selected.empty();
+
+    int matched = 0;
+    int skipped = 0;
+    for (unsigned int i = 0; i < sys.ObservationsCount(); ++i)
+    {
+        Observation *obs = sys.observation(i);
+        const std::string name = obs->GetName();
+
+        if (!useAll &&
+            std::find(selected.begin(), selected.end(), name) == selected.end())
+        {
+            ++skipped;
+            continue;
+        }
+
+        TimeSeries<double> series = m_buffer.series(name);
+        if (series.size() == 0) continue;
+        obs->Variable("observed_data")->SetTimeSeries(series);
+        ++matched;
+    }
+    if (matched == 0)
+    {
+        errorMessage = "no buffered observations matched any selected "
+                       "Observation by name";
+        recordCalibrationFailure(calStart, errorMessage);
+        return false;
+    }
+    std::cout << "[Assim] pushed observed_data into " << matched
+              << " observation(s)";
+    if (!useAll) std::cout << " (skipped " << skipped << " not in calibration list)";
+    std::cout << "\n";
+
+    // 4. Standard inverse-run prep (mirrors oninverserun).
+    // Adjust the simulation window to span all buffered observations,
+    // so the inverse solver evaluates each candidate over the full data
+    // window. The temporal kernel handles down-weighting of older
+    // observations.
+    if (m_buffer.pointCount() == 0)
+    {
+        errorMessage = "buffer is empty — nothing to calibrate against";
+        return false;
+    }
+    tStart = m_buffer.tMin();
+    tEnd   = m_buffer.tMax();
+
+    // Read snapshot's window *before* we override it, for diagnostic
+    double snapshotStart = -1.0, snapshotEnd = -1.0;
+    if (Object *gs = sys.object("General Settings"))
+    {
+        try {
+            snapshotStart = std::stod(gs->Variable("simulation_start_time")->GetProperty());
+            snapshotEnd   = std::stod(gs->Variable("simulation_end_time")->GetProperty());
+        } catch (...) {}
+    }
+
+    Object *generalSettings = sys.object("General Settings");
+    if (!generalSettings)
+    {
+        errorMessage = "no 'General Settings' object found in System";
+        recordCalibrationFailure(calStart, errorMessage);
+        return false;
+    }
+    generalSettings->Variable("simulation_start_time")
+        ->SetProperty(std::to_string(tStart));
+    generalSettings->Variable("simulation_end_time")
+        ->SetProperty(std::to_string(tEnd));
+
+    // Belt-and-suspenders: also set on System directly. SetSystemSettings
+    // will then propagate from the (now updated) Settings vector.
+    sys.SetProp("simulation_start_time", tStart);
+    sys.SetProp("simulation_end_time",   tEnd);
+    sys.SetSystemSettings();
+    sys.SetSilent(true);
+
+    // Inject precipitation covering the calibration window so the inverse
+    // solver's forward solves see the same forcing the truth twin saw.
+    {
+        // Convert OHQ day-serial to QDateTime.
+        const QDateTime windowStart =
+            QDateTime::fromMSecsSinceEpoch(
+                static_cast<qint64>((tStart - 25569.0) * 86400000.0),
+                Qt::UTC);
+        const QDateTime windowEnd =
+            QDateTime::fromMSecsSinceEpoch(
+                static_cast<qint64>((tEnd - 25569.0) * 86400000.0),
+                Qt::UTC);
+
+        std::cout << "[Assim] fetching precipitation for "
+                  << windowStart.toString(Qt::ISODate).toStdString()
+                  << " → "
+                  << windowEnd.toString(Qt::ISODate).toStdString() << "\n";
+
+        CPrecipitation precip = DTWeather::fetchPrecipitation(
+            m_config.weatherSource,
+            m_config.latitude,
+            m_config.longitude,
+            windowStart, windowEnd);
+
+        DTWeather::injectPrecipitation(&sys, precip);
+
+        const std::string etSource = "Evapotranspiration_Penman (Soil)";
+
+        const auto temp = DTWeather::fetchWeatherVariable(
+            m_config.weatherSource, "temperature_2m",
+            m_config.latitude, m_config.longitude, windowStart, windowEnd);
+        DTWeather::injectWeather(&sys, etSource, "Temperature", temp);
+
+        auto rh = DTWeather::fetchWeatherVariable(
+            m_config.weatherSource, "relative_humidity_2m",
+            m_config.latitude, m_config.longitude, windowStart, windowEnd);
+
+        rh = rh/100.0;
+        DTWeather::injectWeather(&sys, etSource, "R_h", rh);
+
+        const auto wind = DTWeather::fetchWeatherVariable(
+            m_config.weatherSource, "windspeed_10m",
+            m_config.latitude, m_config.longitude, windowStart, windowEnd);
+        DTWeather::injectWeather(&sys, etSource, "wind_speed", wind);
+
+        const auto rad = DTWeather::fetchWeatherVariable(
+            m_config.weatherSource, "shortwave_radiation",
+            m_config.latitude, m_config.longitude, windowStart, windowEnd);
+        DTWeather::injectWeather(&sys, etSource, "solar_radiation", rad);
+    }
+
+    std::cout << "[Assim] ===== Calibration window =====\n"
+              << "[Assim]   buffer span:        " << tStart << " → " << tEnd
+              << "  (" << (tEnd - tStart) << " days, "
+              << m_buffer.pointCount() << " buffered points across "
+              << m_buffer.variableCount() << " series)\n"
+              << "[Assim]   snapshot was:       " << snapshotStart
+              << " → " << snapshotEnd
+              << "  (" << (snapshotEnd - snapshotStart) << " days)\n"
+              << "[Assim]   solve window now:   " << tStart << " → " << tEnd
+              << "  (" << (tEnd - tStart) << " days)\n";
+
+    // Verify the override stuck after SetSystemSettings()
+    if (Object *gs = sys.object("General Settings"))
+    {
+        try {
+            const double finalStart = std::stod(gs->Variable("simulation_start_time")->GetProperty());
+            const double finalEnd   = std::stod(gs->Variable("simulation_end_time")->GetProperty());
+            std::cout << "[Assim]   verified post-set:  "
+                      << finalStart << " → " << finalEnd << "\n";
+            if (std::abs(finalStart - tStart) > 1e-6 ||
+                std::abs(finalEnd   - tEnd  ) > 1e-6)
+                std::cerr << "[Assim] WARNING: simulation window was overwritten\n";
+        } catch (...) {}
+    }
+    std::cout << "[Assim] ==============================\n";
+
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// runCalibrationGA
+// The deployed deterministic mode: GA inverse solve on the prepared System,
+// reanalysis writeout, GA-output archival, calibrated snapshot, run-log row,
+// and completion signal. Body unchanged from the pre-refactor runCalibration.
+// ---------------------------------------------------------------------------
+bool DTAssimilation::runCalibrationGA(System &sys,
+                                      double tStart,
+                                      double tEnd,
+                                      const QDateTime &calStart,
+                                      QString &errorMessage)
+{
+    // 5. GA setup.
+    CGA<System> ga(&sys);
+    Object *settings = sys.object("Optimizer");
+    if (!settings)
+    {
+        errorMessage = "no 'Optimizer' object found in System "
+                       "(this should not happen — Settings template loaded successfully)";
+        return false;
+    }
+    ga.SetParameters(settings);
+
+    sys.SetSystemSettings();
+
+    std::cout << "[Assim] simulation window for GA: "
+              << tStart << " → " << tEnd
+              << " (" << (tEnd - tStart) << " days, "
+              << m_buffer.pointCount() << " buffered points)\n";
+
+    std::cout << "[Assim] GA configured from Settings 'Optimizer' ("
+              << settings->GetVars()->size() << " quans)\n";
+
+    const QString calibDir =
+        QString::fromStdString(m_config.assimilation.calibrationOutputDir);
+    QDir().mkpath(calibDir);
+    ga.filenames.pathname       = calibDir.toStdString() + "/";
+    ga.filenames.outputfilename = "ga_output.txt";
+
+    // 6. Warm-start from previous cycle's terminal population, if available.
+    const QString prevOutput = calibDir + "/ga_output.txt";
+    if (m_cyclesCompleted > 0 && QFileInfo::exists(prevOutput))
+    {
+        ga.filenames.getfromfilename = prevOutput.toStdString();
+        ga.getinifromoutput(prevOutput.toStdString());
+        ga.getinitialpop(prevOutput.toStdString());
+        std::cout << "[Assim] warm-starting from "
+                  << prevOutput.toStdString() << "\n";
+    }
+    else
+    {
+        std::cout << "[Assim] cold-start GA (first calibration cycle)\n";
+    }
+
+    sys.SetParameterEstimationMode(parameter_estimation_options::inverse_model);
+
+    // 7. Run.
+    std::cout << "[Assim] running GA...\n";
+    ga.optimize();
+
+    sys.SetParameterEstimationMode();   // reset to default
+
+    // 8. Transfer results onto sys (for snapshot writing).
+    sys.TransferResultsFrom(&ga.Model_out);
+    sys.Parameters() = ga.Model_out.Parameters();
+    sys.SetOutputItems();
+
+    ga.Model_out.Solve();
+
+    // Make sure the deployment output directory exists before writing
+    // reanalysis_output.csv. Without this, the write call can silently fail
+    // on a fresh deployment or when outputDir was cleaned.
+    const QString outputDir = QString::fromStdString(m_config.outputDir);
+    QDir().mkpath(outputDir);
+
+    const QString reanalysisPath = outputDir + "/reanalysis_output.csv";
+    ga.Model_out.GetObservedOutputs().write(reanalysisPath.toStdString());
+
+    if (QFileInfo::exists(reanalysisPath))
+    {
+        std::cout << "[Assim] reanalysis written: "
+                  << reanalysisPath.toStdString() << "\n";
+    }
+    else
+    {
+        std::cerr << "[Assim] WARNING: reanalysis_output.csv was not created at "
+                  << reanalysisPath.toStdString() << "\n";
+    }
+
+    // 9. Archive GA output to the merged file and preserve per-cycle GA
+    // artifacts before the next cycle overwrites ga_output.txt.
+    const int archiveCycle = m_cyclesCompleted + 1;
+    if (!archiveGAOutput(archiveCycle))
+    {
+        std::cerr << "[Assim] failed to archive GA output for cycle "
+                  << archiveCycle << "\n";
+    }
+
+    // 10. Write a new state snapshot reflecting the calibrated parameters.
+    // In debug mode each cycle is timestamped and kept; otherwise we
+    // overwrite a single fixed file so the calibration dir stays bounded
+    // on long runs. DTRunner picks up whatever path is signaled.
+    QString newSnapshotPath;
+    if (m_config.keepDebugOutputs)
+    {
+        const QString stamp = QDateTime::currentDateTimeUtc()
+        .toString("yyyyMMdd_HHmmss");
+        newSnapshotPath = calibDir + "/state_calibrated_" + stamp + ".json";
+    }
+    else
+    {
+        newSnapshotPath = calibDir + "/state_calibrated_latest.json";
+    }
+    if (!sys.SavetoJson(newSnapshotPath.toStdString(), {}, false, false))
+    {
+        errorMessage = "failed to write calibrated snapshot: " + newSnapshotPath;
+        recordCalibrationFailure(calStart, errorMessage);
+        return false;
+    }
+
+    ++m_cyclesCompleted;
+    std::cout << "[Assim] calibration cycle " << m_cyclesCompleted
+              << " completed: " << newSnapshotPath.toStdString() << "\n";
+
+    const QDateTime calEnd = QDateTime::currentDateTimeUtc();
+    const qint64 elapsedMs = calStart.msecsTo(calEnd);
+    std::cout << "[Assim] [" << calEnd.toString(Qt::ISODate).toStdString() << "] "
+              << "calibration cycle " << m_cyclesCompleted
+              << " finished in " << (elapsedMs / 1000.0) << " sec\n";
+
+    writeParameterLog(sys, m_cyclesCompleted);
+
+    if (m_runLogger)
+    {
+        std::cout << "[Assim] writing run_log row, runLogger ptr=" << m_runLogger << "\n";
+        m_runLogger->recordRun(
+            RunLogger::RunType::AssimCalibration,
+            m_cyclesCompleted,
+            calStart, calEnd,
+            tStart, tEnd,
+            m_latestSnapshotPath,
+            newSnapshotPath,
+            RunLogger::Status::Ok);
+    }
+    else
+    {
+        std::cout << "[Assim] runLogger is NULL — calibration not logged\n";
+    }
+
+    emit calibrationCompleted(newSnapshotPath);
+
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// runCalibrationMCMC
+// Streaming Bayesian mode (spec Alg. 1). One calibration cycle:
+//
+//   deadline  <- cycle start + wall-clock budget (Sec. 3.8)
+//   seed      <- posterior snapshot (cold / warm / provisional resume)
+//   sample    <- runCycle(deadline)
+//   publish   <- point estimate onto the calibrated System snapshot
+//                (forward-loop adoption path identical to the GA's),
+//                plus the posterior snapshot for the next cycle
+//
+// A cycle is NOT expected to converge (Sec. 3.9): a provisional outcome
+// is a normal, successful cycle whose ensemble is carried forward, and is
+// logged as Status::Ok with a "provisional" note — never as a failure.
+// ---------------------------------------------------------------------------
+bool DTAssimilation::runCalibrationMCMC(System &sys,
+                                        double tStart,
+                                        double tEnd,
+                                        const QDateTime &calStart,
+                                        QString &errorMessage)
+{
+    // 5. Sampler setup.
+    DTStreamingMCMC mcmc(&sys);
+
+    Object *settings = sys.object("MCMC");
+    if (!settings)
+    {
+        errorMessage = "no 'MCMC' object found in System "
+                       "(this should not happen — Settings template loaded successfully)";
+        recordCalibrationFailure(calStart, errorMessage);
+        return false;
+    }
+    mcmc.SetParameters(settings);
+
+    std::cout << "[Assim] MCMC configured from Settings 'MCMC' ("
+              << settings->GetVars()->size() << " quans), window "
+              << tStart << " → " << tEnd
+              << " (" << (tEnd - tStart) << " days, "
+              << m_buffer.pointCount() << " buffered points)\n";
+
+    const QString calibDir =
+        QString::fromStdString(m_config.assimilation.calibrationOutputDir);
+    QDir().mkpath(calibDir);
+
+    // Per-evaluation detail logging only in debug mode; it serializes a
+    // file append inside an omp critical on every forward solve.
+    if (m_config.keepDebugOutputs)
+    {
+        mcmc.streamSettings.detailLogging = true;
+        mcmc.FileInformation.detailfilename =
+            calibDir.toStdString() + "/mcmc_details.txt";
+    }
+
+    // Wall-clock budget (Tcal, Sec. 3.8), anchored at CYCLE start: prep
+    // time (snapshot load, weather fetch, observation push) counts against
+    // the budget, so the whole cycle fits inside the calibration cadence
+    // with only publication + one-sweep overshoot left for the margin. If
+    // prep alone overran the budget, the deadline is already past and
+    // runCycle degrades to a zero-sweep provisional cycle — loud in the
+    // diagnostics, but never a failure.
+    qint64 budgetMs = m_config.assimilation.mcmcBudgetMs;
+    if (budgetMs <= 0)
+        budgetMs = m_pollIntervalWallClockMs
+                   - m_config.assimilation.mcmcBudgetMarginMs;
+    if (budgetMs < 1000)
+    {
+        std::cerr << "[Assim] WARNING: derived MCMC budget is " << budgetMs
+                  << " ms (cadence " << m_pollIntervalWallClockMs
+                  << " ms minus margin "
+                  << m_config.assimilation.mcmcBudgetMarginMs
+                  << " ms); flooring at 1000 ms — check mcmc_budget / "
+                     "mcmc_budget_margin in config.json\n";
+        budgetMs = 1000;
+    }
+    const QDateTime deadline = calStart.addMSecs(budgetMs);
+    std::cout << "[Assim] MCMC sampling deadline: "
+              << deadline.toString(Qt::ISODate).toStdString()
+              << " (budget " << budgetMs << " ms)\n";
+
+    // 6. Cross-cycle state: previous pool / carried chain states /
+    // proposal scales. A corrupt snapshot forfeits the warm start but
+    // must not wedge the assimilation loop, so it degrades to cold start.
+    const QString postPath =
+        QString::fromStdString(m_config.assimilation.posteriorSnapshotPath);
+    {
+        QString loadErr;
+        if (!mcmc.loadPosteriorSnapshot(postPath, loadErr))
+        {
+            std::cerr << "[Assim] WARNING: posterior snapshot unreadable ("
+                      << loadErr.toStdString() << ") — cold-starting\n";
+        }
+    }
+
+    const SeedMode mode = mcmc.chooseSeedMode(/*driftDetected=*/false);
+    static const char *modeNames[] =
+        { "cold start", "warm start", "ratio reseed", "provisional resume" };
+    std::cout << "[Assim] MCMC seeding: "
+              << modeNames[static_cast<int>(mode)] << "\n";
+
+    sys.SetParameterEstimationMode(parameter_estimation_options::inverse_model);
+
+    if (!mcmc.initializeCycle(mode, errorMessage))
+    {
+        sys.SetParameterEstimationMode();   // reset to default
+        recordCalibrationFailure(calStart, errorMessage);
+        return false;
+    }
+
+    // 7. Run (wall-clock-bounded; Alg. 1 lines 12-29).
+    std::cout << "[Assim] running streaming MCMC...\n";
+    const DTCycleResult result = mcmc.runCycle(deadline);
+
+    sys.SetParameterEstimationMode();   // reset to default
+
+    if (result.pointEstimate.empty())
+    {
+        errorMessage = "MCMC cycle produced no point estimate "
+                       "(empty ensemble?)";
+        recordCalibrationFailure(calStart, errorMessage);
+        return false;
+    }
+
+    // 8. Apply the point estimate onto sys (for snapshot writing) —
+    // sampled MAP from the pool when converged, best carried state when
+    // provisional (Sec. 3.9). Mirrors the parameter application inside
+    // CMCMC::posterior: SetParameterValue per index, then ApplyParameters.
+    for (size_t i = 0; i < result.pointEstimate.size(); ++i)
+        sys.SetParameterValue(static_cast<int>(i), result.pointEstimate[i]);
+    sys.ApplyParameters();
+    sys.SetOutputItems();
+
+    // Reanalysis: solve a COPY under the point estimate so the calibrated
+    // snapshot itself stays unsolved (same semantics as the GA branch,
+    // which writes sys while solving ga.Model_out).
+    const QString outputDir = QString::fromStdString(m_config.outputDir);
+    QDir().mkpath(outputDir);
+    const QString reanalysisPath = outputDir + "/reanalysis_output.csv";
+    {
+        System reanalysis = sys;
+        reanalysis.SetSilent(true);
+        reanalysis.Solve();
+        reanalysis.GetObservedOutputs().write(reanalysisPath.toStdString());
+    }
+    if (QFileInfo::exists(reanalysisPath))
+    {
+        std::cout << "[Assim] reanalysis written: "
+                  << reanalysisPath.toStdString() << "\n";
+    }
+    else
+    {
+        std::cerr << "[Assim] WARNING: reanalysis_output.csv was not created at "
+                  << reanalysisPath.toStdString() << "\n";
+    }
+
+    // 9. Publish the posterior snapshot (full or provisional payload,
+    // Sec. 3.9) — the next cycle's seed source. A write failure here
+    // breaks cross-cycle continuity, so it fails the cycle.
+    {
+        QString writeErr;
+        if (!mcmc.writePosteriorSnapshot(postPath, result, writeErr))
+        {
+            errorMessage = "failed to write posterior snapshot: " + writeErr;
+            recordCalibrationFailure(calStart, errorMessage);
+            return false;
+        }
+    }
+    std::cout << "[Assim] posterior snapshot ("
+              << (result.converged ? "full" : "provisional") << ") written: "
+              << postPath.toStdString() << "\n";
+
+    // Cumulative per-cycle history for the viewer (posterior_history.jsonl,
+    // sibling of the GA's ga_output_merged.txt; ~1 KB/cycle, no samples).
+    {
+        const QString historyPath =
+            calibDir + "/posterior_history.jsonl";
+        QString histErr;
+        if (!mcmc.appendHistoryRecord(historyPath, result, tEnd, histErr))
+        {
+            // Viewer convenience only — never fails the cycle.
+            std::cerr << "[Assim] WARNING: " << histErr.toStdString() << "\n";
+        }
+    }
+
+    // 10. Write the calibrated System snapshot — identical naming and
+    // shape to the GA branch, so DTRunner's adoption path is unchanged.
+    QString newSnapshotPath;
+    if (m_config.keepDebugOutputs)
+    {
+        const QString stamp = QDateTime::currentDateTimeUtc()
+        .toString("yyyyMMdd_HHmmss");
+        newSnapshotPath = calibDir + "/state_calibrated_" + stamp + ".json";
+    }
+    else
+    {
+        newSnapshotPath = calibDir + "/state_calibrated_latest.json";
+    }
+    if (!sys.SavetoJson(newSnapshotPath.toStdString(), {}, false, false))
+    {
+        errorMessage = "failed to write calibrated snapshot: " + newSnapshotPath;
+        recordCalibrationFailure(calStart, errorMessage);
+        return false;
+    }
+
+    ++m_cyclesCompleted;
+
+    const QDateTime calEnd = QDateTime::currentDateTimeUtc();
+    const qint64 elapsedMs = calStart.msecsTo(calEnd);
+    std::cout << "[Assim] [" << calEnd.toString(Qt::ISODate).toStdString() << "] "
+              << "calibration cycle " << m_cyclesCompleted
+              << " (MCMC, " << (result.converged ? "converged" : "provisional")
+              << ", plateaued=" << result.plateauedFraction
+              << ", pool=" << result.pooledSamples.size()
+              << ") finished in " << (elapsedMs / 1000.0) << " sec: "
+              << newSnapshotPath.toStdString() << "\n";
+
+    writeParameterLog(sys, m_cyclesCompleted);
+
+    // A provisional cycle IS a successful cycle: the ensemble moved
+    // toward the target and its progress is banked in the posterior
+    // snapshot. Status::Ok either way; the note column carries the
+    // converged/provisional distinction for run-log inspection.
+    if (m_runLogger)
+    {
+        m_runLogger->recordRun(
+            RunLogger::RunType::AssimCalibration,
+            m_cyclesCompleted,
+            calStart, calEnd,
+            tStart, tEnd,
+            m_latestSnapshotPath,
+            newSnapshotPath,
+            RunLogger::Status::Ok,
+            result.converged
+                ? QString("MCMC converged (ess=%1)")
+                      .arg(result.effectiveSampleSize)
+                : QString("MCMC provisional (plateaued=%1)")
+                      .arg(result.plateauedFraction));
+    }
+
+    emit calibrationCompleted(newSnapshotPath);
+
+    return true;
 }

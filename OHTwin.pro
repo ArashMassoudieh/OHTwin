@@ -128,6 +128,7 @@ CONFIG(debug, debug|release) {
 SOURCES += \
     DTAssimilation.cpp \
     DTConfig.cpp \
+    DTDebugLog.cpp \
     DTObservationBuffer.cpp \
     DTRunner.cpp \
     DTStreamingMCMC.cpp \
@@ -197,6 +198,7 @@ HEADERS += \
     ../OpenHydroQual/aquifolium/include/reaction.h \
     DTAssimilation.h \
     DTConfig.h \
+    DTDebugLog.h \
     DTObservationBuffer.h \
     DTRunner.h \
     DTStreamingMCMC.h \

@@ -96,8 +96,19 @@ AssimViewer::AssimViewer(const QJsonObject &rootConfig,
 
     // ----- absorb config -----
     {
-        const QString u = assimConfig.value("ga_merged_url").toString();
-        m_mergedUrl = resolvedConfigUrl(configBaseUrl, u);
+        // Loader selection by URL key: posterior_history_url => MCMC
+        // mode (PosteriorHistoryLoader), ga_merged_url => GA mode
+        // (GaMergedLoader). If both are present, MCMC wins — mixing two
+        // deployments' histories in one window is never intended.
+        const QString hu = assimConfig.value("posterior_history_url").toString();
+        const QString u  = assimConfig.value("ga_merged_url").toString();
+        m_historyUrl = resolvedConfigUrl(configBaseUrl, hu);
+        m_mergedUrl  = resolvedConfigUrl(configBaseUrl, u);
+        m_mcmcMode   = !m_historyUrl.isEmpty();
+        if (m_mcmcMode && !m_mergedUrl.isEmpty())
+            qWarning("AssimViewer: both posterior_history_url and "
+                     "ga_merged_url configured; using MCMC history and "
+                     "ignoring ga_merged_url.");
 
         const QString obs = assimConfig.value("observed_csv_url").toString();
         m_observedCsvUrl = resolvedConfigUrl(configBaseUrl, obs);
@@ -245,8 +256,13 @@ AssimViewer::AssimViewer(const QJsonObject &rootConfig,
             m_fitnessCharts.push_back(fp);
         }
 
-        m_tabs->addTab(m_fitnessTabHost, "Fitness");
+        if (!m_mcmcMode)
+            m_tabs->addTab(m_fitnessTabHost, "Fitness");
     }
+
+    // ----- Diagnostics tab (MCMC mode): sampler health per cycle -----
+    if (m_mcmcMode)
+        buildDiagnosticsTab();
 
     // ----- Parameters tab: grid of charts in a scroll area -----
     {
@@ -254,13 +270,30 @@ AssimViewer::AssimViewer(const QJsonObject &rootConfig,
         scroll->setWidgetResizable(true);
         scroll->setFrameShape(QFrame::NoFrame);
 
+        auto *outer  = new QWidget();
+        auto *outerL = new QVBoxLayout(outer);
+        outerL->setContentsMargins(0, 0, 0, 0);
+        outerL->setSpacing(6);
+
+        // The band means different things in the two modes; say which.
+        auto *bandCaption = new QLabel(
+            m_mcmcMode
+                ? "Band: posterior 10\u201390% credible interval "
+                  "(converged cycles only \u2014 provisional cycles show "
+                  "the point estimate with no band)"
+                : "Band: GA population p10\u2013p90 (terminal generation)");
+        bandCaption->setStyleSheet("color:#6B7280; font-size:11px;");
+        bandCaption->setVisible(m_showParamBand);
+        outerL->addWidget(bandCaption);
+
         m_paramTabHost = new QWidget();
         m_paramGrid    = new QGridLayout(m_paramTabHost);
         m_paramGrid->setContentsMargins(0, 0, 0, 0);
         m_paramGrid->setHorizontalSpacing(12);
         m_paramGrid->setVerticalSpacing(12);
+        outerL->addWidget(m_paramTabHost, 1);
 
-        scroll->setWidget(m_paramTabHost);
+        scroll->setWidget(outer);
         m_tabs->addTab(scroll, "Parameters");
     }
 
@@ -284,11 +317,23 @@ AssimViewer::AssimViewer(const QJsonObject &rootConfig,
     resize(1280, 860);
 
     // ----- loader & timer -----
-    m_loader = new GaMergedLoader(this);
-    m_loader->setMergedUrl(m_mergedUrl);
-
-    connect(m_loader, &GaMergedLoader::loaded, this, &AssimViewer::onLoaded);
-    connect(m_loader, &GaMergedLoader::failed, this, &AssimViewer::onFailed);
+    if (m_mcmcMode)
+    {
+        setWindowTitle("OHTwin Assimilation Viewer (MCMC)");
+        m_historyLoader = new PosteriorHistoryLoader(this);
+        m_historyLoader->setHistoryUrl(m_historyUrl);
+        connect(m_historyLoader, &PosteriorHistoryLoader::loaded,
+                this, &AssimViewer::onLoaded);
+        connect(m_historyLoader, &PosteriorHistoryLoader::failed,
+                this, &AssimViewer::onFailed);
+    }
+    else
+    {
+        m_loader = new GaMergedLoader(this);
+        m_loader->setMergedUrl(m_mergedUrl);
+        connect(m_loader, &GaMergedLoader::loaded, this, &AssimViewer::onLoaded);
+        connect(m_loader, &GaMergedLoader::failed, this, &AssimViewer::onFailed);
+    }
     connect(&m_timer, &QTimer::timeout,        this, &AssimViewer::onRefreshClicked);
     connect(m_refreshBtn, &QPushButton::clicked,
             this, &AssimViewer::onRefreshClicked);
@@ -319,7 +364,8 @@ AssimViewer::AssimViewer(const QJsonObject &rootConfig,
 void AssimViewer::onRefreshClicked()
 {
     m_statusLabel->setText(statusHtml("#F59E0B", "Fetching …"));
-    m_loader->fetch();
+    if (m_mcmcMode) m_historyLoader->fetch();
+    else            m_loader->fetch();
     if (!m_observedCsvUrl.isEmpty()) m_observedLoader.fetch(m_observedCsvUrl);
     if (!m_modeledCsvUrl .isEmpty()) m_modeledLoader .fetch(m_modeledCsvUrl);
 }
@@ -364,6 +410,7 @@ void AssimViewer::onLoaded(const QVector<CycleSummary> &cycles)
 
     updateFitnessSeries(cycles);
     updateParameterSeries(cycles);
+    if (m_mcmcMode) updateDiagnosticsSeries(cycles);
     applyXAxisToAllCharts();
 
     // The Comparison tab decides whether to show observed dots per
@@ -390,6 +437,7 @@ void AssimViewer::onXAxisModeChanged()
     {
         updateFitnessSeries(m_lastCycles);
         updateParameterSeries(m_lastCycles);
+        if (m_mcmcMode) updateDiagnosticsSeries(m_lastCycles);
     }
 }
 
@@ -655,7 +703,9 @@ void AssimViewer::rebuildParameterCharts(const QVector<CycleSummary> &cycles)
 
         // p10-p90 area (built from two hidden line series).
         // Created only when the config opts in (default true).
-        if (m_showParamBand)
+        // GA mode only: in MCMC mode the band is a set of per-run
+        // segments rebuilt in updateParameterSeries.
+        if (m_showParamBand && !m_mcmcMode)
         {
             pp.p10Series = new QLineSeries();
             pp.p90Series = new QLineSeries();
@@ -710,6 +760,45 @@ void AssimViewer::updateParameterSeries(const QVector<CycleSummary> &cycles)
         double yMin =  std::numeric_limits<double>::max();
         double yMax = -std::numeric_limits<double>::max();
 
+        // MCMC mode: wipe last refresh's band segments; they are rebuilt
+        // below, one QAreaSeries per contiguous run of converged cycles
+        // (provisional cycles break the band — transit dispersion is
+        // never rendered as posterior width).
+        if (m_mcmcMode && m_showParamBand)
+        {
+            for (QAreaSeries *seg : pp.bandSegments)
+            {
+                pp.chart->removeSeries(seg);
+                seg->deleteLater();
+            }
+            pp.bandSegments.clear();
+        }
+
+        QAbstractAxis *xAx = m_useDateAxis ? (QAbstractAxis*)pp.dateAxis
+                                           : (QAbstractAxis*)pp.cycleAxis;
+        auto flushBandSegment = [&]()
+        {
+            // A run of <2 converged cycles has no drawable area; an
+            // isolated converged cycle between provisionals therefore
+            // shows no band (one point has no visible width).
+            if (lo.size() < 2) { lo.clear(); hi.clear(); return; }
+            auto *loS = new QLineSeries();
+            auto *hiS = new QLineSeries();
+            loS->replace(lo);
+            hiS->replace(hi);
+            auto *area = new QAreaSeries(hiS, loS);
+            loS->setParent(area);   // cleaned up with the segment
+            hiS->setParent(area);
+            QColor bandFill = kBandColor; bandFill.setAlpha(60);
+            area->setBrush(QBrush(bandFill));
+            area->setPen(QPen(Qt::NoPen));
+            pp.chart->addSeries(area);
+            area->attachAxis(xAx);
+            area->attachAxis(pp.yAxis);
+            pp.bandSegments.push_back(area);
+            lo.clear(); hi.clear();
+        };
+
         for (const CycleSummary &c : cycles)
         {
             if (k >= c.bestParams.size()) continue;
@@ -723,16 +812,30 @@ void AssimViewer::updateParameterSeries(const QVector<CycleSummary> &cycles)
             if (m_showParamBand &&
                 k < c.paramP10.size() && k < c.paramP90.size())
             {
-                const double p10 = c.paramP10.at(k);
-                const double p90 = c.paramP90.at(k);
-                lo.push_back(QPointF(x, p10));
-                hi.push_back(QPointF(x, p90));
-                yMin = std::min(yMin, p10);
-                yMax = std::max(yMax, p90);
+                if (m_mcmcMode && !c.converged)
+                {
+                    // Provisional cycle: point estimate only; the band
+                    // breaks here and resumes at the next converged run.
+                    flushBandSegment();
+                }
+                else
+                {
+                    const double p10 = c.paramP10.at(k);
+                    const double p90 = c.paramP90.at(k);
+                    lo.push_back(QPointF(x, p10));
+                    hi.push_back(QPointF(x, p90));
+                    yMin = std::min(yMin, p10);
+                    yMax = std::max(yMax, p90);
+                }
             }
         }
         pp.bestSeries->replace(best);
-        if (m_showParamBand && pp.p10Series && pp.p90Series)
+        if (m_mcmcMode)
+        {
+            if (m_showParamBand)
+                flushBandSegment();   // close the trailing converged run
+        }
+        else if (m_showParamBand && pp.p10Series && pp.p90Series)
         {
             pp.p10Series->replace(lo);
             pp.p90Series->replace(hi);
@@ -742,6 +845,142 @@ void AssimViewer::updateParameterSeries(const QVector<CycleSummary> &cycles)
         {
             const double pad = (yMax - yMin) * 0.08 + 1e-9;
             pp.yAxis->setRange(yMin - pad, yMax + pad);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Diagnostics tab (MCMC mode): four charts of per-cycle sampler health,
+// fed from the MCMC-mode extras on CycleSummary (populated by
+// PosteriorHistoryLoader; the tab is never built in GA mode).
+// ---------------------------------------------------------------------------
+void AssimViewer::buildDiagnosticsTab()
+{
+    auto *scroll = new QScrollArea();
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+
+    auto *host = new QWidget();
+    auto *grid = new QGridLayout(host);
+    grid->setContentsMargins(0, 0, 0, 0);
+    grid->setHorizontalSpacing(12);
+    grid->setVerticalSpacing(12);
+
+    const QStringList titles = {
+        "Effective sample size",
+        "Plateaued fraction at deadline",
+        "Acceptance rate",
+        "Pool size (retained samples)"
+    };
+
+    for (int i = 0; i < titles.size(); ++i)
+    {
+        DiagPanel dp;
+        dp.title = titles.at(i);
+
+        dp.chart = new QChart();
+        dp.chart->setTitle(dp.title);
+        dp.chart->setTitleFont(QFont("Inter", 11, QFont::DemiBold));
+        dp.chart->setTitleBrush(QBrush(kTitleColor));
+        dp.chart->setBackgroundBrush(QBrush(QColor("#FFFFFF")));
+        dp.chart->setBackgroundPen(QPen(QColor("#E1E5EB")));
+        dp.chart->setBackgroundRoundness(12);
+        dp.chart->setMargins(QMargins(10, 8, 10, 8));
+        dp.chart->setPlotAreaBackgroundVisible(false);
+        dp.chart->legend()->setVisible(false);
+
+        dp.dateAxis  = new QDateTimeAxis();
+        dp.dateAxis->setFormat("yyyy-MM-dd");
+        dp.cycleAxis = new QValueAxis();
+        dp.cycleAxis->setLabelFormat("%d");
+        dp.yAxis     = new QValueAxis();
+        for (QAbstractAxis *a : { (QAbstractAxis*)dp.dateAxis,
+                                 (QAbstractAxis*)dp.cycleAxis,
+                                 (QAbstractAxis*)dp.yAxis })
+        {
+            a->setLabelsFont(QFont("Inter", 9));
+            a->setLabelsColor(kLabelColor);
+            a->setGridLineColor(kGridColor);
+            a->setLinePenColor(kGridColor);
+        }
+        dp.chart->addAxis(dp.dateAxis,  Qt::AlignBottom);
+        dp.chart->addAxis(dp.cycleAxis, Qt::AlignBottom);
+        dp.chart->addAxis(dp.yAxis,     Qt::AlignLeft);
+        dp.dateAxis ->setVisible(m_useDateAxis);
+        dp.cycleAxis->setVisible(!m_useDateAxis);
+
+        dp.series = new QLineSeries();
+        QPen pen{QColor(kLineColors[i % kLineColors.size()])};
+        pen.setWidthF(2.4);
+        pen.setCapStyle(Qt::RoundCap);
+        dp.series->setPen(pen);
+        dp.chart->addSeries(dp.series);
+        dp.series->attachAxis(m_useDateAxis ? (QAbstractAxis*)dp.dateAxis
+                                            : (QAbstractAxis*)dp.cycleAxis);
+        dp.series->attachAxis(dp.yAxis);
+
+        dp.view = new QChartView(dp.chart);
+        dp.view->setRenderHint(QPainter::Antialiasing);
+        dp.view->setFrameShape(QFrame::NoFrame);
+        dp.view->setStyleSheet("background: transparent;");
+        dp.view->setMinimumHeight(260);
+
+        grid->addWidget(dp.view, i / 2, i % 2);
+        m_diagPanels.push_back(dp);
+    }
+
+    scroll->setWidget(host);
+    m_tabs->addTab(scroll, "Diagnostics");
+}
+
+// ---------------------------------------------------------------------------
+void AssimViewer::updateDiagnosticsSeries(const QVector<CycleSummary> &cycles)
+{
+    if (cycles.isEmpty() || m_diagPanels.isEmpty()) return;
+
+    const auto valueFor = [](const CycleSummary &c, int i) -> double
+    {
+        switch (i)
+        {
+        case 0:  return c.ess;
+        case 1:  return c.plateauedFraction;
+        case 2:  return c.acceptanceRate;
+        default: return c.poolSize;
+        }
+    };
+
+    const qreal xMin = cycleX(cycles.first(), m_useDateAxis);
+    const qreal xMax = cycleX(cycles.last(),  m_useDateAxis);
+
+    for (int i = 0; i < m_diagPanels.size(); ++i)
+    {
+        DiagPanel &dp = m_diagPanels[i];
+
+        QVector<QPointF> pts;
+        pts.reserve(cycles.size());
+        double yMin =  std::numeric_limits<double>::max();
+        double yMax = -std::numeric_limits<double>::max();
+
+        for (const CycleSummary &c : cycles)
+        {
+            const double v = valueFor(c, i);
+            pts.push_back(QPointF(cycleX(c, m_useDateAxis), v));
+            yMin = std::min(yMin, v);
+            yMax = std::max(yMax, v);
+        }
+        dp.series->replace(pts);
+
+        const double pad = (yMax > yMin)
+                               ? (yMax - yMin) * 0.08
+                               : std::max(1e-9, std::abs(yMax) * 0.1);
+        dp.yAxis->setRange(yMin - pad, yMax + pad);
+
+        if (xMax > xMin)
+        {
+            dp.dateAxis->setRange(
+                QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(xMin)),
+                QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(xMax)));
+            dp.cycleAxis->setRange(xMin, xMax);
         }
     }
 }
@@ -787,8 +1026,18 @@ void AssimViewer::applyXAxisToAllCharts()
     {
         retarget(pp.bestSeries, pp.dateAxis, pp.cycleAxis);
         retarget(pp.bandArea,   pp.dateAxis, pp.cycleAxis);
+        for (QAreaSeries *seg : pp.bandSegments)
+            retarget(seg, pp.dateAxis, pp.cycleAxis);
         if (pp.dateAxis)  pp.dateAxis ->setVisible(m_useDateAxis);
         if (pp.cycleAxis) pp.cycleAxis->setVisible(!m_useDateAxis);
+    }
+
+    // Diagnostics charts (MCMC mode).
+    for (DiagPanel &dp : m_diagPanels)
+    {
+        retarget(dp.series, dp.dateAxis, dp.cycleAxis);
+        if (dp.dateAxis)  dp.dateAxis ->setVisible(m_useDateAxis);
+        if (dp.cycleAxis) dp.cycleAxis->setVisible(!m_useDateAxis);
     }
 
     // X ranges based on the data we have.

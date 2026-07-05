@@ -71,6 +71,15 @@ struct CycleSummary
     QVector<double> paramMax;
     QVector<double> paramP10;
     QVector<double> paramP90;
+
+    // --- MCMC-mode extras (PosteriorHistoryLoader) ---------------------
+    // Defaults chosen so GA-mode records read as "converged, no sampler
+    // diagnostics"; GaMergedLoader never touches these.
+    bool   converged         = true;
+    double ess               = 0.0;
+    double plateauedFraction = 0.0;
+    double acceptanceRate    = 0.0;
+    double poolSize          = 0.0;
 };
 
 class GaMergedLoader : public QObject

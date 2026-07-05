@@ -4,6 +4,7 @@ TARGET   = OHTwinViewer
 TEMPLATE = app
 
 SOURCES += \
+    PosteriorHistoryLoader.cpp \
     main.cpp \
     Bootstrapper.cpp \
     MainWindow.cpp \
@@ -17,7 +18,8 @@ HEADERS += \
     AssimViewer.h \
     CsvLoader.h \
     GaMergedLoader.h \
-    OhqTime.h
+    OhqTime.h \
+    PosteriorHistoryLoader.h
 
 DISTFILES += \
     config.json \

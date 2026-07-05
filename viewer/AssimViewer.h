@@ -1,27 +1,35 @@
 // AssimViewer.h
 //
-// Assimilation-mode top-level window. Periodically refetches
-// ga_output_merged.txt from the deployment's outputs/calibration/
-// directory and renders two tabs:
+// Assimilation-mode top-level window. Periodically refetches the
+// per-cycle calibration history from the deployment's
+// outputs/calibration/ directory — ga_output_merged.txt in GA mode,
+// posterior_history.jsonl in MCMC mode — and renders tabs:
 //
-//   - Fitness:    two side-by-side charts (NSE and NMSE = 1 - NSE),
-//                 one line per "used" observation (an observation
-//                 whose MSE/R2/NSE are not all zero in the best
-//                 individual). NMSE uses a log Y axis.
+//   - Fitness (GA mode):    two side-by-side charts (NSE and NMSE =
+//                 1 - NSE), one line per "used" observation (an
+//                 observation whose MSE/R2/NSE are not all zero in the
+//                 best individual). NMSE uses a log Y axis.
+//
+//   - Diagnostics (MCMC mode): per-cycle sampler health — effective
+//                 sample size, plateaued fraction, acceptance rate,
+//                 pool size.
 //
 //   - Parameters: one chart per calibrated parameter, laid out in a
 //                 wrapping grid inside a scroll area. Each chart shows
-//                 the best-individual trajectory (a line) and the
-//                 p10-p90 population band (a translucent area), both
-//                 over the full history of calibration cycles.
+//                 the best/point-estimate trajectory (a line) and a
+//                 band: GA population p10-p90, or the posterior 10-90%
+//                 credible interval (converged cycles only) in MCMC
+//                 mode.
 //
 // X-axis can be toggled between "cycle index" and "simulated time
 // t_now" (rendered as a calendar date via OHQ day-serial conversion).
 //
 // Data lifecycle:
-//   - The window owns a single GaMergedLoader and a single QTimer.
+//   - The window owns one loader (GaMergedLoader or
+//     PosteriorHistoryLoader, chosen by which URL key the config
+//     provides) and a single QTimer.
 //   - On each timer tick (or manual refresh), the loader fetches the
-//     merged file and emits `loaded(cycles)`. The viewer wipes and
+//     history and emits `loaded(cycles)`. The viewer wipes and
 //     rebuilds chart contents from the new vector (the chart structure
 //     stays put across refreshes; only the series data changes).
 
@@ -29,6 +37,7 @@
 
 #include "CsvLoader.h"
 #include "GaMergedLoader.h"
+#include "PosteriorHistoryLoader.h"
 
 #include <QJsonObject>
 #include <QMainWindow>
@@ -97,6 +106,20 @@ struct FitnessChartPanel
     bool            yIsLog     = false;
 };
 
+// One chart per sampler diagnostic in the Diagnostics tab (MCMC mode).
+struct DiagPanel
+{
+    QString         title;
+
+    QChart         *chart     = nullptr;
+    QChartView     *view      = nullptr;
+    QLineSeries    *series    = nullptr;
+
+    QDateTimeAxis  *dateAxis  = nullptr;
+    QValueAxis     *cycleAxis = nullptr;
+    QValueAxis     *yAxis     = nullptr;
+};
+
 // One chart panel per calibrated parameter in the Parameters tab.
 struct ParamPanel
 {
@@ -109,7 +132,13 @@ struct ParamPanel
     QLineSeries    *bestSeries = nullptr;
     QLineSeries    *p10Series  = nullptr;     // lower bound (hidden)
     QLineSeries    *p90Series  = nullptr;     // upper bound (hidden)
-    QAreaSeries    *bandArea   = nullptr;     // p10-p90 fill
+    QAreaSeries    *bandArea   = nullptr;     // p10-p90 fill (GA mode)
+
+    // MCMC mode: the band exists only over contiguous runs of CONVERGED
+    // cycles; each run is its own area series, rebuilt on every data
+    // refresh (provisional cycles break the band — transit dispersion is
+    // never rendered as posterior width).
+    QVector<QAreaSeries*> bandSegments;
 
     // Either dateAxis or cycleAxis is attached at any given time,
     // depending on the x-axis toggle. We keep both around so the
@@ -165,6 +194,8 @@ private:
 
     // Build (once) the per-parameter chart grid in the parameters tab.
     void rebuildParameterCharts(const QVector<CycleSummary> &cycles);
+    void buildDiagnosticsTab();
+    void updateDiagnosticsSeries(const QVector<CycleSummary> &cycles);
 
     // Replace data in the existing charts from `cycles`. Cheap; called
     // every refresh.
@@ -188,12 +219,17 @@ private:
     static QString shortenName(const QString &full);
 
     // ----- state -----
-    QUrl              m_mergedUrl;
-    GaMergedLoader   *m_loader      = nullptr;
+    QUrl              m_mergedUrl;                       // GA mode
+    QUrl              m_historyUrl;                      // MCMC mode
+    bool              m_mcmcMode     = false;
+    GaMergedLoader        *m_loader        = nullptr;    // GA mode only
+    PosteriorHistoryLoader *m_historyLoader = nullptr;   // MCMC mode only
+
     QTimer            m_timer;
     int               m_refreshSeconds = 10;
 
     QVector<CycleSummary> m_lastCycles;
+    QVector<DiagPanel>    m_diagPanels;       // MCMC mode only
     QStringList           m_lastUsedNames;     // ordered union of used-obs names
     QStringList           m_lastParamNames;    // schema for the parameters tab
 
