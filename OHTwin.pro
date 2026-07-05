@@ -124,6 +124,8 @@ CONFIG(debug, debug|release) {
     DEFINES += NO_OPENMP DEBUG
 }
 
+QMAKE_CXXFLAGS += -Werror=return-type
+
 # ── Project sources ──────────────────────────────────────────────
 SOURCES += \
     DTAssimilation.cpp \

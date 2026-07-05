@@ -39,6 +39,7 @@
 #include <QThread>
 #include "RunLogger.h"
 #include "DTStreamingMCMC.h"
+#include "DTDebugLog.h"
 
 DTAssimilation::DTAssimilation(const DTConfig &config, QObject *parent)
     : QObject(parent)
@@ -142,7 +143,19 @@ void DTAssimilation::onPollTick()
 
     m_calibrationInProgress = true;
     QString calErr;
-    const bool ok = runCalibration(calErr);
+    bool ok = false;
+    try {
+        ok = runCalibration(calErr);
+    } catch (const std::exception &e) {
+        calErr = QString("unhandled exception in calibration: %1").arg(e.what());
+        DTDebugLog::instance().log(DTDebugLog::Category::Assim, calErr);
+        DTDebugLog::instance().flush();
+        recordCalibrationFailure(QDateTime::currentDateTimeUtc(), calErr);
+    } catch (...) {
+        calErr = "unhandled non-std exception in calibration";
+        DTDebugLog::instance().log(DTDebugLog::Category::Assim, calErr);
+        DTDebugLog::instance().flush();
+    }
     m_calibrationInProgress = false;
 
     if (!ok)
@@ -518,6 +531,12 @@ bool DTAssimilation::prepareCalibrationSystem(System &sys,
                                               const QDateTime &calStart,
                                               QString &errorMessage)
 {
+
+    auto mark = [](const QString &m) {
+        DTDebugLog::instance().log(DTDebugLog::Category::Assim, m);
+        DTDebugLog::instance().flush();
+    };
+
     // Guard: need a snapshot to calibrate against.
     if (m_latestSnapshotPath.isEmpty())
     {
@@ -551,12 +570,20 @@ bool DTAssimilation::prepareCalibrationSystem(System &sys,
         return false;
     }
 
-    if (!sys.LoadfromJson(m_latestSnapshotPath))
-    {
-        errorMessage = "System::LoadfromJson failed for " + m_latestSnapshotPath;
-        recordCalibrationFailure(calStart, errorMessage);
-        return false;
+    std::cerr << "[Assim] settings template OK (" << sys.SettingsCount()
+              << " objects)\n";
+
+    try {
+        if (!sys.LoadfromJson(m_latestSnapshotPath))
+        {
+            errorMessage = "System::LoadfromJson failed for " + m_latestSnapshotPath;
+            recordCalibrationFailure(calStart, errorMessage);
+            return false;
+        }
+    } catch (const std::exception &e) {
+        throw std::runtime_error(std::string("LoadfromJson: ") + e.what());
     }
+
 
     // 2. Pre-flight checks (mirrors MainWindow::oninverserun).
     if (sys.ParametersCount() == 0)
@@ -922,6 +949,11 @@ bool DTAssimilation::runCalibrationMCMC(System &sys,
                                         const QDateTime &calStart,
                                         QString &errorMessage)
 {
+    auto mark = [](const QString &m) {
+        DTDebugLog::instance().log(DTDebugLog::Category::Assim, m);
+        DTDebugLog::instance().flush();
+    };
+
     // 5. Sampler setup.
     DTStreamingMCMC mcmc(&sys);
 

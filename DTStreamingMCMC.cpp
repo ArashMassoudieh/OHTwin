@@ -395,6 +395,29 @@ bool DTStreamingMCMC::initializeCycle(SeedMode mode, QString &errorMessage)
     m_dissolutionCount = 0;
     m_evaluationCount  = 0;
 
+    // Chain-private pristine model copies, made SERIALLY here so the
+    // parallel sweep never copy-constructs from a shared source. The
+    // shared model (*Model == the prepared calibration System) is fully
+    // configured at this point: observations pushed, window patched,
+    // weather injected, estimation mode set.
+    {
+        DTDebugLog &dlog = DTDebugLog::instance();
+        dlog.log(DTDebugLog::Category::MCMC,
+                 QString("pristine copies: starting (%1 chains)").arg(nc));
+        dlog.flush();
+        m_chainModels.clear();
+        m_chainModels.reserve(nc);
+        for (unsigned int c = 0; c < nc; ++c)
+        {
+            m_chainModels.push_back(*Model);
+            dlog.log(DTDebugLog::Category::MCMC,
+                     QString("pristine copy %1/%2 done").arg(c + 1).arg(nc));
+            dlog.flush();
+        }
+        dlog.log(DTDebugLog::Category::MCMC, "pristine copies: done");
+        dlog.flush();
+    }
+
     // Proposal scales: restore from the previous cycle's snapshot when
     // compatible, so adaptation accumulates across cycles (short cycles
     // may never hit an adaptation block on their own). Otherwise fall
@@ -443,6 +466,9 @@ bool DTStreamingMCMC::initializeCycle(SeedMode mode, QString &errorMessage)
         }
     }
 
+    DTDebugLog::instance().log(DTDebugLog::Category::MCMC, "seeding: dispatch");
+    DTDebugLog::instance().flush();
+
     bool ok = false;
     switch (mode)
     {
@@ -456,6 +482,10 @@ bool DTStreamingMCMC::initializeCycle(SeedMode mode, QString &errorMessage)
     // Evaluate the CURRENT cycle's target at every seed. Even warm-start
     // seeds need this: the window and kernel weights have moved since the
     // logp values stored in the previous snapshot were computed.
+    DTDebugLog::instance().log(DTDebugLog::Category::MCMC,
+                               QString("seed evaluation: starting parallel pass (chains=%1, threads=%2)")
+                                   .arg(nc).arg(MCMC_Settings.numberOfThreads));
+    DTDebugLog::instance().flush();
 #ifndef NO_OPENMP
     omp_set_num_threads(MCMC_Settings.numberOfThreads);
 #endif
@@ -466,7 +496,7 @@ bool DTStreamingMCMC::initializeCycle(SeedMode mode, QString &errorMessage)
         if (std::isfinite(chain.logp) && chain.logp > -1e299)
             continue;   // pre-filled by the seeding routine
 
-        double lp = posterior(chain.params, c);
+        double lp = posteriorLocal(c, chain.params);
         // NaN would poison the acceptance comparison in stepChain
         // (never accepts); map to the finite sentinel so the chain
         // self-heals on its first finite proposal instead.
@@ -476,8 +506,13 @@ bool DTStreamingMCMC::initializeCycle(SeedMode mode, QString &errorMessage)
     m_evaluationCount += nc;
 
     // Seed each trace with the initial level; phase starts Climbing.
+    // The seed entry counts as "accepted" so the stagnation guard's
+    // denominator and numerator start consistent.
     for (DTChainState &chain : m_chains)
+    {
         chain.trace.push_back(chain.logp);
+        chain.acceptTrace.push_back(1);
+    }
 
     {
         DTDebugLog &dlog = DTDebugLog::instance();
@@ -664,17 +699,6 @@ DTCycleResult DTStreamingMCMC::runCycle(const QDateTime &deadline)
                      .arg(result.acceptanceRate)
                      .arg(result.totalSweeps)
                      .arg(result.totalEvaluations));
-
-    if (dlog.enabled(DTDebugLog::Category::MCMC))
-    {
-        QString counts;
-        for (int c = 0; c < static_cast<int>(m_chains.size()); ++c)
-            counts += QString("%1:%2 ").arg(c)
-                          .arg(m_chains[c].samples.size());
-        dlog.log(DTDebugLog::Category::MCMC,
-                 QString("retained per chain: %1").arg(counts.trimmed()));
-    }
-
     DTDebugLog::instance().flush();   // cycle boundary: make the log durable
 
     return result;
@@ -880,6 +904,31 @@ std::vector<double> DTStreamingMCMC::drawFromRange(std::mt19937_64 &rng)
 // ---------------------------------------------------------------------------
 // Per-chain mechanics
 // ---------------------------------------------------------------------------
+double DTStreamingMCMC::posteriorLocal(int c, const std::vector<double> &par)
+{
+    // Copy-solve-discard against the chain's OWN pristine model. Same
+    // semantics and value as CMCMC::posterior (log-prior plus the
+    // negated engine objective, i.e. the kernel-weighted log-likelihood)
+    // -- but the copy source is chain-private, so concurrent sweeps
+    // never read the same System, and the base's per-evaluation
+    // detail-file omp critical is out of the hot path.
+    System work = m_chainModels[c];
+    work.SetSilent(true);
+    work.SetRecordResults(false);
+    work.SetNumThreads(1);
+
+    double sum = 0;
+    for (int i = 0; i < MCMC_Settings.number_of_parameters; ++i)
+    {
+        work.SetParameterValue(i, par[i]);
+        sum += parameter(i)->CalcLogPriorProbability(par[i]);
+    }
+    work.ApplyParameters();
+    work.Solve();
+    return sum - work.GetObjectiveFunctionValue();
+}
+
+// ---------------------------------------------------------------------------
 bool DTStreamingMCMC::stepChain(int c, std::mt19937_64 &rng)
 {
     DTChainState &chain = m_chains[c];
@@ -889,7 +938,7 @@ bool DTStreamingMCMC::stepChain(int c, std::mt19937_64 &rng)
 
     // Pure log-posterior: log-prior + kernel-weighted log-likelihood.
     // One forward solve; the dominant cost of the step.
-    const double logp0 = posterior(X, c);
+    const double logp0 = posteriorLocal(c, X);
 
 #pragma omp atomic
     ++m_evaluationCount;
@@ -944,9 +993,12 @@ bool DTStreamingMCMC::stepChain(int c, std::mt19937_64 &rng)
     // (a rejected step re-records the current level, exactly as the
     // base driver re-records Params[k] on rejection).
     chain.trace.push_back(chain.logp);
+    chain.acceptTrace.push_back(accepted ? 1 : 0);
     while (static_cast<int>(chain.trace.size()) >
            streamSettings.plateauWindow)
         chain.trace.pop_front();
+    while (chain.acceptTrace.size() > chain.trace.size())
+        chain.acceptTrace.pop_front();
 
     // Burn-in exclusion at retention time (Sec. 3.4): only a plateaued
     // chain's states enter the retained store. Rejected steps repeat the
@@ -1053,24 +1105,48 @@ void DTStreamingMCMC::classifyChain(int c, qint64 sweepIndex)
     }
     const double s = std::sqrt(ss / std::max(n - 2, 1));
 
-    // Plateaued iff the total trend across the window is small relative
-    // to the within-window scatter (Sec. 3.2). TRAJECTORY-based only:
-    // the chain's absolute level never enters, so a chain flat at a low
-    // level (secondary mode / low-density ridge) classifies plateaued.
+    // Stagnation guard: a window carried by too few ACCEPTED moves is a
+    // stuck chain, not a plateau -- its trace is flat because nothing
+    // moved, and treating that as convergence is what produced the
+    // spurious "PLATEAUED at sweep 8, scatter=1e-13" events. Requires a
+    // minimum fraction of accepts in the window before a plateau can be
+    // declared. (Trajectory-plus-motion, still never level-based.)
+    int acceptedInTrace = 0;
+    for (const char a : chain.acceptTrace) acceptedInTrace += a;
+    const bool moving =
+        acceptedInTrace >=
+        std::max(1, static_cast<int>(streamSettings.minAcceptedFraction * n));
+
+    // Plateaued iff the chain is moving AND the total trend across the
+    // window is small relative to the within-window scatter (Sec. 3.2).
+    // TRAJECTORY-based: the chain's absolute level never enters, so a
+    // chain flat-but-moving at a low level (secondary mode / low-density
+    // ridge) still classifies plateaued.
+    //
+    // Hysteresis: DECLARE below plateauSlopeThreshold; once plateaued,
+    // REVERT only above plateauSlopeThreshold * plateauRevertFactor.
+    // Window statistics are noisy enough that a single threshold flaps.
     const double totalTrend = std::fabs(b) * (n - 1);
+    const double declareAt  = streamSettings.plateauSlopeThreshold;
+    const double revertAt   = declareAt * std::max(1.0, streamSettings.plateauRevertFactor);
 
     bool plateaued;
-    if (s > 0.0)
+    if (!moving)
     {
-        plateaued = (totalTrend < streamSettings.plateauSlopeThreshold * s);
+        plateaued = false;   // stagnation: dissolution's territory (Phase 2)
+    }
+    else if (s > 0.0)
+    {
+        const double ratio = totalTrend / s;
+        plateaued = (chain.phase == ChainPhase::Plateaued)
+                        ? (ratio < revertAt)     // stickier once declared
+                        : (ratio < declareAt);
     }
     else
     {
-        // Degenerate zero-scatter window: every point lies exactly on the
-        // fitted line. A flat line (long rejection run at a stable level)
-        // has ceased to trend => plateaued; a perfect ramp is trending
-        // => climbing. Tolerance scaled to the magnitude of the level.
-        plateaued = (totalTrend <= 1e-9 * std::max(1.0, std::fabs(ybar)));
+        // Zero scatter with accepted moves in-window is effectively
+        // impossible for a continuous target; classify conservatively.
+        plateaued = false;
     }
 
     if (plateaued)

@@ -82,8 +82,13 @@ struct DTStreamingSettings
 {
     // --- plateau classifier (Sec. 3.2) ---
     int    plateauWindow          = 40;    // trace length (per-chain steps) over which trend is tested
-    double plateauSlopeThreshold  = 1.0;   // |slope * window| below this many trace-stddevs => plateaued
+    double plateauSlopeThreshold  = 1.0;   // DECLARE plateau: |slope * window| < this many trace-stddevs
+    double plateauRevertFactor    = 2.0;   // REVERT to climbing only above threshold*factor (hysteresis:
+                                           // prevents flapping when trend/scatter hovers near 1.0)
     int    minStepsBeforeClassify = 10;    // chains younger than this are always "climbing"
+    double minAcceptedFraction    = 0.05;  // a window with fewer accepted moves than this fraction of
+                                           // its length is STAGNATION, never a plateau (a flat trace of
+                                           // rejections is a stuck chain, not a converged one)
 
     // --- quorum (Sec. 3.2 / 3.9) ---
     double quorumFraction         = 0.5;   // fraction q of chains that must be plateaued
@@ -102,7 +107,10 @@ struct DTStreamingSettings
 
     // --- cycle driver (Sec. 3.8) ---
     int    stepsPerClockCheck     = 1;     // chain-sweeps between deadline checks
-    int    adaptationBlock        = 50;    // sweeps between proposal-scale adaptations
+    int    adaptationBlock        = 20;    // sweeps between proposal-scale adaptations
+                                           // (short: streaming cycles are ~100 sweeps and the target
+                                           // sharpens every cycle as the record grows, so adaptation
+                                           // must get several corrections per cycle to track it)
 
     // --- diagnostics / IO ---
     bool   detailLogging          = false; // per-evaluation detail file writes (base-class behavior)
@@ -120,6 +128,9 @@ struct DTChainState
 
     // classifier inputs
     std::deque<double>  trace;           // recent logp history (<= plateauWindow)
+    std::deque<char>    acceptTrace;     // 1/0 accept flags, parallel to trace
+                                         // (classifier stagnation guard; independent
+                                         // of the per-block adaptation counters)
     ChainPhase          phase = ChainPhase::Climbing;
     int                 plateauOnsetStep = -1;  // sweep index at which plateau was declared
 
@@ -270,6 +281,13 @@ private:
     // Per-chain mechanics
     // -----------------------------------------------------------------------
 
+    // Posterior evaluation against chain c's pristine model
+    // (m_chainModels[c]): log-prior + kernel-weighted log-likelihood,
+    // identical value to CMCMC::posterior but with a chain-private copy
+    // source (race-free under the parallel sweep) and without the
+    // per-evaluation detail-file critical section.
+    double posteriorLocal(int c, const std::vector<double> &par);
+
     // One MH step of chain c: propose (additive normal / multiplicative
     // log-normal per prior type, with the log-normal Jacobian in the
     // acceptance ratio, mirroring CMCMC::purturb/step), accept or reject
@@ -353,6 +371,15 @@ private:
     // -----------------------------------------------------------------------
     std::vector<DTChainState> m_chains;
 
+    // One pristine System per chain, copied SERIALLY from the shared
+    // model at cycle initialization (initializeCycle). Each evaluation
+    // copies from its own chain's pristine object (copy-solve-discard,
+    // the same semantics as CMCMC::posterior) -- so no two threads ever
+    // touch the same System concurrently, not even as a copy source.
+    // Memory: nc pristine copies + up to numberOfThreads transient
+    // working copies resident during a sweep.
+    std::vector<System> m_chainModels;
+
     // Previous cycle's product, restored by loadPosteriorSnapshot():
     bool m_havePrevSnapshot   = false;
     bool m_prevWasProvisional = false;
@@ -370,6 +397,6 @@ private:
     int    m_cycleIndex        = 0;
 
     std::mt19937_64 m_seedRng;  // seeded in the constructor; used for seeding
-    // and clone-target draws (per-thread RNGs for
-    // the parallel sweep live inside runCycle)
+                                // and clone-target draws (per-thread RNGs for
+                                // the parallel sweep live inside runCycle)
 };

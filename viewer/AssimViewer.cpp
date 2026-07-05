@@ -949,8 +949,17 @@ void AssimViewer::updateDiagnosticsSeries(const QVector<CycleSummary> &cycles)
         }
     };
 
-    const qreal xMin = cycleX(cycles.first(), m_useDateAxis);
-    const qreal xMax = cycleX(cycles.last(),  m_useDateAxis);
+    qreal xMin = cycleX(cycles.first(), m_useDateAxis);
+    qreal xMax = cycleX(cycles.last(),  m_useDateAxis);
+    if (xMax <= xMin)
+    {
+        // Single record (or degenerate order): pad so the point is
+        // centered instead of leaving the axis at its epoch default.
+        const qreal pad = m_useDateAxis ? 43200000.0   // ±12 h in ms
+                                        : 1.0;         // ±1 cycle
+        xMin -= pad;
+        xMax += pad;
+    }
 
     for (int i = 0; i < m_diagPanels.size(); ++i)
     {
@@ -972,16 +981,14 @@ void AssimViewer::updateDiagnosticsSeries(const QVector<CycleSummary> &cycles)
 
         const double pad = (yMax > yMin)
                                ? (yMax - yMin) * 0.08
-                               : std::max(1e-9, std::abs(yMax) * 0.1);
+                               : std::max(0.5, std::abs(yMax) * 0.1);
         dp.yAxis->setRange(yMin - pad, yMax + pad);
 
-        if (xMax > xMin)
-        {
-            dp.dateAxis->setRange(
-                QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(xMin)),
-                QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(xMax)));
-            dp.cycleAxis->setRange(xMin, xMax);
-        }
+        dp.dateAxis->setRange(
+            QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(xMin)),
+            QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(xMax)));
+        dp.cycleAxis->setRange(xMin, xMax);
+
     }
 }
 
@@ -1042,8 +1049,14 @@ void AssimViewer::applyXAxisToAllCharts()
 
     // X ranges based on the data we have.
     if (m_lastCycles.isEmpty()) return;
-    const qreal xMin = cycleX(m_lastCycles.first(), m_useDateAxis);
-    const qreal xMax = cycleX(m_lastCycles.last(),  m_useDateAxis);
+    qreal xMin = cycleX(m_lastCycles.first(), m_useDateAxis);
+    qreal xMax = cycleX(m_lastCycles.last(),  m_useDateAxis);
+    if (xMax <= xMin)
+    {
+        const qreal pad = m_useDateAxis ? 43200000.0 : 1.0;
+        xMin -= pad;
+        xMax += pad;
+    }
 
     auto setX = [&](QDateTimeAxis *dateAx, QValueAxis *cycleAx)
     {

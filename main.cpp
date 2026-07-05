@@ -118,21 +118,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    {
-        QString logErr;
-        if (!DTDebugLog::instance().configure(
-                QString::fromStdString(config.logging.filePath),
-                config.logging.enabled,
-                config.logging.categories,
-                config.logging.flushEvery,
-                config.logging.truncate,
-                logErr))
-        {
-            std::cerr << "[Main] debug log setup failed: "
-                      << logErr.toStdString() << "\n";
-            return 1;
-        }
-    }
 
     // ------------------------------------------------------------------
     // 2a. Handle --fresh: erase contents of state/ and outputs/
@@ -160,6 +145,23 @@ int main(int argc, char *argv[])
                   << "  " << config.stateDir  << "\n"
                   << "  " << config.outputDir << "\n";
     }
+
+    {
+        QString logErr;
+        if (!DTDebugLog::instance().configure(
+                QString::fromStdString(config.logging.filePath),
+                config.logging.enabled,
+                config.logging.categories,
+                config.logging.flushEvery,
+                config.logging.truncate,
+                logErr))
+        {
+            std::cerr << "[Main] debug log setup failed: "
+                      << logErr.toStdString() << "\n";
+            return 1;
+        }
+    }
+
     // ------------------------------------------------------------------
     // 3. Construct runner. In render-only mode, do not initialise the
     //    simulation loop, assimilation, timing state, or any OHQ state.
