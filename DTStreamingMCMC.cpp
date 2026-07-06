@@ -433,7 +433,11 @@ bool DTStreamingMCMC::appendParameterCIRow(const DTCycleResult &result,
                                            QString &errorMessage)
 {
     const unsigned int np = MCMC_Settings.number_of_parameters;
-    const bool full = result.converged && !result.summary.mean.empty();
+    // Emit the five statistics whenever a summary was computed this cycle
+    // (pool non-empty), regardless of certification. The `converged`
+    // column still distinguishes a certified interval from a provisional
+    // one; the interval numbers are published either way.
+    const bool full = !result.summary.mean.empty();
 
     // Header (written once, on cycle 1 of a fresh deployment).
     const bool truncate = (m_cycleIndex <= 1);
@@ -848,6 +852,21 @@ DTCycleResult DTStreamingMCMC::runCycle(const QDateTime &deadline)
     }
 
     // ---- publication (Sec. 3.9, Alg. 1 24-29) ----
+
+    // Chain states must be populated BEFORE posteriorMAP: on a provisional
+    // cycle the point estimate is the best carried chain state, which reads
+    // result.chainParams / result.chainLogp. (Fix B moved the pointEstimate
+    // assignment up so the stability ring sees the current cycle; the
+    // chain-state fill has to move up with it, or posteriorMAP reads empty
+    // vectors on every provisional cycle and returns no estimate.)
+    result.chainParams.reserve(nc);
+    result.chainLogp.reserve(nc);
+    for (const DTChainState &chain : m_chains)
+    {
+        result.chainParams.push_back(chain.params);
+        result.chainLogp.push_back(chain.logp);
+    }
+
     // --- convergence certification (quorum OR inter-cycle stability) ---
     // Push this cycle's point estimate onto the stability ring first, so
     // streamStable() sees the current cycle.
@@ -888,26 +907,22 @@ DTCycleResult DTStreamingMCMC::runCycle(const QDateTime &deadline)
                        : 0.0;
     }
 
-    // Chain states always published: the provisional payload when
-    // !converged (carried states, Sec. 3.9), and a diagnostic record
-    // either way.
-    result.chainParams.reserve(nc);
-    result.chainLogp.reserve(nc);
-    for (const DTChainState &chain : m_chains)
+    // Assemble the pool and compute summaries whenever any post-plateau
+    // samples were retained this cycle -- including provisional cycles --
+    // so that parameter CIs, distributions, and the predictive band are
+    // published every cycle regardless of certification. On a provisional
+    // cycle the pool is the retained samples of whichever chains happened
+    // to plateau; its dispersion is an estimate from a partial ensemble,
+    // NOT a certified posterior width. The distinction is preserved by
+    // result.converged / convergenceSource in the record, so downstream
+    // consumers can still tell a certified interval from a provisional
+    // one, but the numbers are emitted either way.
+    assemblePool(result);
+    if (!result.pooledSamples.empty())
     {
-        result.chainParams.push_back(chain.params);
-        result.chainLogp.push_back(chain.logp);
-    }
-
-    if (result.converged)
-    {
-        assemblePool(result);
         result.summary             = computeSummary(result.pooledSamples);
         result.effectiveSampleSize = effectiveSampleSize();
     }
-    // Posterior summaries are computed ONLY from a converged pool; a
-    // provisional result carries no summary -- mid-transit dispersion is
-    // not posterior width (Sec. 3.9).
     // (result.pointEstimate was set above, before the stability ring push.)
 
     ++m_cycleIndex;

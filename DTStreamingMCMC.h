@@ -83,11 +83,11 @@
 struct DTStreamingSettings
 {
     // --- plateau classifier (Sec. 3.2) ---
-    int    plateauWindow          = 40;    // trace length (per-chain steps) over which trend is tested
+    int    plateauWindow          = 60;    // trace length (per-chain steps) over which trend is tested
     double plateauSlopeThreshold  = 1.0;   // DECLARE plateau: |slope * window| < this many trace-stddevs
-    double plateauRevertFactor    = 2.0;   // REVERT to climbing only above threshold*factor (hysteresis:
+    double plateauRevertFactor    = 3.0;   // REVERT to climbing only above threshold*factor (hysteresis:
     // prevents flapping when trend/scatter hovers near 1.0)
-    int    minStepsBeforeClassify = 10;    // chains younger than this are always "climbing"
+    int    minStepsBeforeClassify = 20;    // chains younger than this are always "climbing"
     double minAcceptedFraction    = 0.05;  // a window with fewer accepted moves than this fraction of
     // its length is STAGNATION, never a plateau (a flat trace of
     // rejections is a stuck chain, not a converged one)

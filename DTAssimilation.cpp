@@ -1132,7 +1132,7 @@ bool DTAssimilation::runCalibrationMCMC(System &sys,
     const int interval = m_config.assimilation.mcmcRealizationInterval;
     const bool onSchedule = (cyc == 1) ||
                             (interval > 0 && cyc % interval == 0);
-    if (result.converged && onSchedule)
+    if ((result.converged || cyc == 1) && onSchedule)
     {
         QString rErr;
         if (!mcmc.produceRealizationCI(result, outputDir, tEnd, rErr))
