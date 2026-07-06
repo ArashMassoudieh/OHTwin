@@ -16,7 +16,7 @@
         "time_acceleration": 1000,
         "advance_to_observations": true,
         "state_variables": [],
-        "keep_debug_outputs": true
+        "keep_debug_outputs": false
     },
     "observations": {
         "save_interval": "1hr",

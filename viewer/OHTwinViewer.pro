@@ -6,6 +6,7 @@ TEMPLATE = app
 SOURCES += \
     PosteriorHistoryLoader.cpp \
     RealizationCILoader.cpp \
+    PosteriorDistLoader.cpp \
     main.cpp \
     Bootstrapper.cpp \
     MainWindow.cpp \
@@ -21,7 +22,8 @@ HEADERS += \
     GaMergedLoader.h \
     OhqTime.h \
     PosteriorHistoryLoader.h \
-    RealizationCILoader.h
+    RealizationCILoader.h \
+    PosteriorDistLoader.h
 
 DISTFILES += \
     config.json \

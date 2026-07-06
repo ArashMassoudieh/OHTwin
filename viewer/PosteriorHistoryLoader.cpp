@@ -124,8 +124,11 @@ bool PosteriorHistoryLoader::parse(const QByteArray &data,
         cs.acceptanceRate    = rec.value("acceptance_rate").toDouble(0.0);
         cs.poolSize          = rec.value("pool_size").toDouble(0.0);
 
-        if (cs.converged &&
-            rec.contains("p10") && rec.contains("p90"))
+        // Percentiles are now written for any cycle that produced a pooled
+        // summary (provisional included). Map them whenever present,
+        // regardless of the converged flag; cs.converged is retained so the
+        // renderer can style provisional bands differently.
+        if (rec.contains("p025") && rec.contains("p975"))
         {
             cs.paramP10 = toVector(rec.value("p10").toArray());
             cs.paramP90 = toVector(rec.value("p90").toArray());
@@ -134,11 +137,9 @@ bool PosteriorHistoryLoader::parse(const QByteArray &data,
         }
         else
         {
-            // Provisional cycle: no dispersion exists in the record, by
-            // design. Zero-width band at the point estimate keeps
-            // size-assuming chart code safe without displaying any false
-            // spread; renderers that honor cs.converged gap the band
-            // entirely (V3).
+            // No dispersion in this record (e.g. a cycle with no pool).
+            // Zero-width band at the point estimate keeps size-assuming
+            // chart code safe without displaying any false spread.
             cs.paramP10 = cs.bestParams;
             cs.paramP90 = cs.bestParams;
             cs.paramMin = cs.bestParams;

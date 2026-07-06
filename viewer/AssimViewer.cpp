@@ -110,17 +110,40 @@ AssimViewer::AssimViewer(const QJsonObject &rootConfig,
                      "ga_merged_url configured; using MCMC history and "
                      "ignoring ga_merged_url.");
 
-        // Realization CI band files: realization_ci_<obs>_latest.txt in the
-        // same outputs directory as the modeled CSV.
-        const QString rt = assimConfig.value("realization_ci_url_template").toString();
-        m_realizationUrlTemplate = rt.isEmpty()
-                                       ? QString()  // disabled if not configured
-                                       : resolvedConfigUrl(configBaseUrl, rt).toString();
-
         const QString obs = assimConfig.value("observed_csv_url").toString();
         m_observedCsvUrl = resolvedConfigUrl(configBaseUrl, obs);
         const QString mod = assimConfig.value("modeled_csv_url").toString();
         m_modeledCsvUrl = resolvedConfigUrl(configBaseUrl, mod);
+
+        // Combined realization-band file: a single realization_ci_latest.txt
+        // in the same outputs directory as the modeled CSV. Use an explicit
+        // "realization_ci_url" if given, otherwise derive it from the modeled
+        // CSV URL by swapping the filename (works for any deployment).
+        const QString rc = assimConfig.value("realization_ci_url").toString();
+        if (!rc.isEmpty())
+            m_realizationUrl = resolvedConfigUrl(configBaseUrl, rc).toString();
+        else if (m_modeledCsvUrl.isValid() && !m_modeledCsvUrl.isEmpty())
+        {
+            QUrl u = m_modeledCsvUrl;
+            const QString path = u.path();
+            const int slash = path.lastIndexOf('/');
+            u.setPath(path.left(slash + 1) + "realization_ci_latest.txt");
+            m_realizationUrl = u.toString();
+        }
+
+        // Posterior-distribution histograms: posterior_dist_latest.txt beside
+        // the modeled CSV. Same derivation, with an optional explicit override.
+        const QString pd = assimConfig.value("posterior_dist_url").toString();
+        if (!pd.isEmpty())
+            m_distUrl = resolvedConfigUrl(configBaseUrl, pd).toString();
+        else if (m_modeledCsvUrl.isValid() && !m_modeledCsvUrl.isEmpty())
+        {
+            QUrl u = m_modeledCsvUrl;
+            const QString path = u.path();
+            const int slash = path.lastIndexOf('/');
+            u.setPath(path.left(slash + 1) + "posterior_dist_latest.txt");
+            m_distUrl = u.toString();
+        }
 
         if (assimConfig.contains("refresh_seconds"))
             m_refreshSeconds = assimConfig.value("refresh_seconds").toInt(m_refreshSeconds);
@@ -285,9 +308,9 @@ AssimViewer::AssimViewer(const QJsonObject &rootConfig,
         // The band means different things in the two modes; say which.
         auto *bandCaption = new QLabel(
             m_mcmcMode
-                ? "Band: posterior 10\u201390% credible interval "
-                  "(converged cycles only \u2014 provisional cycles show "
-                  "the point estimate with no band)"
+                ? "Band: posterior 2.5\u201397.5% credible interval "
+                  "(provisional cycles included; width is an uncertified "
+                  "estimate until a cycle converges)"
                 : "Band: GA population p10\u2013p90 (terminal generation)");
         bandCaption->setStyleSheet("color:#6B7280; font-size:11px;");
         bandCaption->setVisible(m_showParamBand);
@@ -303,6 +326,11 @@ AssimViewer::AssimViewer(const QJsonObject &rootConfig,
         scroll->setWidget(outer);
         m_tabs->addTab(scroll, "Parameters");
     }
+
+    // ----- Posterior tab: latest per-parameter distribution histograms
+    // (MCMC mode only; GA mode has no sampled posterior). -----
+    if (m_mcmcMode)
+        buildPosteriorDistTab();
 
     // ----- Comparison tab: stacked charts in a scroll area -----
     {
@@ -360,9 +388,13 @@ AssimViewer::AssimViewer(const QJsonObject &rootConfig,
     connect(&m_modeledLoader,  &CsvLoader::failed,
             this, &AssimViewer::onModeledFailed);
 
-    m_realizationLoader.setUrlTemplate(m_realizationUrlTemplate);
+    m_realizationLoader.setUrl(m_realizationUrl);
     connect(&m_realizationLoader, &RealizationCILoader::loaded,
             this, &AssimViewer::onRealizationsLoaded);
+
+    m_distLoader.setUrl(m_distUrl);
+    connect(&m_distLoader, &PosteriorDistLoader::loaded,
+            this, &AssimViewer::onPosteriorDistLoaded);
 
     m_timer.setInterval(m_refreshSeconds * 1000);
     m_timer.start();
@@ -379,6 +411,22 @@ void AssimViewer::onRefreshClicked()
     else            m_loader->fetch();
     if (!m_observedCsvUrl.isEmpty()) m_observedLoader.fetch(m_observedCsvUrl);
     if (!m_modeledCsvUrl .isEmpty()) m_modeledLoader .fetch(m_modeledCsvUrl);
+
+    // Realization band: one GET for the combined file, extracting a band per
+    // comparison panel. Panels exist only after the first CSV load, so the
+    // opening refresh is a no-op here and the first band arrives on the next
+    // timer tick -- fine, since the band file itself lags the first cycle.
+    if (!m_realizationUrl.isEmpty() && !m_compPanels.isEmpty())
+    {
+        QStringList names;
+        for (const ComparisonPanel &p : m_compPanels) names << p.name;
+        m_realizationLoader.fetch(names);
+    }
+
+    // Posterior distribution histograms (MCMC mode). Self-describing file,
+    // so no name list is needed.
+    if (m_mcmcMode && !m_distUrl.isEmpty())
+        m_distLoader.fetch();
 }
 
 void AssimViewer::onIntervalChanged(int seconds)
@@ -771,10 +819,9 @@ void AssimViewer::updateParameterSeries(const QVector<CycleSummary> &cycles)
         double yMin =  std::numeric_limits<double>::max();
         double yMax = -std::numeric_limits<double>::max();
 
-        // MCMC mode: wipe last refresh's band segments; they are rebuilt
-        // below, one QAreaSeries per contiguous run of converged cycles
-        // (provisional cycles break the band — transit dispersion is
-        // never rendered as posterior width).
+        // MCMC mode: wipe last refresh's band segments; a single continuous
+        // 2.5-97.5% band is rebuilt below from every cycle's percentiles
+        // (provisional cycles included).
         if (m_mcmcMode && m_showParamBand)
         {
             for (QAreaSeries *seg : pp.bandSegments)
@@ -789,9 +836,8 @@ void AssimViewer::updateParameterSeries(const QVector<CycleSummary> &cycles)
                                            : (QAbstractAxis*)pp.cycleAxis;
         auto flushBandSegment = [&]()
         {
-            // A run of <2 converged cycles has no drawable area; an
-            // isolated converged cycle between provisionals therefore
-            // shows no band (one point has no visible width).
+            // Need at least two points for a drawable area (a single cycle
+            // has no horizontal width).
             if (lo.size() < 2) { lo.clear(); hi.clear(); return; }
             auto *loS = new QLineSeries();
             auto *hiS = new QLineSeries();
@@ -820,31 +866,26 @@ void AssimViewer::updateParameterSeries(const QVector<CycleSummary> &cycles)
             yMin = std::min(yMin, vBest);
             yMax = std::max(yMax, vBest);
 
+            // 2.5-97.5% credible band (paramMin/paramMax). Percentiles are
+            // now written for every pooled cycle (provisional included), so
+            // the band is drawn continuously rather than gapping at each
+            // non-converged cycle.
             if (m_showParamBand &&
-                k < c.paramP10.size() && k < c.paramP90.size())
+                k < c.paramMin.size() && k < c.paramMax.size())
             {
-                if (m_mcmcMode && !c.converged)
-                {
-                    // Provisional cycle: point estimate only; the band
-                    // breaks here and resumes at the next converged run.
-                    flushBandSegment();
-                }
-                else
-                {
-                    const double p10 = c.paramP10.at(k);
-                    const double p90 = c.paramP90.at(k);
-                    lo.push_back(QPointF(x, p10));
-                    hi.push_back(QPointF(x, p90));
-                    yMin = std::min(yMin, p10);
-                    yMax = std::max(yMax, p90);
-                }
+                const double p025 = c.paramMin.at(k);
+                const double p975 = c.paramMax.at(k);
+                lo.push_back(QPointF(x, p025));
+                hi.push_back(QPointF(x, p975));
+                yMin = std::min(yMin, p025);
+                yMax = std::max(yMax, p975);
             }
         }
         pp.bestSeries->replace(best);
         if (m_mcmcMode)
         {
             if (m_showParamBand)
-                flushBandSegment();   // close the trailing converged run
+                flushBandSegment();   // draw the accumulated 2.5-97.5% band
         }
         else if (m_showParamBand && pp.p10Series && pp.p90Series)
         {
@@ -858,6 +899,160 @@ void AssimViewer::updateParameterSeries(const QVector<CycleSummary> &cycles)
             pp.yAxis->setRange(yMin - pad, yMax + pad);
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Posterior tab (MCMC mode): one histogram per parameter, showing the latest
+// posterior distribution (posterior_dist_latest.txt). Built empty here; the
+// per-parameter panels are created lazily on the first load once the
+// parameter set is known.
+// ---------------------------------------------------------------------------
+void AssimViewer::buildPosteriorDistTab()
+{
+    auto *scroll = new QScrollArea();
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+
+    auto *outer  = new QWidget();
+    auto *outerL = new QVBoxLayout(outer);
+    outerL->setContentsMargins(0, 0, 0, 0);
+    outerL->setSpacing(6);
+
+    auto *caption = new QLabel(
+        "Latest posterior distribution per parameter (histogram of the most "
+        "recent cycle's pooled samples).");
+    caption->setStyleSheet("color:#6B7280; font-size:11px;");
+    outerL->addWidget(caption);
+
+    m_distTabHost = new QWidget();
+    m_distGrid    = new QGridLayout(m_distTabHost);
+    m_distGrid->setContentsMargins(0, 0, 0, 0);
+    m_distGrid->setHorizontalSpacing(12);
+    m_distGrid->setVerticalSpacing(12);
+    outerL->addWidget(m_distTabHost, 1);
+
+    scroll->setWidget(outer);
+    m_tabs->addTab(scroll, "Posterior");
+}
+
+// Rebuild panels when the parameter set changes, then fill each histogram.
+void AssimViewer::updatePosteriorDistCharts(
+    const QHash<QString, QVector<QPointF>> &hists)
+{
+    if (!m_distGrid) return;
+
+    // Desired parameter order: follow the Parameters tab schema when known,
+    // else the histogram keys. Keep only names actually present in the file.
+    QStringList names = m_lastParamNames.isEmpty()
+                            ? hists.keys()
+                            : m_lastParamNames;
+    QStringList present;
+    for (const QString &n : names)
+        if (hists.contains(n)) present << n;
+    // Include any extra names in the file not covered by the schema.
+    for (const QString &n : hists.keys())
+        if (!present.contains(n)) present << n;
+
+    QStringList current;
+    for (const DistPanel &p : m_distPanels) current << p.name;
+
+    if (present != current)
+    {
+        for (DistPanel &p : m_distPanels)
+            if (p.view) { m_distGrid->removeWidget(p.view); p.view->deleteLater(); }
+        m_distPanels.clear();
+
+        const int nCols = 2;
+        int row = 0, col = 0;
+        int idx = 0;
+        for (const QString &n : present)
+        {
+            DistPanel dp;
+            dp.name  = n;
+
+            dp.chart = new QChart();
+            dp.chart->setTitle(n);
+            dp.chart->setTitleFont(QFont("Inter", 11, QFont::DemiBold));
+            dp.chart->setTitleBrush(QBrush(kTitleColor));
+            dp.chart->setBackgroundBrush(QBrush(QColor("#FFFFFF")));
+            dp.chart->setBackgroundPen(QPen(QColor("#E1E5EB")));
+            dp.chart->setBackgroundRoundness(12);
+            dp.chart->setMargins(QMargins(10, 8, 10, 8));
+            dp.chart->setPlotAreaBackgroundVisible(false);
+            dp.chart->legend()->setVisible(false);
+
+            dp.xAxis = new QValueAxis();
+            dp.yAxis = new QValueAxis();
+            for (QValueAxis *a : { dp.xAxis, dp.yAxis })
+            {
+                a->setLabelsFont(QFont("Inter", 9));
+                a->setLabelsColor(kLabelColor);
+                a->setGridLineColor(kGridColor);
+                a->setLinePenColor(kGridColor);
+            }
+            dp.yAxis->setLabelFormat("%.0f");
+            dp.chart->addAxis(dp.xAxis, Qt::AlignBottom);
+            dp.chart->addAxis(dp.yAxis, Qt::AlignLeft);
+
+            dp.line = new QLineSeries();
+            QColor c(kLineColors[idx % kLineColors.size()]);
+            QPen pen{c};
+            pen.setWidthF(1.8);
+            dp.line->setPen(pen);
+            dp.area = new QAreaSeries(dp.line);
+            QColor fill = c; fill.setAlpha(70);
+            dp.area->setBrush(QBrush(fill));
+            dp.area->setPen(QPen(Qt::NoPen));
+
+            dp.chart->addSeries(dp.area);
+            dp.area->attachAxis(dp.xAxis);
+            dp.area->attachAxis(dp.yAxis);
+            dp.chart->addSeries(dp.line);
+            dp.line->attachAxis(dp.xAxis);
+            dp.line->attachAxis(dp.yAxis);
+
+            dp.view = new QChartView(dp.chart);
+            dp.view->setRenderHint(QPainter::Antialiasing);
+            dp.view->setFrameShape(QFrame::NoFrame);
+            dp.view->setStyleSheet("background: transparent;");
+            dp.view->setMinimumHeight(240);
+
+            m_distGrid->addWidget(dp.view, row, col);
+            if (++col >= nCols) { col = 0; ++row; }
+            m_distPanels.push_back(dp);
+            ++idx;
+        }
+    }
+
+    // Fill data + axis ranges.
+    for (DistPanel &dp : m_distPanels)
+    {
+        const QVector<QPointF> &pts = hists.value(dp.name);
+        dp.line->replace(pts);
+        if (pts.isEmpty()) continue;
+
+        double xMin =  std::numeric_limits<double>::max();
+        double xMax = -std::numeric_limits<double>::max();
+        double yMax = 0.0;
+        for (const QPointF &p : pts)
+        {
+            xMin = std::min(xMin, p.x());
+            xMax = std::max(xMax, p.x());
+            yMax = std::max(yMax, p.y());
+        }
+        if (xMax > xMin)
+        {
+            const double pad = (xMax - xMin) * 0.04;
+            dp.xAxis->setRange(xMin - pad, xMax + pad);
+        }
+        dp.yAxis->setRange(0.0, yMax > 0.0 ? yMax * 1.1 : 1.0);
+    }
+}
+
+void AssimViewer::onPosteriorDistLoaded(
+    const QHash<QString, QVector<QPointF>> &hists)
+{
+    updatePosteriorDistCharts(hists);
 }
 
 // ---------------------------------------------------------------------------

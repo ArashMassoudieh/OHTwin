@@ -1132,14 +1132,41 @@ bool DTAssimilation::runCalibrationMCMC(System &sys,
     const int interval = m_config.assimilation.mcmcRealizationInterval;
     const bool onSchedule = (cyc == 1) ||
                             (interval > 0 && cyc % interval == 0);
-    if ((result.converged || cyc == 1) && onSchedule)
+    DTDebugLog::instance().log(DTDebugLog::Category::Assim,
+                               QString("realization gate: cyc=%1 converged=%2 interval=%3 onSchedule=%4")
+                                   .arg(cyc).arg(result.converged).arg(interval).arg(onSchedule));
+    DTDebugLog::instance().flush();
+
+    // Publish the realization band + posterior distribution on schedule
+    // (cycle 1 and every Nth cycle) regardless of certification. Both writers
+    // emit provisional payloads from the retained pool/reservoir; a
+    // non-converged cycle simply yields a wider, uncertified band rather than
+    // no output. Data-availability (empty pool/reservoir) is handled inside
+    // each writer.
+    if (onSchedule)
     {
         QString rErr;
         if (!mcmc.produceRealizationCI(result, outputDir, tEnd, rErr))
+        {
             std::cerr << "[Assim] WARNING: realizations: " << rErr.toStdString() << "\n";
+            DTDebugLog::instance().log(DTDebugLog::Category::Assim,
+                                       QString("realizations skipped: %1").arg(rErr));
+            DTDebugLog::instance().flush();
+        }
         QString dErr;
         if (!mcmc.writePosteriorDistribution(result, outputDir, tEnd, dErr))
+        {
             std::cerr << "[Assim] WARNING: posterior dist: " << dErr.toStdString() << "\n";
+            DTDebugLog::instance().log(DTDebugLog::Category::Assim,
+                                       QString("posterior dist skipped: %1").arg(dErr));
+            DTDebugLog::instance().flush();
+        }
+    }
+    else
+    {
+        DTDebugLog::instance().log(DTDebugLog::Category::Assim,
+                                   "realization block SKIPPED (gate false)");
+        DTDebugLog::instance().flush();
     }
 
     // 10. Write the calibrated System snapshot — identical naming and

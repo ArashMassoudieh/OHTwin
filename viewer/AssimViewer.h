@@ -39,6 +39,7 @@
 #include "GaMergedLoader.h"
 #include "PosteriorHistoryLoader.h"
 #include "RealizationCILoader.h"
+#include "PosteriorDistLoader.h"
 
 #include <QJsonObject>
 #include <QMainWindow>
@@ -149,6 +150,19 @@ struct ParamPanel
     QValueAxis     *yAxis      = nullptr;
 };
 
+// One chart panel per parameter in the Posterior tab: the latest posterior
+// distribution histogram (bin center vs frequency) as a filled area.
+struct DistPanel
+{
+    QString         name;
+    QChart         *chart = nullptr;
+    QChartView     *view  = nullptr;
+    QLineSeries    *line  = nullptr;   // histogram outline
+    QAreaSeries    *area  = nullptr;   // filled to the zero baseline
+    QValueAxis     *xAxis = nullptr;   // parameter value (bin center)
+    QValueAxis     *yAxis = nullptr;   // frequency
+};
+
 // One chart panel per series in the Comparison tab. Each panel
 // overlays an observed scatter series (from the truth twin's
 // selected_output.csv) and a modeled line series (from the
@@ -189,6 +203,7 @@ private slots:
     void onObservedFailed(const QString &errorMessage);
     void onModeledFailed (const QString &errorMessage);
     void onRealizationsLoaded(const QHash<QString, RealizationBand> &bands);
+    void onPosteriorDistLoaded(const QHash<QString, QVector<QPointF>> &hists);
 
 private:
     // Build (once) the chart shells for the fitness tab — two charts
@@ -201,6 +216,11 @@ private:
     void rebuildParameterCharts(const QVector<CycleSummary> &cycles);
     void buildDiagnosticsTab();
     void updateDiagnosticsSeries(const QVector<CycleSummary> &cycles);
+
+    // Posterior tab: one histogram chart per parameter. Panels are (re)built
+    // when the parameter-name set changes, then filled from the loader hash.
+    void buildPosteriorDistTab();
+    void updatePosteriorDistCharts(const QHash<QString, QVector<QPointF>> &hists);
 
     // Replace data in the existing charts from `cycles`. Cheap; called
     // every refresh.
@@ -229,6 +249,11 @@ private:
     bool              m_mcmcMode     = false;
     GaMergedLoader        *m_loader        = nullptr;    // GA mode only
     PosteriorHistoryLoader *m_historyLoader = nullptr;   // MCMC mode only
+    PosteriorDistLoader    m_distLoader;                 // MCMC mode only
+    QString                m_distUrl;                    // posterior_dist_latest.txt
+    QVector<DistPanel>     m_distPanels;
+    QWidget               *m_distTabHost = nullptr;
+    QGridLayout           *m_distGrid    = nullptr;
 
     QTimer            m_timer;
     int               m_refreshSeconds = 10;
@@ -283,5 +308,5 @@ private:
 
     RealizationCILoader m_realizationLoader;
     QHash<QString, RealizationBand> m_lastBands;
-    QString m_realizationUrlTemplate;
+    QString m_realizationUrl;
 };

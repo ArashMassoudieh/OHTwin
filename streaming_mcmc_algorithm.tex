@@ -1,0 +1,584 @@
+% =====================================================================
+%  Streaming Bayesian Parameter Assimilation for OpenHydroTwin
+%  Algorithm & Implementation Reference
+%
+%  This document describes the algorithm ACTUALLY IMPLEMENTED in
+%  DTStreamingMCMC.{h,cpp} and DTAssimilation.cpp, including the exact
+%  plateau, quorum, and convergence criteria, with their default
+%  parameter values. Where the code stubs a designed-but-unimplemented
+%  feature, that is called out explicitly in Section~\ref{sec:status}.
+%
+%  Build:  pdflatex streaming_mcmc_algorithm.tex   (run twice for refs)
+% =====================================================================
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage[hidelinks]{hyperref}
+\usepackage{titlesec}
+
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\param}[1]{\textsf{#1}}
+\definecolor{stubgray}{gray}{0.35}
+\newcommand{\stub}[1]{{\color{stubgray}\textit{#1}}}
+
+\title{\bfseries Streaming Bayesian Parameter Assimilation\\ for OpenHydroTwin\\[4pt]
+\large Algorithm and Implementation Reference}
+\author{Digital Twin Runner --- \code{DTStreamingMCMC}}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document specifies the streaming Markov-chain Monte Carlo (MCMC)
+parameter-assimilation algorithm used by the OpenHydroTwin digital-twin
+runner. It documents the target distribution (a prior combined with a
+recency-weighted likelihood), the multi-chain Metropolis--Hastings
+sampler, and---in full detail---the two criteria that govern the method:
+the \emph{per-chain plateau classifier} (when a chain has stopped
+burning in) and the \emph{cycle convergence certification} (when a
+cycle's pooled samples may be published as a certified posterior). All
+formulas and default constants below reflect the code as implemented;
+unimplemented (stubbed) design features are flagged in
+Section~\ref{sec:status}.
+\end{abstract}
+
+\tableofcontents
+
+% =====================================================================
+\section{Overview and terminology}
+% =====================================================================
+
+The runner alternates between two activities on a wall-clock schedule:
+
+\begin{description}[leftmargin=1.4em]
+  \item[Forward stepping.] The model is advanced through simulated time
+  (\code{forward\_advance}) and a short forecast is produced
+  (\code{forward\_forecast}), accumulating observations from the truth
+  source into a rolling buffer.
+  \item[Calibration cycle.] Every \param{poll\_interval} of simulated
+  time (default \code{3day}), the accumulated observations trigger one
+  \emph{calibration cycle} (\code{assim\_calibration}): a bounded run of
+  the streaming sampler that re-estimates the posterior of the model
+  parameters and emits a calibrated model snapshot for the forward loop
+  to adopt.
+\end{description}
+
+A \emph{cycle} is one invocation of the sampler
+(\code{DTStreamingMCMC::runCycle}). Within a cycle the sampler runs an
+ensemble of $N_c$ Metropolis--Hastings \emph{chains} in parallel until a
+wall-clock deadline. Each chain passes through two \emph{phases}:
+\textbf{Climbing} (burn-in; its draws are disposable) and
+\textbf{Plateaued} (stationary; its draws are retained). Only retained
+draws are ever \emph{pooled} into the posterior estimate.
+
+\paragraph{Governing design principle.} Selection \emph{among} chains is
+free during the disposable Climbing phase and forbidden once a chain
+Plateaus. All acceleration machinery (seeding, and---when
+enabled---culling and dissolution) touches only pre-plateau chains; the
+pooled posterior is gated on convergence alone.
+
+Let $\psi=(\theta,\sigma)$ denote the full parameter vector of dimension
+$n_p$, where $\theta$ are the physical model parameters and $\sigma$ the
+per-observation error standard deviations (both are sampled jointly).
+
+% =====================================================================
+\section{The target distribution}\label{sec:target}
+% =====================================================================
+
+The sampler targets the log-posterior returned by the engine
+(\code{posteriorLocal}), identical in value to the deployed GA mode's
+objective:
+\begin{equation}
+  \log \pi_t(\psi) \;=\; \underbrace{\sum_{i=1}^{n_p}\log
+  p_i(\psi_i)}_{\text{log-prior}}
+  \;+\; \underbrace{\sum_{o}\log L_{o,t}(\psi)}_{\text{log-likelihood}}
+  \;+\; \text{const},
+\end{equation}
+where the subscript $t$ marks the \emph{streaming} time dependence: the
+likelihood re-weights observations by recency at the current window end
+$t_{\text{now}}$.
+
+\subsection{Recency (forgetting) kernel}
+For an observation series with a ``Weighted Least Squared'' comparison
+method and normal error structure, each observation of age
+$\delta = t_{\text{now}} - t_i$ receives weight
+\begin{equation}
+  w(\delta) \;=\;
+  \begin{cases}
+    1, & \delta < \Delta_0,\\[4pt]
+    \left(\,1 + \dfrac{\log(\delta/\Delta_0)}{\tau}\,\right)^{-\alpha},
+      & \delta \ge \Delta_0,
+  \end{cases}
+  \label{eq:kernel}
+\end{equation}
+with per-observation kernel constants $\Delta_0$
+(\param{kernel\_Delta0}, a full-weight plateau length), $\tau$
+(\param{kernel\_tau}), and $\alpha$ (\param{kernel\_alpha}) taken from
+the model file. Recent observations ($\delta<\Delta_0$) keep full
+weight; older ones are down-weighted logarithmically. This is what makes
+the target ``stream'': as $t_{\text{now}}$ advances, the effective data
+window slides, and the posterior $\pi_t$ tracks a slowly moving target.
+
+\subsection{Per-observation likelihood}
+With kernel-weighted mean-squared error
+$\mathrm{MSE}_w = \big(\sum_i w_i (y_i-\hat y_i)^2\big)/\sum_i w_i$,
+effective count $W=\sum_i w_i$, and error standard deviation $\sigma$
+(\param{error\_standard\_deviation}, itself calibratable), the engine
+returns as objective the negative log-likelihood contribution
+\begin{equation}
+  -\log L_{o,t} \;=\; W\!\left(\frac{\mathrm{MSE}_w}{\sigma^2}
+  + \log\sigma\right),
+\end{equation}
+so that $\sigma$ remains statistically identifiable when sampled jointly
+with $\theta$. (For log-normal error structure the same form is applied
+to log-transformed series.) The sampler stores honest log-posteriors:
+the log-prior and this likelihood only; the Hastings/Jacobian correction
+of Section~\ref{sec:proposal} is \emph{not} folded in.
+
+% =====================================================================
+\section{The Metropolis--Hastings ensemble}
+% =====================================================================
+
+\subsection{Chains and parallelism}
+The ensemble holds $N_c=$ \param{number\_of\_chains} chains (from the
+model's \code{MCMC} settings). Each cycle sweeps all chains in parallel
+(OpenMP, \param{numberOfThreads} threads); within a sweep, chain $c$
+performs one MH step followed by one plateau classification, touching
+only its own state, so the sweep is race-free. Each chain owns a
+private, pristine copy of the \code{System}, so no two threads ever read
+the same model object concurrently. Per-chain RNGs are seeded serially
+from a master seed, making a run reproducible for a fixed seed regardless
+of thread scheduling.
+
+\subsection{Proposal mechanism}\label{sec:proposal}
+For chain position $x$, the proposal $X$ is drawn coordinate-wise
+(\code{proposeFrom}) according to each parameter's prior type, using
+per-parameter scale $s_i=$ \code{pertcoeff}$_i$ and $Z\sim\mathcal N(0,1)$:
+\begin{align}
+  \text{additive (normal/uniform prior):}\quad & X_i = x_i + s_i Z,\\
+  \text{multiplicative (log-normal prior):}\quad & X_i = x_i \,e^{\,s_i Z}.
+\end{align}
+The multiplicative (log-normal random-walk) proposal is asymmetric; its
+Hastings log-correction is accumulated explicitly,
+\begin{equation}
+  \log J \;=\; \sum_{i \in \text{log-normal}} \big(\log X_i - \log x_i\big),
+\end{equation}
+and is $0$ for an all-additive parameter set.
+
+\subsection{Acceptance rule}
+The proposal is accepted (\code{stepChain}) by the standard MH rule in
+log space, with the Hastings correction entering the ratio (never the
+stored $\log\pi$). Non-finite proposals always reject. With
+$\log A = \big(\log\pi_t(X) + \log J\big) - \log\pi_t(x)$:
+\begin{equation}
+  \text{accept if } \log A \ge 0,\quad
+  \text{else accept with probability } e^{\log A}
+  \ \ (\text{i.e. } \log U < \log A,\ U\sim\mathcal U(0,1)).
+\end{equation}
+A step costs exactly one forward solve---the dominant cost of the method.
+
+% =====================================================================
+\section{Plateau classifier (burn-in detection)}\label{sec:plateau}
+% =====================================================================
+
+The classifier (\code{classifyChain}) decides, from a chain's own recent
+\emph{trajectory} of log-posterior values, whether it is still climbing
+toward the typical set or has become stationary. It is
+\textbf{trajectory-based, never level-based}: only the trend of a chain's
+$\log\pi$ trace matters, never its absolute height---so a chain that is
+flat-but-moving on a low-density ridge or secondary mode still qualifies
+as plateaued.
+
+\subsection{Effective window}
+Let $W_{\max}=$ \param{plateauWindow} (default $60$) be the maximum trace
+length, and let $g$ be the number of sweeps elapsed so far. The effective
+window is
+\begin{equation}
+  W_{\text{eff}} \;=\; \min\!\big(W_{\max},\ \max(10,\ \lfloor g/2\rfloor)\big),
+\end{equation}
+so that late, short cycles (whose sweep budget shrinks as the data record
+grows) can still fill a window and classify instead of being stuck
+``climbing'' for lack of data. The trend is tested over the last
+$n=\min(|\text{trace}|, W_{\text{eff}})$ points.
+
+\subsection{Guards before classification}
+A chain is forced to \textbf{Climbing} if either:
+\begin{enumerate}[nosep,leftmargin=1.6em]
+  \item $n < \min(\param{minStepsBeforeClassify},\,W_{\text{eff}})$
+  (default floor $20$): too little data; or
+  \item any value in the window is non-finite or a sentinel
+  ($\le -10^{299}$): the chain is parked in an infeasible region.
+\end{enumerate}
+
+\subsection{Trend and scatter}
+Over the last $n$ trace points $y_0,\dots,y_{n-1}$ (with index $k$ as the
+regressor, $\bar k = (n-1)/2$), fit a least-squares line and measure its
+residual scatter:
+\begin{equation}
+  b = \frac{\sum_{k}(k-\bar k)(y_k-\bar y)}{\sum_k (k-\bar k)^2},
+  \qquad
+  s = \sqrt{\frac{1}{\max(n-2,\,1)}\sum_k\big[(y_k-\bar y)-b(k-\bar k)\big]^2}.
+\end{equation}
+The \emph{total trend across the window} is $T = |b|\,(n-1)$, i.e.\ the
+fitted rise/fall in $\log\pi$ over the whole window, and the decision
+statistic is the trend-to-scatter ratio $R = T/s$.
+
+\subsection{Motion (stagnation) guard}
+A window carried by too few \emph{accepted} moves is a \emph{stuck} chain,
+not a converged one: its trace is flat because nothing moved. Let $a$ be
+the number of accepted steps within the window. The chain is
+\emph{moving} iff
+\begin{equation}
+  a \;\ge\; \max\!\big(1,\ \lfloor \param{minAcceptedFraction}\cdot n\rfloor\big),
+  \qquad \param{minAcceptedFraction}=0.05.
+\end{equation}
+If not moving, the chain is \emph{not} plateaued (it is dissolution's
+territory---see Section~\ref{sec:status}, where dissolution is noted as
+currently stubbed).
+
+\subsection{Decision with hysteresis}
+A moving chain is classified using a two-level (hysteretic) threshold on
+$R$ to prevent flapping when $R$ hovers near the boundary. With
+$\param{plateauSlopeThreshold}=1.0$ and
+$\param{plateauRevertFactor}=3.0$:
+\begin{equation}
+  \text{Plateaued} \iff
+  \text{moving} \ \wedge\
+  \begin{cases}
+    R < \param{plateauSlopeThreshold}, & \text{if currently Climbing (declare)},\\[2pt]
+    R < \param{plateauSlopeThreshold}\cdot\param{plateauRevertFactor}, & \text{if currently Plateaued (revert only above)}.
+  \end{cases}
+  \label{eq:plateau}
+\end{equation}
+In words: \emph{a chain plateaus when the trend it has drifted over the
+window is less than one within-window standard deviation of noise}, and
+once plateaued it reverts to Climbing only if the trend grows past three
+such standard deviations. A ``Plateaued $\to$ Climbing'' reversion is
+logged as ``target moved under the chain''; already-retained samples are
+kept (they were drawn while genuinely stationary), but retention pauses
+until the chain re-plateaus. The special case $s=0$ with accepted moves
+(effectively impossible for a continuous target) is classified
+conservatively as not plateaued.
+
+% =====================================================================
+\section{Pooling and the plateaued fraction}
+% =====================================================================
+
+A sample is \emph{retained} (appended to its chain's sample store) on a
+step \emph{only while that chain is classified Plateaued}
+(\code{stepChain}); Climbing samples are never stored. At cycle end,
+\code{assemblePool} concatenates every chain's retained samples with
+\textbf{equal weight}---the posterior shape is carried by sample density
+alone, and burn-in exclusion has already happened at retention time. Only
+the current cycle's samples are ever pooled; distinct per-cycle targets
+are never mixed.
+
+The \emph{plateaued fraction} is the ensemble-wide readiness statistic
+\begin{equation}
+  f_P \;=\; \frac{\#\{c : \text{phase}(c)=\text{Plateaued}\}}{N_c}.
+\end{equation}
+
+% =====================================================================
+\section{Convergence certification}\label{sec:convergence}
+% =====================================================================
+
+At cycle end (\code{runCycle}) the result is certified \textbf{FULL}
+(publishable posterior) or \textbf{PROVISIONAL} (point product only) by
+\emph{two independent paths}; a cycle is FULL if \emph{either} holds:
+\begin{equation}
+  \texttt{converged} \;=\; \text{(byQuorum)} \ \lor\ \text{(byStability)}.
+\end{equation}
+
+\subsection{Path 1 --- within-cycle quorum}
+\begin{equation}
+  \text{byQuorum} \iff f_P \ge \param{quorumFraction},
+  \qquad \param{quorumFraction}=0.5.
+\end{equation}
+At least half the chains have independently reached stationarity within
+this single cycle---the primary, strongest certification.
+
+\subsection{Path 2 --- inter-cycle stability}
+For the streaming regime where the data record grows faster than a
+within-cycle quorum can form (late cycles have too few sweeps to plateau
+half the chains), a weaker path certifies convergence when the
+\emph{point estimate has settled across cycles}. A ring buffer holds the
+last $W_s=\param{stabilityWindow}$ (default $5$) cycle point estimates.
+The stream is \emph{stable} (\code{streamStable}) iff the ring is full and
+\emph{every} parameter's spread across the ring is small relative to its
+recent mean:
+\begin{equation}
+  \text{streamStable} \iff
+  \max_{i}\ \frac{\max_r \psi_i^{(r)} - \min_r \psi_i^{(r)}}
+  {\max(|\bar\psi_i|,\,10^{-9})} \;\le\; \param{stabilityTol},
+  \qquad \param{stabilityTol}=0.02,
+\end{equation}
+where $r$ ranges over the $W_s$ ring entries. The small floor $10^{-9}$
+prevents a parameter sitting near zero from tripping the test on absolute
+noise. Stability is accepted \emph{only if a quorum did not already
+hold}, and additionally requires a minimum plateaued fraction so the
+partial pool is trustworthy:
+\begin{equation}
+  \text{byStability} \iff
+  (\neg\,\text{byQuorum}) \ \wedge\ \text{streamStable} \ \wedge\
+  f_P \ge \param{stabilityMinPlateaued},
+  \quad \param{stabilityMinPlateaued}=0.1.
+\end{equation}
+Crucially, stability relaxes only \emph{how many} plateaued chains are
+required to trust the pool---never \emph{which} samples pool. Only the
+current cycle's plateaued samples are ever used; no cross-cycle mixing
+occurs. The certification source (\code{"quorum"}, \code{"stability"}, or
+\code{""}) is recorded in the snapshot and history for auditing.
+
+\subsection{Provisional cycles}
+If neither path holds, the cycle is \textbf{provisional}: it still
+publishes a point estimate and (as implemented) the dispersion of its
+partial pool, but that dispersion is an \emph{uncertified} estimate, not
+a certified posterior width. Provisional cycles are the expected regime
+while the ensemble migrates toward a relocated target; each is expected
+to leave the ensemble better located than it found it (see
+Section~\ref{sec:seeding}).
+
+% =====================================================================
+\section{Proposal-scale adaptation}
+% =====================================================================
+
+Every \param{adaptationBlock} (default $20$) sweeps, \code{adaptProposalScale}
+measures the pooled acceptance rate $\rho$ over the just-closed block and
+nudges every per-parameter scale toward the configured target
+\param{acceptance\_rate} using the base engine's multiplicative rule with
+factor $\kappa=\param{purt\_change\_scale}$:
+\begin{equation}
+  s_i \leftarrow
+  \begin{cases}
+    s_i/\kappa, & \rho > \param{acceptance\_rate}\ \ (\text{accepting too often}\Rightarrow\text{enlarge steps}),\\
+    s_i\cdot\kappa, & \rho \le \param{acceptance\_rate}\ \ (\text{shrink steps}).
+  \end{cases}
+\end{equation}
+\textbf{Freeze on quorum.} Once a quorum holds, adaptation is
+\emph{frozen}: continued kernel changes while samples are being retained
+would break the invariance the pooled posterior rests on. Acceptance
+bookkeeping continues so the cycle acceptance rate stays accurate, but
+$s_i$ is held fixed---post-plateau draws are taken under a fixed kernel.
+
+% =====================================================================
+\section{Cross-cycle seeding}\label{sec:seeding}
+% =====================================================================
+
+Each cycle seeds its chains from the previous cycle's product
+(\code{chooseSeedMode}), banking cross-cycle progress:
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Condition & Seed mode & Status\\
+\midrule
+no previous snapshot        & \code{ColdStart}          & interim (see \S\ref{sec:status})\\
+previous cycle provisional  & \code{ProvisionalResume}  & implemented\\
+drift detected              & \code{RatioReseed}        & \stub{not implemented}\\
+otherwise (stationary)      & \code{WarmStart}          & implemented\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{description}[leftmargin=1.4em,nosep]
+  \item[WarmStart.] Uniform, \emph{unweighted} draws with replacement
+  from the previous cycle's pooled posterior. Weighting them by posterior
+  value would apply the density twice and under-disperse the ensemble---a
+  bias that compounds because each cycle seeds the next. Seed
+  log-posteriors are re-evaluated against the \emph{current} target, not
+  copied.
+  \item[ProvisionalResume.] Each chain picks up exactly where it left off,
+  so migration toward a relocated target accumulates across cycles rather
+  than restarting. If the chain count changed (config edit), chains resume
+  by uniform draw from the carried states.
+  \item[ColdStart / RatioReseed.] See Section~\ref{sec:status}.
+\end{description}
+
+% =====================================================================
+\section{Point estimates and posterior summaries}
+% =====================================================================
+
+\subsection{Point estimate for the forward loop}
+The forward loop adopts the cycle's point estimate, taken as the
+\emph{sampled MAP} (\code{posteriorMAP}): the highest-$\log\pi$ retained
+sample when FULL, or the highest-posterior carried chain state when
+provisional. The posterior mean (\code{posteriorMean}) is also available.
+The point estimate is pushed onto the stability ring each cycle.
+
+\subsection{Marginal and joint summaries}
+For a pool of $N$ samples (\code{computeSummary}) the runner computes, per
+parameter $i$: the mean $\bar\psi_i$; the joint sample covariance
+$\Sigma$ (denominator $N-1$), whose diagonal gives the standard
+deviations and whose off-diagonals expose parameter compensation
+structure; and marginal percentiles by sorting each column and linearly
+interpolating at rank $q(N-1)$ for
+$q\in\{0.025,\,0.10,\,0.50,\,0.90,\,0.975\}$. The
+$2.5/50/97.5$ percentiles form the $95\%$ credible interval reported to
+the viewer.
+
+\subsection{Effective sample size}
+ESS (\code{effectiveSampleSize}) is computed \emph{per chain} and summed,
+never on the flat concatenated pool (which would show false correlation
+at chain seams). For a scalar chain of length $n\ge 8$ with autocovariance
+$\gamma_k$, Geyer's initial monotone-sequence estimator pairs adjacent
+lags $\Gamma_m=\gamma_{2m}+\gamma_{2m+1}$, sums them until the first
+non-positive pair (with a monotone-decreasing clamp), and forms
+\begin{equation}
+  \tau_{\text{int}} = \frac{2\sum_m \Gamma_m - \gamma_0}{\gamma_0},
+  \qquad
+  \mathrm{ESS}_{\text{chain}} = \frac{n}{\tau_{\text{int}}}.
+\end{equation}
+Per-parameter ESS is summed across chains; the reported cycle ESS is the
+\emph{minimum} across parameters---the worst-mixing direction bounds the
+pool's reliability. Chains shorter than $8$ samples are treated as
+independent (ESS $=n$).
+
+% =====================================================================
+\section{Posterior-predictive products}
+% =====================================================================
+
+\subsection{Realization credible band (reservoir sampling)}
+The predictive band over the observed quantities is built \emph{without
+any extra solves}. During sampling, whenever a plateaued chain accepts a
+step, the modeled output series from that already-computed solve are
+offered to a fixed-capacity reservoir (\code{offerToReservoir}) of size
+\param{realizationCount} (default $100$). Reservoir sampling keeps a
+uniform random subset of all offered plateaued realizations: the first
+$C$ fill it, and the $m$-th offer thereafter replaces a random slot with
+probability $C/m$. At cycle end (\code{produceRealizationCI}), for each
+\emph{calibration} observation the $2.5/50/97.5$ percentile bracket across
+the retained realizations is written. All calibration observations are
+written to a single combined file with columns labelled
+\code{<observation> | <percentile>}.
+
+\subsection{Parameter posterior histograms}
+\code{writePosteriorDistribution} writes, per parameter, a histogram over
+the pooled samples with bin count $\mathrm{clamp}(\lfloor\sqrt N\rceil,
+10, 60)$, plus a mean/stdev/$2.5/50/97.5$ CI table.
+
+% =====================================================================
+\section{Cycle driver and wall-clock budget}
+% =====================================================================
+
+A cycle is bounded by a wall-clock deadline (\code{runCycle}), derived
+from the calibration cadence: budget $=$ \param{poll\_interval} wall-clock
+duration minus a safety margin (or an explicit \param{mcmc\_budget}). The
+deadline is checked between sweeps (every \param{stepsPerClockCheck}
+sweeps); an in-flight sweep is never aborted, so a cycle may overrun by at
+most one forward-solve duration, which the margin absorbs. If the deadline
+is already past on entry, the cycle degrades to a zero-sweep provisional
+result rather than failing.
+
+\begin{algorithm}[h]
+\caption{One calibration cycle (\code{runCycle}), as implemented}
+\begin{algorithmic}[1]
+\State choose seed mode from previous snapshot; seed and evaluate all $N_c$ chains
+\While{now $<$ deadline}
+  \ForAll{chains $c$ in parallel}
+     \State one MH step (one forward solve); classify $c$ (Section~\ref{sec:plateau})
+     \State if $c$ plateaued and step accepted: retain sample; offer outputs to reservoir
+  \EndFor
+  \State \stub{(serial interventions: dissolution / cull --- currently stubs)}
+  \If{sweep index $\bmod$ \param{adaptationBlock} $= 0$} adapt proposal scales (frozen after quorum) \EndIf
+\EndWhile
+\State push point estimate onto stability ring
+\State certify: \texttt{converged} $\gets$ byQuorum $\lor$ byStability (Section~\ref{sec:convergence})
+\State assemble pool; compute summaries + ESS if pool non-empty
+\State \Return cycle result (FULL or PROVISIONAL)
+\end{algorithmic}
+\end{algorithm}
+
+% =====================================================================
+\section{Default parameters}\label{sec:defaults}
+% =====================================================================
+
+Streaming-specific knobs live in \code{DTStreamingSettings}; the base MCMC
+knobs (chains, threads, target acceptance, scale-change factor) are parsed
+from the model file's \code{MCMC} settings object.
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Symbol / setting & Default & Role\\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Plateau classifier (\S\ref{sec:plateau})}}\\
+\param{plateauWindow} & $60$ & max trace length for the trend test\\
+\param{plateauSlopeThreshold} & $1.0$ & declare plateau when $R<$ this\\
+\param{plateauRevertFactor} & $3.0$ & revert only when $R>$ threshold$\times$this\\
+\param{minStepsBeforeClassify} & $20$ & below this a chain is always Climbing\\
+\param{minAcceptedFraction} & $0.05$ & motion (anti-stagnation) floor\\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Convergence (\S\ref{sec:convergence})}}\\
+\param{quorumFraction} & $0.5$ & plateaued fraction for byQuorum\\
+\param{stabilityWindow} & $5$ & cycles compared for byStability\\
+\param{stabilityTol} & $0.02$ & max relative point-estimate drift\\
+\param{stabilityMinPlateaued} & $0.1$ & plateaued floor to trust a partial pool\\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Driver \& adaptation}}\\
+\param{adaptationBlock} & $20$ & sweeps between scale adaptations\\
+\param{stepsPerClockCheck} & $1$ & sweeps between deadline checks\\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Predictive products}}\\
+\param{realizationCount} & $100$ & reservoir size (predictive band)\\
+\param{realizationInterval} & $10$ & publish band/dist every $N$th cycle\\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Designed but stubbed (\S\ref{sec:status})}}\\
+\param{cullEnabled} & \code{true} & (cull check is a stub)\\
+\param{cullMarginLogp} & $20.0$ & log-posterior margin for culling\\
+\param{stuckThreshold} & $200$ & consecutive rejections for dissolution\\
+\param{minAcceptanceRate} & $10^{-3}$ & dissolution acceptance floor\\
+\param{coldStartMultiplier} & $20$ & $K=$ this $\times N_c$ prior candidates\\
+\param{explorerFraction} & $0.03$ & chains seeded raw from the prior\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% =====================================================================
+\section{Implementation status (what is and is not active)}\label{sec:status}
+% =====================================================================
+
+The header documents a fuller design (referred to as ``spec v2''); several
+acceleration features are present as interfaces but currently stubbed. For
+an accurate reading of runtime behaviour:
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Culling} (\code{cullCheck}), \textbf{dissolution}
+  (\code{dissolutionCheck}), \code{cloneChain}, the donor selectors, and
+  \code{plateauedEnsembleLevel} are \stub{stubs that return
+  false/no-op}. Consequently, no chain is currently cloned mid-cycle to
+  accelerate burn-in or to replace a mechanically stuck chain; the
+  ensemble relies solely on seeding and adaptation. The \param{cull*},
+  \param{stuck*}, and \param{minAcceptanceRate} settings are therefore
+  inert at present.
+  \item \textbf{ColdStart} (\code{seedColdStart}) currently performs plain
+  range-uniform prior draws per chain. The designed importance-resampled
+  initialization ($K=\param{coldStartMultiplier}\cdot N_c$ candidates,
+  resampled proportional to $\exp(\log\text{-prior}+J)$, with an
+  \param{explorerFraction} of raw-prior explorer chains) is \stub{not yet
+  implemented}.
+  \item \textbf{RatioReseed} (\code{seedRatioWeighted}) and the drift
+  detection that would select it are \stub{not implemented}; the caller
+  always passes \code{driftDetected = false}, so this mode is never chosen
+  and \code{WarmStart}/\code{ProvisionalResume} cover the stationary and
+  migrating regimes respectively.
+  \item \textbf{Provisional dispersion.} As currently configured, the
+  runner \emph{does} publish the partial-pool percentiles for provisional
+  cycles (parameter CI history, posterior histograms, and the realization
+  band), tagged \code{converged=false}. These are uncertified estimates,
+  useful for monitoring while the ensemble migrates; a certified posterior
+  width requires a FULL cycle.
+\end{itemize}
+
+\paragraph{Source of truth.} The authoritative definitions are
+\code{DTStreamingMCMC.h} / \code{DTStreamingMCMC.cpp} (sampler, criteria,
+products) and \code{DTAssimilation.cpp} (cycle orchestration, cadence,
+output paths). This document should be re-checked against those files when
+the stubbed features are implemented.
+
+\end{document}

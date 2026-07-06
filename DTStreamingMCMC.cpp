@@ -299,55 +299,105 @@ bool DTStreamingMCMC::produceRealizationCI(const DTCycleResult &result,
     // Reads the reservoir captured DURING sampling -- no re-solves. The
     // reservoir holds up to realizationCount modeled-output sets, drawn
     // uniformly at random from this cycle's pooled post-plateau samples.
-    if (!result.converged)
-    {
-        errorMessage = "realization band requested for a non-converged cycle";
-        return false;
-    }
+    DTDebugLog &dlog = DTDebugLog::instance();
+    dlog.log(DTDebugLog::Category::MCMC,
+             QString("produceRealizationCI: ENTRY converged=%1 reservoir.size=%2 "
+                     "reservoir.seen=%3 pool=%4 tNow=%5")
+                 .arg(result.converged)
+                 .arg(m_outputReservoir.outputs.size())
+                 .arg(m_outputReservoir.seen)
+                 .arg(result.pooledSamples.size())
+                 .arg(tNow));
+    dlog.flush();
+
+    // Provisional cycles allowed: publish whatever the reservoir captured.
+    // The only hard requirement is a non-empty reservoir.
     const DTOutputReservoir &R = m_outputReservoir;
     if (R.outputs.empty())
     {
-        errorMessage = "output reservoir is empty (no plateaued samples "
-                       "captured this cycle)";
+        dlog.log(DTDebugLog::Category::MCMC,
+                 "produceRealizationCI: BAIL reservoir empty");
+        dlog.flush();
+        errorMessage = "output reservoir is empty (no plateaued samples captured this cycle)";
         return false;
     }
-
     // Number of observations from the first stored realization.
     const int nobs = static_cast<int>(R.outputs.front().size());
     const int nreal = static_cast<int>(R.outputs.size());
 
-    // Per observation, gather the nreal modeled series into a TimeSeriesSet
-    // and take the 2.5/50/97.5 percentile bracket (GUI getpercentiles).
+    // ONE combined band file for the whole cycle. Each calibration
+    // observation contributes four named value columns (Mean + 2.5/50/97.5 %,
+    // via GUI getpercentiles); the observation name is a COLUMN LABEL, never
+    // part of the filename. This is deliberate: observation names such as
+    // "Underdrain flow (m3/day)" contain '/', which the old per-observation
+    // filename scheme fed straight into std::ofstream -- the OS read it as a
+    // directory separator and the open silently failed, dropping that
+    // observation's band entirely. Labels inside the file have no such issue.
     const std::vector<double> pcts = {0.025, 0.5, 0.975};
     const QString tag = QString::number(static_cast<qint64>(tNow));
 
+    TimeSeriesSet<double> combined;
+    int nBands = 0;
+    QStringList emptyObs;
     for (int o = 0; o < nobs; ++o)
     {
+        // Restrict to calibration targets. DTAssimilation pushes observed_data
+        // into exactly the observations named in calibration_observations; a
+        // non-empty observed series is the reliable in-model marker. Model
+        // observations that are computed but not calibrated against (e.g.
+        // Evaporation) carry no observed_data and are skipped here.
+        auto *odq = observation(o)->Variable("observed_data");
+        const bool isCalib = odq && odq->GetTimeSeries()
+                             && odq->GetTimeSeries()->size() > 0;
+        if (!isCalib)
+            continue;
+
         TimeSeriesSet<double> ensemble;
         for (int r = 0; r < nreal; ++r)
-            if (o < static_cast<int>(R.outputs[r].size()))
+            if (o < static_cast<int>(R.outputs[r].size())
+                && R.outputs[r][o].size() > 0)
                 ensemble.append(R.outputs[r][o], std::to_string(r));
 
-        TimeSeriesSet<double> bracket = ensemble.getpercentiles(pcts);
         const std::string obsName = observation(o)->GetName();
-        bracket.write((outputPath.toStdString()
-                       + "/realization_ci_" + obsName
-                       + "_cycle_" + tag.toStdString() + ".txt"));
+        if (ensemble.empty())
+        {
+            // A calibration target with no reservoir data this cycle -- surface
+            // it rather than silently omitting the column.
+            emptyObs << QString::fromStdString(obsName);
+            continue;
+        }
 
-        // Fixed-name copy so the viewer can fetch a stable URL without
-        // discovering the latest cycle-tagged file.
-        bracket.write((outputPath.toStdString()
-                       + "/realization_ci_" + obsName + "_latest.txt"));
+        // getpercentiles -> series named "Mean","2.500000 %",... Qualify each
+        // with the observation name so a single file disambiguates columns:
+        //   "Underdrain flow (m3/day) | 2.500000 %"
+        TimeSeriesSet<double> bracket = ensemble.getpercentiles(pcts);
+        for (size_t k = 0; k < bracket.size(); ++k)
+            combined.append(bracket[k], obsName + " | " + bracket[k].name());
+        ++nBands;
     }
 
+    if (combined.empty())
     {
-        DTDebugLog &dlog = DTDebugLog::instance();
-        if (dlog.enabled(DTDebugLog::Category::MCMC))
-            dlog.log(DTDebugLog::Category::MCMC,
-                     QString("realization band: %1 reservoir realizations x "
-                             "%2 obs at t_now=%3 (seen=%4)")
-                         .arg(nreal).arg(nobs).arg(tNow).arg(R.seen));
+        dlog.log(DTDebugLog::Category::MCMC,
+                 QString("produceRealizationCI: BAIL no calibration observation "
+                         "had reservoir data (empty: %1)").arg(emptyObs.join(", ")));
+        dlog.flush();
+        errorMessage = "no calibration observation had reservoir data this cycle";
+        return false;
     }
+
+    combined.write((outputPath.toStdString()
+                    + "/realization_ci_cycle_" + tag.toStdString() + ".txt"));
+    // Stable-name copy so the viewer fetches one fixed URL per cycle.
+    combined.write((outputPath.toStdString() + "/realization_ci_latest.txt"));
+
+    if (dlog.enabled(DTDebugLog::Category::MCMC))
+        dlog.log(DTDebugLog::Category::MCMC,
+                 QString("realization band: %1 calib obs x %2 realizations at "
+                         "t_now=%3 (seen=%4)%5")
+                     .arg(nBands).arg(nreal).arg(tNow).arg(R.seen)
+                     .arg(emptyObs.isEmpty() ? QString()
+                                             : QString(" [no data: %1]").arg(emptyObs.join(", "))));
     return true;
 }
 
@@ -357,7 +407,11 @@ bool DTStreamingMCMC::writePosteriorDistribution(const DTCycleResult &result,
                                                  double tNow,
                                                  QString &errorMessage)
 {
-    if (!result.converged || result.pooledSamples.empty())
+    // Provisional cycles allowed: the posterior histogram + CI table are
+    // published from whatever pooled post-plateau samples this cycle
+    // retained, certified or not (see runCycle's assemblePool comment).
+    // The only hard requirement is a non-empty pool.
+    if (result.pooledSamples.empty())
     {
         errorMessage = "posterior distribution requested with no pooled samples";
         return false;
@@ -439,7 +493,10 @@ bool DTStreamingMCMC::appendParameterCIRow(const DTCycleResult &result,
     // one; the interval numbers are published either way.
     const bool full = !result.summary.mean.empty();
 
-    // Header (written once, on cycle 1 of a fresh deployment).
+    // Header (written once, on cycle 1 of a fresh deployment). m_cycleIndex
+    // is already incremented to 1 by runCycle before this append runs, so the
+    // first row truncates + emits the header; later rows append. Using <= 0
+    // here would never write the header.
     const bool truncate = (m_cycleIndex <= 1);
     QString out;
     if (truncate)
@@ -516,10 +573,12 @@ bool DTStreamingMCMC::appendHistoryRecord(const QString &path,
 
     rec["point_estimate"] = toJsonArray(result.pointEstimate);
 
-    // Percentile fields exist ONLY for converged cycles: a provisional
-    // record carries no dispersion at all, so no downstream plot can
-    // render transit spread as a credible band (Sec. 3.9).
-    if (result.converged)
+    // Percentile fields are emitted for any cycle that produced a pooled
+    // summary -- provisional cycles included. The `converged` flag above
+    // still distinguishes a certified posterior width from a provisional
+    // (uncertified) one, so downstream consumers can label the band
+    // accordingly, but the dispersion numbers are published either way.
+    if (!result.summary.mean.empty())
     {
         rec["mean"] = toJsonArray(result.summary.mean);
         rec["p10"]  = toJsonArray(result.summary.p10);
@@ -943,7 +1002,14 @@ DTCycleResult DTStreamingMCMC::runCycle(const QDateTime &deadline)
                               ? QString()
                               : QString(" via %1").arg(
                                     QString::fromStdString(result.convergenceSource))));
-    DTDebugLog::instance().flush();   // cycle boundary: make the log durable
+
+    DTDebugLog::instance().log(DTDebugLog::Category::MCMC,
+                               QString("runCycle END: reservoir=%1 seen=%2 pool=%3 converged=%4")
+                                   .arg(m_outputReservoir.outputs.size())
+                                   .arg(m_outputReservoir.seen)
+                                   .arg(result.pooledSamples.size())
+                                   .arg(result.converged));
+    DTDebugLog::instance().flush();
 
     return result;
 }
@@ -1295,8 +1361,20 @@ bool DTStreamingMCMC::stepChain(int c, std::mt19937_64 &rng)
         // only if this step captured -- but a rejected step's `modeled` is
         // the REJECTED proposal, not the retained state, so only offer when
         // the step was accepted (retained state == proposal == modeled).
-        if (accepted && capture && !modeled.empty())
+        const bool offered = accepted && capture && !modeled.empty();
+        if (offered)
             offerToReservoir(std::move(modeled));
+
+        if (DTDebugLog::instance().enabled(DTDebugLog::Category::MCMCTrace))
+        {
+            if (offered)
+                DTDebugLog::instance().log(DTDebugLog::Category::MCMCTrace,
+                                           QString("reservoir offer: chain=%1 sweep=%2").arg(c).arg(m_sweepIndex));
+            else if (chain.phase == ChainPhase::Plateaued)
+                DTDebugLog::instance().log(DTDebugLog::Category::MCMCTrace,
+                                           QString("reservoir SKIP: chain=%1 accepted=%2 capture=%3 modeled_empty=%4")
+                                               .arg(c).arg(accepted).arg(capture).arg(modeled.empty()));
+        }
     }
 
     return accepted;
