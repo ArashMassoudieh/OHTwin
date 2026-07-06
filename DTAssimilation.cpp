@@ -967,6 +967,8 @@ bool DTAssimilation::runCalibrationMCMC(System &sys,
     }
     mcmc.SetParameters(settings);
 
+    mcmc.streamSettings.realizationInterval = m_config.assimilation.mcmcRealizationInterval;
+
     std::cout << "[Assim] MCMC configured from Settings 'MCMC' ("
               << settings->GetVars()->size() << " quans), window "
               << tStart << " → " << tEnd
@@ -1114,6 +1116,30 @@ bool DTAssimilation::runCalibrationMCMC(System &sys,
             // Viewer convenience only — never fails the cycle.
             std::cerr << "[Assim] WARNING: " << histErr.toStdString() << "\n";
         }
+    }
+
+    // Parameter CI history: EVERY cycle (dense record, not interval-gated).
+    {
+        const QString ciPath = calibDir + "/parameter_ci_history.csv";
+        QString ciErr;
+        if (!mcmc.appendParameterCIRow(result, ciPath, tEnd, ciErr))
+            std::cerr << "[Assim] WARNING: " << ciErr.toStdString() << "\n";
+    }
+
+    // Realization band + posterior distribution: on cycle 1 (early look)
+    // and every Nth cycle thereafter.
+    const int cyc      = static_cast<int>(m_cyclesCompleted + 1);
+    const int interval = m_config.assimilation.mcmcRealizationInterval;
+    const bool onSchedule = (cyc == 1) ||
+                            (interval > 0 && cyc % interval == 0);
+    if (result.converged && onSchedule)
+    {
+        QString rErr;
+        if (!mcmc.produceRealizationCI(result, outputDir, tEnd, rErr))
+            std::cerr << "[Assim] WARNING: realizations: " << rErr.toStdString() << "\n";
+        QString dErr;
+        if (!mcmc.writePosteriorDistribution(result, outputDir, tEnd, dErr))
+            std::cerr << "[Assim] WARNING: posterior dist: " << dErr.toStdString() << "\n";
     }
 
     // 10. Write the calibrated System snapshot — identical naming and

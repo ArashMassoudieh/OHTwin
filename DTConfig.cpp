@@ -558,6 +558,10 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
             postQ.isEmpty()
                 ? assimilation.calibrationOutputDir + "/posterior_latest.json"
                 : resolvePath(postQ).toStdString();
+
+        if (as.contains("mcmc_realization_interval"))
+            assimilation.mcmcRealizationInterval =
+                as["mcmc_realization_interval"].toInt(10);
     }
 
     // --- parameter_drift (optional) ---

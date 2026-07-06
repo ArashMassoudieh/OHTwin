@@ -64,12 +64,14 @@
 
 #include "MCMC.h"
 #include "System.h"
+#include "TimeSeries.h"
 
 #include <QString>
 #include <QDateTime>
 
 #include <deque>
 #include <random>
+#include <mutex>
 #include <vector>
 
 // ---------------------------------------------------------------------------
@@ -84,14 +86,30 @@ struct DTStreamingSettings
     int    plateauWindow          = 40;    // trace length (per-chain steps) over which trend is tested
     double plateauSlopeThreshold  = 1.0;   // DECLARE plateau: |slope * window| < this many trace-stddevs
     double plateauRevertFactor    = 2.0;   // REVERT to climbing only above threshold*factor (hysteresis:
-                                           // prevents flapping when trend/scatter hovers near 1.0)
+    // prevents flapping when trend/scatter hovers near 1.0)
     int    minStepsBeforeClassify = 10;    // chains younger than this are always "climbing"
     double minAcceptedFraction    = 0.05;  // a window with fewer accepted moves than this fraction of
-                                           // its length is STAGNATION, never a plateau (a flat trace of
-                                           // rejections is a stuck chain, not a converged one)
+    // its length is STAGNATION, never a plateau (a flat trace of
+    // rejections is a stuck chain, not a converged one)
 
     // --- quorum (Sec. 3.2 / 3.9) ---
     double quorumFraction         = 0.5;   // fraction q of chains that must be plateaued
+
+    // --- inter-cycle stability certification (Fix B) ---
+    // A second, weaker path to a FULL publication for the streaming
+    // regime where the record grows faster than a within-cycle quorum can
+    // form (late cycles have too few sweeps to plateau half the chains),
+    // yet the point estimate is demonstrably stationary across cycles.
+    // When the last stabilityWindow point estimates have all moved less
+    // than stabilityTol (relative to their recent mean) AND the current
+    // cycle has at least stabilityMinPlateaued of its chains plateaued,
+    // the current cycle's partial pool is published as FULL. Only the
+    // CURRENT cycle's samples are pooled (never cross-cycle), so no
+    // mixing of distinct per-cycle targets occurs; stability only relaxes
+    // HOW MANY plateaued chains are required, not which samples pool.
+    int    stabilityWindow        = 5;     // consecutive cycles compared
+    double stabilityTol           = 0.02;  // max relative point-estimate drift
+    double stabilityMinPlateaued  = 0.1;   // floor on plateaued fraction to trust the partial pool
 
     // --- accelerated burn-in cull (Sec. 3.5) ---
     bool   cullEnabled            = true;
@@ -108,9 +126,16 @@ struct DTStreamingSettings
     // --- cycle driver (Sec. 3.8) ---
     int    stepsPerClockCheck     = 1;     // chain-sweeps between deadline checks
     int    adaptationBlock        = 20;    // sweeps between proposal-scale adaptations
-                                           // (short: streaming cycles are ~100 sweeps and the target
-                                           // sharpens every cycle as the record grows, so adaptation
-                                           // must get several corrections per cycle to track it)
+    // (short: streaming cycles are ~100 sweeps and the target
+    // sharpens every cycle as the record grows, so adaptation
+    // must get several corrections per cycle to track it)
+
+    // --- posterior predictive realizations (Sec. GUI ProduceRealizations) ---
+    int    realizationCount       = 100;   // reservoir size: modeled outputs retained per cycle for
+    // the predictive band (uniform random over pooled samples,
+    // captured during sampling -- NOT re-solved afterward)
+    int    realizationInterval    = 10;    // publish realization band + posterior distribution/CI
+    // every Nth FULL cycle (0 disables)
 
     // --- diagnostics / IO ---
     bool   detailLogging          = false; // per-evaluation detail file writes (base-class behavior)
@@ -121,6 +146,30 @@ struct DTStreamingSettings
 // ---------------------------------------------------------------------------
 enum class ChainPhase { Climbing, Plateaued };
 
+// ---------------------------------------------------------------------------
+// Fixed-size reservoir of modeled outputs for the predictive band. Holds at
+// most `capacity` per-observation modeled series, drawn uniformly at random
+// (reservoir sampling) from the pooled post-plateau samples as they are
+// retained during the sweep -- so the band costs no extra solves, and memory
+// is O(capacity * observations * record), never O(samples). Shared across
+// chains; a mutex guards offer() since retention happens in the parallel
+// sweep. Each slot stores one realization's full set of observation series.
+// ---------------------------------------------------------------------------
+struct DTOutputReservoir
+{
+    // slot[r] = modeled series for observation o at outputs[r][o]
+    std::vector<std::vector<TimeSeries<double>>> outputs;
+    long long seen = 0;          // total retained samples offered (reservoir N)
+    int  capacity  = 100;
+
+    void reset(int cap)
+    {
+        capacity = std::max(1, cap);
+        outputs.clear();
+        seen = 0;
+    }
+};
+
 struct DTChainState
 {
     std::vector<double> params;          // current position psi = (theta, sigma)
@@ -129,8 +178,8 @@ struct DTChainState
     // classifier inputs
     std::deque<double>  trace;           // recent logp history (<= plateauWindow)
     std::deque<char>    acceptTrace;     // 1/0 accept flags, parallel to trace
-                                         // (classifier stagnation guard; independent
-                                         // of the per-block adaptation counters)
+    // (classifier stagnation guard; independent
+    // of the per-block adaptation counters)
     ChainPhase          phase = ChainPhase::Climbing;
     int                 plateauOnsetStep = -1;  // sweep index at which plateau was declared
 
@@ -183,6 +232,10 @@ struct DTCycleResult
     // diagnostics (Sec. 3.11)
     double plateauedFraction   = 0.0;
     double effectiveSampleSize = 0.0;
+
+    // How a FULL publication was certified: "quorum", "stability", or
+    // "" (provisional). Recorded in the snapshot/history for auditing.
+    std::string convergenceSource;
     double acceptanceRate      = 0.0;
     int    cullCount           = 0;
     int    dissolutionCount    = 0;
@@ -216,6 +269,45 @@ public:
     bool writePosteriorSnapshot(const QString &path,
                                 const DTCycleResult &result,
                                 QString &errorMessage);
+
+    // Posterior predictive realizations (mirrors the GUI's
+    // CMCMC::ProduceRealizations): draw realizationCount parameter
+    // vectors, solve a fresh model per draw (parallel, on the chain-
+    // private pristine copies), and write the per-observation 2.5/50/
+    // 97.5 percentile bracket to outputPath. Draws come from the pooled
+    // posterior when converged, else from the carried chain states
+    // (band is then chain-state dispersion, tagged via `converged`, not
+    // posterior width). Raw realizations written only when writeRaw.
+    // Returns false (with errorMessage) on hard failure; the caller
+    // treats predictive output as best-effort, never a cycle failure.
+    // Non-const: parameter(int) accessor + model solves.
+    // Publish the predictive output band from the reservoir (no re-solves)
+    // plus the parameter posterior distribution and CI, tagged by tNow.
+    // Written only by the caller when the cycle is FULL and on the
+    // realization interval. Best-effort: returns false on hard failure.
+    bool produceRealizationCI(const DTCycleResult &result,
+                              const QString &outputPath,
+                              double tNow,
+                              QString &errorMessage);
+
+    // Per-parameter histogram (TimeSeries::distribution over pooled samples,
+    // bins = clamp(round(sqrt(N)),10,60)) + a mean/stdev/p2.5/p50/p97.5 CI
+    // table. Uses the full pooled samples, not the reservoir.
+    bool writePosteriorDistribution(const DTCycleResult &result,
+                                    const QString &outputPath,
+                                    double tNow,
+                                    QString &errorMessage);
+
+    // Append one wide row per cycle to a running parameter-CI CSV
+    // (mean/stdev/p2.5/p50/p97.5 per parameter). Called EVERY cycle, not
+    // gated by the realization interval. Provisional cycles write the
+    // point estimate into the mean/p50 columns and leave stdev/p025/p975
+    // blank (no CI exists; transit dispersion is never emitted). Truncates
+    // + writes the header when m_cycleIndex <= 1 (fresh deployment).
+    bool appendParameterCIRow(const DTCycleResult &result,
+                              const QString &csvPath,
+                              double tNow,
+                              QString &errorMessage);
 
     // Append one compact JSON line for this cycle to the cumulative
     // history file consumed by the viewer (point estimate, posterior
@@ -286,7 +378,11 @@ private:
     // identical value to CMCMC::posterior but with a chain-private copy
     // source (race-free under the parallel sweep) and without the
     // per-evaluation detail-file critical section.
-    double posteriorLocal(int c, const std::vector<double> &par);
+    // When captureOut != nullptr, the modeled observation series are copied
+    // out of the transient work model before it is destroyed (used only for
+    // retained plateaued samples that will be offered to the reservoir).
+    double posteriorLocal(int c, const std::vector<double> &par,
+                          std::vector<TimeSeries<double>> *captureOut = nullptr);
 
     // One MH step of chain c: propose (additive normal / multiplicative
     // log-normal per prior type, with the log-normal Jacobian in the
@@ -314,6 +410,12 @@ private:
 
     double plateauedFraction() const;
     bool   quorumHolds() const;
+
+    // Inter-cycle stability test (Fix B): true iff the ring is full and
+    // every parameter's spread across the ring is below stabilityTol
+    // relative to its recent mean. Called after the current cycle's point
+    // estimate has been pushed onto the ring.
+    bool   streamStable() const;
 
     // Median current logp over plateaued chains — the ensemble level the
     // cull margin is measured against (Sec. 3.5).
@@ -358,10 +460,13 @@ private:
     DTPosteriorSummary computeSummary(
         const std::vector<std::vector<double>> &samples) const;
 
-    // Autocorrelation-based ESS of the pooled draws; reported as the
-    // minimum across parameters (Sec. 3.11).
-    double effectiveSampleSize(
-        const std::vector<std::vector<double>> &samples) const;
+    // Autocorrelation-based ESS, computed PER CHAIN (the pool is a
+    // concatenation of chains, so autocorrelation on the flat stream
+    // would see false correlation at chain seams). Geyer initial-
+    // monotone-sequence truncation; ESS summed across chains per
+    // parameter, reported as the minimum across parameters -- the
+    // worst-mixing direction bounds the pool's reliability (Sec. 3.11).
+    double effectiveSampleSize() const;
 
     // One structured log line per cycle (Sec. 3.11).
     void logCycleDiagnostics(const DTCycleResult &result) const;
@@ -380,12 +485,27 @@ private:
     // working copies resident during a sweep.
     std::vector<System> m_chainModels;
 
+    // Predictive-band output reservoir (Sec: realizations). Reset each cycle.
+    DTOutputReservoir m_outputReservoir;
+    std::mutex        m_reservoirMutex;
+
+    // Offer one retained sample's modeled outputs to the reservoir. Called
+    // from stepChain under the parallel sweep for plateaued samples only.
+    // Takes ownership by move. Reservoir-sampling: fills to capacity, then
+    // replaces a random slot with probability capacity/seen.
+    void offerToReservoir(std::vector<TimeSeries<double>> &&modeled);
+
     // Previous cycle's product, restored by loadPosteriorSnapshot():
     bool m_havePrevSnapshot   = false;
     bool m_prevWasProvisional = false;
     std::vector<std::vector<double>> m_prevSamples;  // pooled samples (full) or chain states (provisional)
     std::vector<double>              m_prevLogp;     // their posterior values (for ratio reseed)
     std::vector<double>              m_prevPertcoeff; // proposal scales carried across cycles
+
+    // Inter-cycle stability ring (Fix B): the last stabilityWindow point
+    // estimates, oldest-first. Certifies streaming convergence when a
+    // within-cycle quorum cannot form but the estimate has settled.
+    std::deque<std::vector<double>> m_pointEstimateHistory;
 
     // Per-cycle bookkeeping
     qint64 m_sweepIndex        = 0;
@@ -397,6 +517,6 @@ private:
     int    m_cycleIndex        = 0;
 
     std::mt19937_64 m_seedRng;  // seeded in the constructor; used for seeding
-                                // and clone-target draws (per-thread RNGs for
-                                // the parallel sweep live inside runCycle)
+    // and clone-target draws (per-thread RNGs for
+    // the parallel sweep live inside runCycle)
 };

@@ -133,6 +133,8 @@ struct AssimilationConfig
     // Path of the posterior snapshot exchanged between cycles. Empty =>
     // calibrationOutputDir + "/posterior_latest.json".
     std::string posteriorSnapshotPath;
+
+    int mcmcRealizationInterval = 10;   // publish realization band + posterior dist every Nth FULL cycle
 };
 
 

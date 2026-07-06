@@ -20,6 +20,7 @@
 
 #include "DTStreamingMCMC.h"
 #include "DTDebugLog.h"
+#include "TimeSeriesSet.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -290,6 +291,208 @@ bool DTStreamingMCMC::writePosteriorSnapshot(const QString &path,
 }
 
 // ---------------------------------------------------------------------------
+bool DTStreamingMCMC::produceRealizationCI(const DTCycleResult &result,
+                                           const QString &outputPath,
+                                           double tNow,
+                                           QString &errorMessage)
+{
+    // Reads the reservoir captured DURING sampling -- no re-solves. The
+    // reservoir holds up to realizationCount modeled-output sets, drawn
+    // uniformly at random from this cycle's pooled post-plateau samples.
+    if (!result.converged)
+    {
+        errorMessage = "realization band requested for a non-converged cycle";
+        return false;
+    }
+    const DTOutputReservoir &R = m_outputReservoir;
+    if (R.outputs.empty())
+    {
+        errorMessage = "output reservoir is empty (no plateaued samples "
+                       "captured this cycle)";
+        return false;
+    }
+
+    // Number of observations from the first stored realization.
+    const int nobs = static_cast<int>(R.outputs.front().size());
+    const int nreal = static_cast<int>(R.outputs.size());
+
+    // Per observation, gather the nreal modeled series into a TimeSeriesSet
+    // and take the 2.5/50/97.5 percentile bracket (GUI getpercentiles).
+    const std::vector<double> pcts = {0.025, 0.5, 0.975};
+    const QString tag = QString::number(static_cast<qint64>(tNow));
+
+    for (int o = 0; o < nobs; ++o)
+    {
+        TimeSeriesSet<double> ensemble;
+        for (int r = 0; r < nreal; ++r)
+            if (o < static_cast<int>(R.outputs[r].size()))
+                ensemble.append(R.outputs[r][o], std::to_string(r));
+
+        TimeSeriesSet<double> bracket = ensemble.getpercentiles(pcts);
+        const std::string obsName = observation(o)->GetName();
+        bracket.write((outputPath.toStdString()
+                       + "/realization_ci_" + obsName
+                       + "_cycle_" + tag.toStdString() + ".txt"));
+
+        // Fixed-name copy so the viewer can fetch a stable URL without
+        // discovering the latest cycle-tagged file.
+        bracket.write((outputPath.toStdString()
+                       + "/realization_ci_" + obsName + "_latest.txt"));
+    }
+
+    {
+        DTDebugLog &dlog = DTDebugLog::instance();
+        if (dlog.enabled(DTDebugLog::Category::MCMC))
+            dlog.log(DTDebugLog::Category::MCMC,
+                     QString("realization band: %1 reservoir realizations x "
+                             "%2 obs at t_now=%3 (seen=%4)")
+                         .arg(nreal).arg(nobs).arg(tNow).arg(R.seen));
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+bool DTStreamingMCMC::writePosteriorDistribution(const DTCycleResult &result,
+                                                 const QString &outputPath,
+                                                 double tNow,
+                                                 QString &errorMessage)
+{
+    if (!result.converged || result.pooledSamples.empty())
+    {
+        errorMessage = "posterior distribution requested with no pooled samples";
+        return false;
+    }
+    const int N  = static_cast<int>(result.pooledSamples.size());
+    const int np = static_cast<int>(result.pooledSamples.front().size());
+    const QString tag = QString::number(static_cast<qint64>(tNow));
+
+    // Adaptive bin count: sqrt(N), clamped to [10, 60] -- smooth without
+    // over-resolving a few-hundred-sample cycle pool.
+    const int nbins = std::min(60, std::max(10,
+                                            static_cast<int>(std::lround(std::sqrt((double)N)))));
+
+    // Per-parameter histogram via TimeSeries::distribution over pooled values.
+    TimeSeriesSet<double> dists;
+    for (int i = 0; i < np; ++i)
+    {
+        // Build a value series for parameter i (time index is a dummy
+        // ordinal; distribution() only reads the values).
+        TimeSeries<double> col;
+        for (int s = 0; s < N; ++s)
+            col.append(static_cast<double>(s), result.pooledSamples[s][i]);
+        TimeSeries<double> hist = col.distribution(nbins, 0);
+        dists.append(hist, parameter(i)->GetName());
+    }
+    dists.write((outputPath.toStdString()
+                 + "/posterior_dist_cycle_" + tag.toStdString() + ".txt"));
+
+    dists.write((outputPath.toStdString() + "/posterior_dist_latest.txt"));
+
+    // CI table: name, mean, stdev, p2.5, p50, p97.5 (from computeSummary,
+    // already run on the full pool for this FULL cycle).
+    const DTPosteriorSummary &s = result.summary;
+    {
+        QString ci;
+        ci += "parameter\tmean\tstdev\tp2.5\tp50\tp97.5\n";
+        for (int i = 0; i < np; ++i)
+            ci += QString("%1\t%2\t%3\t%4\t%5\t%6\n")
+                      .arg(QString::fromStdString(parameter(i)->GetName()))
+                      .arg(i < (int)s.mean.size() ? s.mean[i] : 0.0)
+                      .arg(i < (int)s.stdev.size() ? s.stdev[i] : 0.0)
+                      .arg(i < (int)s.p025.size() ? s.p025[i] : 0.0)
+                      .arg(i < (int)s.p50.size()  ? s.p50[i]  : 0.0)
+                      .arg(i < (int)s.p975.size() ? s.p975[i] : 0.0);
+        QFile f(outputPath + "/posterior_ci_cycle_" + tag + ".txt");
+        if (f.open(QIODevice::WriteOnly))
+        {
+            f.write(ci.toUtf8());
+            f.close();
+        }
+        else
+        {
+            errorMessage = "cannot write posterior CI table";
+            return false;
+        }
+    }
+
+    {
+        DTDebugLog &dlog = DTDebugLog::instance();
+        if (dlog.enabled(DTDebugLog::Category::MCMC))
+            dlog.log(DTDebugLog::Category::MCMC,
+                     QString("posterior dist+CI: %1 params, %2 samples, "
+                             "%3 bins at t_now=%4")
+                         .arg(np).arg(N).arg(nbins).arg(tNow));
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+bool DTStreamingMCMC::appendParameterCIRow(const DTCycleResult &result,
+                                           const QString &csvPath,
+                                           double tNow,
+                                           QString &errorMessage)
+{
+    const unsigned int np = MCMC_Settings.number_of_parameters;
+    const bool full = result.converged && !result.summary.mean.empty();
+
+    // Header (written once, on cycle 1 of a fresh deployment).
+    const bool truncate = (m_cycleIndex <= 1);
+    QString out;
+    if (truncate)
+    {
+        out += "cycle,t_now,converged";
+        for (unsigned int i = 0; i < np; ++i)
+        {
+            const QString p = QString::fromStdString(parameter(i)->GetName());
+            out += QString(",%1_mean,%1_stdev,%1_p025,%1_p50,%1_p975").arg(p);
+        }
+        out += "\n";
+    }
+
+    out += QString("%1,%2,%3")
+               .arg(m_cycleIndex)
+               .arg(tNow, 0, 'f', 6)
+               .arg(full ? 1 : 0);
+
+    for (unsigned int i = 0; i < np; ++i)
+    {
+        if (full)
+        {
+            const DTPosteriorSummary &s = result.summary;
+            out += QString(",%1,%2,%3,%4,%5")
+                       .arg(s.mean[i], 0, 'g', 8)
+                       .arg(s.stdev[i], 0, 'g', 8)
+                       .arg(s.p025[i], 0, 'g', 8)
+                       .arg(s.p50[i], 0, 'g', 8)
+                       .arg(s.p975[i], 0, 'g', 8);
+        }
+        else
+        {
+            // Provisional: point estimate into mean/p50, CI columns blank.
+            const double pe = (i < result.pointEstimate.size())
+                                  ? result.pointEstimate[i] : 0.0;
+            out += QString(",%1,,,%2,")
+                       .arg(pe, 0, 'g', 8)
+                       .arg(pe, 0, 'g', 8);
+        }
+    }
+    out += "\n";
+
+    QFile f(csvPath);
+    const QIODevice::OpenMode mode =
+        QIODevice::WriteOnly | (truncate ? QIODevice::Truncate
+                                         : QIODevice::Append);
+    if (!f.open(mode))
+    {
+        errorMessage = "cannot open parameter CI CSV: " + csvPath;
+        return false;
+    }
+    f.write(out.toUtf8());
+    f.close();
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 bool DTStreamingMCMC::appendHistoryRecord(const QString &path,
                                           const DTCycleResult &result,
                                           double tNow,
@@ -417,6 +620,9 @@ bool DTStreamingMCMC::initializeCycle(SeedMode mode, QString &errorMessage)
         dlog.log(DTDebugLog::Category::MCMC, "pristine copies: done");
         dlog.flush();
     }
+
+    // Reset the predictive-band output reservoir for this cycle.
+    m_outputReservoir.reset(streamSettings.realizationCount);
 
     // Proposal scales: restore from the previous cycle's snapshot when
     // compatible, so adaptation accumulates across cycles (short cycles
@@ -642,7 +848,27 @@ DTCycleResult DTStreamingMCMC::runCycle(const QDateTime &deadline)
     }
 
     // ---- publication (Sec. 3.9, Alg. 1 24-29) ----
-    result.converged         = quorumHolds();
+    // --- convergence certification (quorum OR inter-cycle stability) ---
+    // Push this cycle's point estimate onto the stability ring first, so
+    // streamStable() sees the current cycle.
+    result.pointEstimate = posteriorMAP(result);
+    if (!result.pointEstimate.empty())
+    {
+        m_pointEstimateHistory.push_back(result.pointEstimate);
+        while (static_cast<int>(m_pointEstimateHistory.size()) >
+               streamSettings.stabilityWindow)
+            m_pointEstimateHistory.pop_front();
+    }
+
+    const bool byQuorum = quorumHolds();
+    const bool byStability =
+        !byQuorum &&
+        streamStable() &&
+        plateauedFraction() >= streamSettings.stabilityMinPlateaued;
+
+    result.converged         = byQuorum || byStability;
+    result.convergenceSource = byQuorum ? "quorum"
+                                        : (byStability ? "stability" : "");
     result.plateauedFraction = plateauedFraction();
     result.totalSweeps       = m_sweepIndex;
     result.totalEvaluations  = m_evaluationCount;
@@ -677,20 +903,19 @@ DTCycleResult DTStreamingMCMC::runCycle(const QDateTime &deadline)
     {
         assemblePool(result);
         result.summary             = computeSummary(result.pooledSamples);
-        result.effectiveSampleSize = effectiveSampleSize(result.pooledSamples);
+        result.effectiveSampleSize = effectiveSampleSize();
     }
     // Posterior summaries are computed ONLY from a converged pool; a
     // provisional result carries no summary -- mid-transit dispersion is
     // not posterior width (Sec. 3.9).
-
-    result.pointEstimate = posteriorMAP(result);
+    // (result.pointEstimate was set above, before the stability ring push.)
 
     ++m_cycleIndex;
     logCycleDiagnostics(result);
 
     if (dlog.enabled(DTDebugLog::Category::MCMC))
         dlog.log(DTDebugLog::Category::MCMC,
-                 QString("cycle %1 published: %2 plateaued=%3 pool=%4 "
+                 QString("cycle %1 published: %2%8 plateaued=%3 pool=%4 "
                          "accept=%5 sweeps=%6 evals=%7")
                      .arg(m_cycleIndex)
                      .arg(result.converged ? "FULL" : "PROVISIONAL")
@@ -698,7 +923,11 @@ DTCycleResult DTStreamingMCMC::runCycle(const QDateTime &deadline)
                      .arg(result.pooledSamples.size())
                      .arg(result.acceptanceRate)
                      .arg(result.totalSweeps)
-                     .arg(result.totalEvaluations));
+                     .arg(result.totalEvaluations)
+                     .arg(result.convergenceSource.empty()
+                              ? QString()
+                              : QString(" via %1").arg(
+                                    QString::fromStdString(result.convergenceSource))));
     DTDebugLog::instance().flush();   // cycle boundary: make the log durable
 
     return result;
@@ -904,7 +1133,8 @@ std::vector<double> DTStreamingMCMC::drawFromRange(std::mt19937_64 &rng)
 // ---------------------------------------------------------------------------
 // Per-chain mechanics
 // ---------------------------------------------------------------------------
-double DTStreamingMCMC::posteriorLocal(int c, const std::vector<double> &par)
+double DTStreamingMCMC::posteriorLocal(int c, const std::vector<double> &par,
+                                       std::vector<TimeSeries<double>> *captureOut)
 {
     // Copy-solve-discard against the chain's OWN pristine model. Same
     // semantics and value as CMCMC::posterior (log-prior plus the
@@ -925,7 +1155,38 @@ double DTStreamingMCMC::posteriorLocal(int c, const std::vector<double> &par)
     }
     work.ApplyParameters();
     work.Solve();
+
+    // Capture modeled observation series before `work` is destroyed
+    // (retained plateaued samples destined for the reservoir only).
+    if (captureOut != nullptr)
+    {
+        const int nobs = static_cast<int>(work.ObservationsCount());
+        captureOut->clear();
+        captureOut->reserve(nobs);
+        for (int i = 0; i < nobs; ++i)
+            captureOut->push_back(*(work.observation(i)->GetModeledTimeSeries()));
+    }
+
     return sum - work.GetObjectiveFunctionValue();
+}
+
+// ---------------------------------------------------------------------------
+void DTStreamingMCMC::offerToReservoir(std::vector<TimeSeries<double>> &&modeled)
+{
+    std::lock_guard<std::mutex> lock(m_reservoirMutex);
+    DTOutputReservoir &R = m_outputReservoir;
+    ++R.seen;
+    if (static_cast<int>(R.outputs.size()) < R.capacity)
+    {
+        R.outputs.push_back(std::move(modeled));   // still filling
+        return;
+    }
+    // Reservoir full: replace a random slot with probability capacity/seen.
+    std::uniform_int_distribution<long long> pick(0, R.seen - 1);
+    const long long j = pick(m_seedRng);
+    if (j < R.capacity)
+        R.outputs[static_cast<size_t>(j)] = std::move(modeled);
+    // else: discard the newcomer
 }
 
 // ---------------------------------------------------------------------------
@@ -936,9 +1197,15 @@ bool DTStreamingMCMC::stepChain(int c, std::mt19937_64 &rng)
     double logJ = 0.0;
     std::vector<double> X = proposeFrom(chain.params, rng, logJ);
 
+    // Capture modeled outputs on this solve only when the chain is already
+    // plateaued (its accepted samples will be retained and are reservoir
+    // candidates). Climbing chains skip capture -- their samples never pool.
+    const bool capture = (chain.phase == ChainPhase::Plateaued);
+    std::vector<TimeSeries<double>> modeled;
+
     // Pure log-posterior: log-prior + kernel-weighted log-likelihood.
     // One forward solve; the dominant cost of the step.
-    const double logp0 = posteriorLocal(c, X);
+    const double logp0 = posteriorLocal(c, X, capture ? &modeled : nullptr);
 
 #pragma omp atomic
     ++m_evaluationCount;
@@ -1007,6 +1274,14 @@ bool DTStreamingMCMC::stepChain(int c, std::mt19937_64 &rng)
     {
         chain.samples.push_back(chain.params);
         chain.sampleLogp.push_back(chain.logp);
+
+        // Reservoir candidate. On acceptance `modeled` holds the proposal's
+        // outputs; on rejection it holds the (still current) state's outputs
+        // only if this step captured -- but a rejected step's `modeled` is
+        // the REJECTED proposal, not the retained state, so only offer when
+        // the step was accepted (retained state == proposal == modeled).
+        if (accepted && capture && !modeled.empty())
+            offerToReservoir(std::move(modeled));
     }
 
     return accepted;
@@ -1049,10 +1324,25 @@ void DTStreamingMCMC::classifyChain(int c, qint64 sweepIndex)
 {
     DTChainState &chain = m_chains[c];
 
-    const int n = static_cast<int>(chain.trace.size());
+    // Effective window: never larger than the configured plateauWindow,
+    // but capped at half the sweeps elapsed so far so that late, short
+    // cycles (whose sweep budget is smaller than plateauWindow as the
+    // record grows, Sec. 2.3) can still fill a window and classify.
+    // Without this, a 42-sweep cycle can never accumulate a 60-step
+    // trace and every chain is stuck "climbing" purely for lack of data.
+    const int effWindow = std::min(
+        streamSettings.plateauWindow,
+        std::max(10, static_cast<int>(sweepIndex) / 2));
 
-    // Too little history to call a trend either way (Sec. 3.2).
-    if (n < streamSettings.minStepsBeforeClassify)
+    // Trend is tested over the last effWindow trace points.
+    const int have = static_cast<int>(chain.trace.size());
+    const int n    = std::min(have, effWindow);
+
+    // Minimum data to classify: the smaller of the configured floor and
+    // the effective window (so a small effWindow doesn't deadlock on a
+    // larger minStepsBeforeClassify).
+    const int minSteps = std::min(streamSettings.minStepsBeforeClassify, effWindow);
+    if (n < minSteps)
     {
         chain.phase = ChainPhase::Climbing;
         chain.plateauOnsetStep = -1;
@@ -1072,36 +1362,29 @@ void DTStreamingMCMC::classifyChain(int c, qint64 sweepIndex)
         }
     }
 
-    // Least-squares slope of logp against step index over the window.
-    // With k = 0..n-1: b = sum((k - kbar)(y - ybar)) / sum((k - kbar)^2).
+    // Least-squares slope of logp against step index over the last n
+    // trace points. With k = 0..n-1: b = sum((k-kbar)(y-ybar)) / sum((k-kbar)^2).
+    const int start = have - n;   // tail offset into the trace deque
     const double kbar = 0.5 * (n - 1);
     double ybar = 0.0;
-    for (const double v : chain.trace) ybar += v;
+    for (int k = 0; k < n; ++k) ybar += chain.trace[start + k];
     ybar /= n;
 
     double sxy = 0.0, sxx = 0.0;
+    for (int k = 0; k < n; ++k)
     {
-        int k = 0;
-        for (const double v : chain.trace)
-        {
-            const double dk = k - kbar;
-            sxy += dk * (v - ybar);
-            sxx += dk * dk;
-            ++k;
-        }
+        const double dk = k - kbar;
+        sxy += dk * (chain.trace[start + k] - ybar);
+        sxx += dk * dk;
     }
     const double b = sxy / sxx;
 
     // Scatter of the residuals about the fitted line (n-2 dof).
     double ss = 0.0;
+    for (int k = 0; k < n; ++k)
     {
-        int k = 0;
-        for (const double v : chain.trace)
-        {
-            const double r = (v - ybar) - b * (k - kbar);
-            ss += r * r;
-            ++k;
-        }
+        const double r = (chain.trace[start + k] - ybar) - b * (k - kbar);
+        ss += r * r;
     }
     const double s = std::sqrt(ss / std::max(n - 2, 1));
 
@@ -1112,7 +1395,11 @@ void DTStreamingMCMC::classifyChain(int c, qint64 sweepIndex)
     // minimum fraction of accepts in the window before a plateau can be
     // declared. (Trajectory-plus-motion, still never level-based.)
     int acceptedInTrace = 0;
-    for (const char a : chain.acceptTrace) acceptedInTrace += a;
+    {
+        const int aStart = static_cast<int>(chain.acceptTrace.size()) - n;
+        for (int k = 0; k < n; ++k)
+            if (aStart + k >= 0) acceptedInTrace += chain.acceptTrace[aStart + k];
+    }
     const bool moving =
         acceptedInTrace >=
         std::max(1, static_cast<int>(streamSettings.minAcceptedFraction * n));
@@ -1199,6 +1486,38 @@ bool DTStreamingMCMC::quorumHolds() const
 {
     if (m_chains.empty()) return false;
     return plateauedFraction() >= streamSettings.quorumFraction;
+}
+
+bool DTStreamingMCMC::streamStable() const
+{
+    const int W = streamSettings.stabilityWindow;
+    if (static_cast<int>(m_pointEstimateHistory.size()) < W) return false;
+
+    const size_t np = m_pointEstimateHistory.front().size();
+    for (const auto &pe : m_pointEstimateHistory)
+        if (pe.size() != np) return false;   // schema changed mid-window
+
+    // Per parameter: spread across the ring relative to its recent mean.
+    for (size_t i = 0; i < np; ++i)
+    {
+        double mean = 0.0, lo = 1e300, hi = -1e300;
+        for (const auto &pe : m_pointEstimateHistory)
+        {
+            const double v = pe[i];
+            mean += v;
+            lo = std::min(lo, v);
+            hi = std::max(hi, v);
+        }
+        mean /= static_cast<double>(m_pointEstimateHistory.size());
+
+        // Scale by |recent mean|, with a small floor so parameters that
+        // sit near zero (e.g. a conductivity driven to its lower bound)
+        // don't trip the test on absolute noise.
+        const double scale = std::max(std::fabs(mean), 1e-9);
+        if ((hi - lo) / scale > streamSettings.stabilityTol)
+            return false;
+    }
+    return true;
 }
 
 double DTStreamingMCMC::plateauedEnsembleLevel() const
@@ -1431,16 +1750,81 @@ DTPosteriorSummary DTStreamingMCMC::computeSummary(
     return summary;
 }
 
-double DTStreamingMCMC::effectiveSampleSize(
-    const std::vector<std::vector<double>> &samples) const
+namespace
 {
-    // TODO (Phase 4):
-    //   Per-parameter ESS from the pooled draws via initial positive
-    //   sequence of autocorrelations (Geyer); report min across parameters.
-    //   Note the pool interleaves chains — compute per chain then sum,
-    //   rather than on the concatenated stream.
-    Q_UNUSED(samples);
-    return 0.0;
+// ESS of a single scalar chain via Geyer's initial monotone sequence.
+// Returns n / (1 + 2*sum rho_k), with the autocovariance sum truncated
+// where consecutive lag-pair sums stop being positive (the standard
+// robust truncation for MCMC). Returns n for n < 8 (too short to
+// estimate autocorrelation; treat as independent, conservatively small).
+double chainESS(const std::vector<double> &x)
+{
+    const int n = static_cast<int>(x.size());
+    if (n < 8) return static_cast<double>(std::max(0, n));
+
+    double mean = 0.0;
+    for (double v : x) mean += v;
+    mean /= n;
+
+    // Autocovariance gamma_k for k = 0..maxLag.
+    const int maxLag = n - 1;
+    std::vector<double> gamma(maxLag + 1, 0.0);
+    for (int k = 0; k <= maxLag; ++k)
+    {
+        double s = 0.0;
+        for (int i = 0; i + k < n; ++i)
+            s += (x[i] - mean) * (x[i + k] - mean);
+        gamma[k] = s / n;
+    }
+    if (gamma[0] <= 0.0) return static_cast<double>(n);   // constant chain
+
+    // Geyer initial positive/monotone sequence: pair adjacent lags
+    // (Gamma_m = gamma_{2m} + gamma_{2m+1}); stop at the first
+    // non-positive pair, and enforce monotone non-increasing pairs.
+    double sumPairs = 0.0;
+    double prevPair = std::numeric_limits<double>::max();
+    for (int m = 0; 2 * m + 1 <= maxLag; ++m)
+    {
+        double pair = gamma[2 * m] + gamma[2 * m + 1];
+        if (pair <= 0.0) break;
+        if (pair > prevPair) pair = prevPair;   // monotone clamp
+        sumPairs += pair;
+        prevPair = pair;
+    }
+
+    // tau = 1 + 2*sum_{k>=1} rho_k = (2*sumPairs - gamma_0) / gamma_0.
+    const double tau = (2.0 * sumPairs - gamma[0]) / gamma[0];
+    if (tau < 1.0) return static_cast<double>(n);         // anti-correlated => cap at n
+    return n / tau;
+}
+} // namespace
+
+double DTStreamingMCMC::effectiveSampleSize() const
+{
+    // Per parameter: sum per-chain ESS (each chain's retained samples are
+    // a contiguous, correctly-ordered MCMC subsequence). Report the min
+    // across parameters -- the worst-mixing direction (typically a
+    // correlated ridge) bounds how much independent information the pool
+    // actually carries.
+    const unsigned int np = MCMC_Settings.number_of_parameters;
+    if (np == 0) return 0.0;
+
+    double essMin = std::numeric_limits<double>::max();
+    for (unsigned int i = 0; i < np; ++i)
+    {
+        double essParam = 0.0;
+        for (const DTChainState &chain : m_chains)
+        {
+            if (chain.samples.empty()) continue;
+            std::vector<double> col;
+            col.reserve(chain.samples.size());
+            for (const std::vector<double> &s : chain.samples)
+                col.push_back(s[i]);
+            essParam += chainESS(col);
+        }
+        essMin = std::min(essMin, essParam);
+    }
+    return (essMin == std::numeric_limits<double>::max()) ? 0.0 : essMin;
 }
 
 void DTStreamingMCMC::logCycleDiagnostics(const DTCycleResult &result) const
