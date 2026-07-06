@@ -110,6 +110,13 @@ AssimViewer::AssimViewer(const QJsonObject &rootConfig,
                      "ga_merged_url configured; using MCMC history and "
                      "ignoring ga_merged_url.");
 
+        // Realization CI band files: realization_ci_<obs>_latest.txt in the
+        // same outputs directory as the modeled CSV.
+        const QString rt = assimConfig.value("realization_ci_url_template").toString();
+        m_realizationUrlTemplate = rt.isEmpty()
+                                       ? QString()  // disabled if not configured
+                                       : resolvedConfigUrl(configBaseUrl, rt).toString();
+
         const QString obs = assimConfig.value("observed_csv_url").toString();
         m_observedCsvUrl = resolvedConfigUrl(configBaseUrl, obs);
         const QString mod = assimConfig.value("modeled_csv_url").toString();
@@ -352,6 +359,10 @@ AssimViewer::AssimViewer(const QJsonObject &rootConfig,
             this, &AssimViewer::onModeledLoaded);
     connect(&m_modeledLoader,  &CsvLoader::failed,
             this, &AssimViewer::onModeledFailed);
+
+    m_realizationLoader.setUrlTemplate(m_realizationUrlTemplate);
+    connect(&m_realizationLoader, &RealizationCILoader::loaded,
+            this, &AssimViewer::onRealizationsLoaded);
 
     m_timer.setInterval(m_refreshSeconds * 1000);
     m_timer.start();
@@ -1155,6 +1166,20 @@ void AssimViewer::rebuildComparisonPanels(const QVector<CsvSeries> &observed,
         modeledPen.setCapStyle(Qt::RoundCap);
         p.modeledSer->setPen(modeledPen);
 
+        // Realization 95% band (drawn first so it sits behind the lines).
+        p.ciLo = new QLineSeries();
+        p.ciHi = new QLineSeries();
+        p.ciBand = new QAreaSeries(p.ciHi, p.ciLo);
+        p.ciLo->setParent(p.ciBand);
+        p.ciHi->setParent(p.ciBand);
+        {
+            QColor fill("#2D7FF9"); fill.setAlpha(45);   // modeled hue, translucent
+            p.ciBand->setBrush(QBrush(fill));
+            p.ciBand->setPen(QPen(Qt::NoPen));
+            p.ciBand->setName("95% CI");
+        }
+        p.chart->addSeries(p.ciBand);   // BEFORE modeled/observed so it's behind
+
         // Observed: scatter dots, contrasting color.
         p.observedSer = new QScatterSeries();
         p.observedSer->setName("Observed");
@@ -1186,6 +1211,9 @@ void AssimViewer::rebuildComparisonPanels(const QVector<CsvSeries> &observed,
         p.yAxis->setGridLineColor(kGridColor);
         p.yAxis->setLinePenColor(kGridColor);
         p.chart->addAxis(p.yAxis, Qt::AlignLeft);
+
+        p.ciBand->attachAxis(p.xAxis);
+        p.ciBand->attachAxis(p.yAxis);
 
         p.modeledSer ->attachAxis(p.xAxis);
         p.modeledSer ->attachAxis(p.yAxis);
@@ -1285,6 +1313,25 @@ void AssimViewer::updateComparisonPanels()
         else if (yMax == yMin)
         {
             p.yAxis->setRange(yMin - 1.0, yMax + 1.0);
+        }
+    }
+}
+
+void AssimViewer::onRealizationsLoaded(const QHash<QString, RealizationBand> &bands)
+{
+    m_lastBands = bands;
+    for (ComparisonPanel &p : m_compPanels)
+    {
+        auto it = bands.find(p.name);
+        if (it != bands.end() && p.ciLo && p.ciHi)
+        {
+            p.ciLo->replace(QVector<QPointF>(it->lo.begin(), it->lo.end()));
+            p.ciHi->replace(QVector<QPointF>(it->hi.begin(), it->hi.end()));
+            p.ciBand->setVisible(true);
+        }
+        else if (p.ciBand)
+        {
+            p.ciBand->setVisible(false);
         }
     }
 }

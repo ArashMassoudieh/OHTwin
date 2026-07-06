@@ -38,6 +38,7 @@
 #include "CsvLoader.h"
 #include "GaMergedLoader.h"
 #include "PosteriorHistoryLoader.h"
+#include "RealizationCILoader.h"
 
 #include <QJsonObject>
 #include <QMainWindow>
@@ -161,6 +162,9 @@ struct ComparisonPanel
     QLineSeries     *modeledSer   = nullptr;
     QDateTimeAxis   *xAxis        = nullptr;
     QValueAxis      *yAxis        = nullptr;
+    QAreaSeries    *ciBand      = nullptr;   // realization 2.5–97.5 band
+    QLineSeries    *ciLo        = nullptr;
+    QLineSeries    *ciHi        = nullptr;
 };
 
 class AssimViewer : public QMainWindow
@@ -184,6 +188,7 @@ private slots:
     void onModeledLoaded (const QVector<CsvSeries> &series);
     void onObservedFailed(const QString &errorMessage);
     void onModeledFailed (const QString &errorMessage);
+    void onRealizationsLoaded(const QHash<QString, RealizationBand> &bands);
 
 private:
     // Build (once) the chart shells for the fitness tab — two charts
@@ -275,4 +280,8 @@ private:
     QWidget             *m_compTabHost  = nullptr;
     QVBoxLayout         *m_compLayout   = nullptr;
     QVector<ComparisonPanel> m_compPanels;
+
+    RealizationCILoader m_realizationLoader;
+    QHash<QString, RealizationBand> m_lastBands;
+    QString m_realizationUrlTemplate;
 };

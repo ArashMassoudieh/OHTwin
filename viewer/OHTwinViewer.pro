@@ -5,6 +5,7 @@ TEMPLATE = app
 
 SOURCES += \
     PosteriorHistoryLoader.cpp \
+    RealizationCILoader.cpp \
     main.cpp \
     Bootstrapper.cpp \
     MainWindow.cpp \
@@ -19,7 +20,8 @@ HEADERS += \
     CsvLoader.h \
     GaMergedLoader.h \
     OhqTime.h \
-    PosteriorHistoryLoader.h
+    PosteriorHistoryLoader.h \
+    RealizationCILoader.h
 
 DISTFILES += \
     config.json \
