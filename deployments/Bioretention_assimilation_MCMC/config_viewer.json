@@ -1,16 +1,11 @@
 {
     "mode": "assimilation",
-    "refresh_seconds": 10,
-
+    "refresh_seconds": 300,
     "assimilation": {
-        "ga_merged_url":    "http://localhost:8087/outputs/calibration/ga_output_merged.txt",
-        "observed_csv_url": "http://localhost:8086/outputs/selected_output.csv",
-        "modeled_csv_url":  "http://localhost:8087/outputs/selected_output.csv",
-
+        "posterior_history_url": "http://localhost:8182/outputs/calibration/posterior_history.jsonl",
+        "observed_csv_url": "http://localhost:8084/outputs/selected_output.csv",
+        "modeled_csv_url":  "http://localhost:8182/outputs/selected_output.csv",
         "x_axis": "t_now",
-
-        "fitness_metrics": ["nse", "nmse"],
-
         "parameter_panel": {
             "show_population_band": true
         }
