@@ -13,7 +13,7 @@
         "forecast_horizon": "6day",
         "start_datetime": "2020-01-03T00:00:00",
         "stop_datetime": "2022-01-03T00:00:00",
-        "time_acceleration": 1000,
+        "time_acceleration": 200,
         "advance_to_observations": true,
         "state_variables": [],
         "keep_debug_outputs": false
@@ -37,6 +37,8 @@
         "method": "MCMC",
         "mcmc_budget_margin": "60s",
         "mcmc_realization_interval": 10,
+        "calibration_window_days": 100,
+        "mcmc_max_sweeps": 300,
         "calibration_output_dir": "outputs/calibration",
         "calibration_observations": [
             "Underdrain flow (m3/day)",

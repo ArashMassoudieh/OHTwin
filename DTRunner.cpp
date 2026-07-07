@@ -242,9 +242,39 @@ bool DTRunner::init(QString &errorMessage)
         }
     }
 
-    // Determine the wall-clock start time for the first interval
-    if (!m_config.startDatetime.empty())
+    // Determine the wall-clock start time for the first interval.
+    //
+    // RESUME TAKES PRECEDENCE over the configured start. If a prior state
+    // snapshot survives with a next-start time, this is a restart without
+    // --fresh (--fresh wipes state/ before we get here), so we continue
+    // exactly where the run left off. start_datetime is the COLD-START anchor
+    // only: it is used when there is no snapshot to resume from -- a genuine
+    // first run, or a deliberate --fresh restart. This makes an interrupted
+    // run resumable simply by relaunching without --fresh, even though
+    // start_datetime is set in config.
     {
+        const QString latestSnapshot = findLatestStateSnapshot();
+        if (!latestSnapshot.isEmpty())
+        {
+            const QJsonObject state = readJson(latestSnapshot);
+            const QString nextStart = state.value("_dt_next_start_utc").toString();
+            if (!nextStart.isEmpty())
+            {
+                const QDateTime t = QDateTime::fromString(nextStart, Qt::ISODate);
+                if (t.isValid())
+                    m_nextIntervalStart = t;
+            }
+        }
+    }
+
+    if (m_nextIntervalStart.isValid())
+    {
+        std::cout << "[Runner] Resuming from previous state; next interval start: "
+                  << m_nextIntervalStart.toString(Qt::ISODate).toStdString() << "\n";
+    }
+    else if (!m_config.startDatetime.empty())
+    {
+        // Cold start at the configured anchor (first run or after --fresh).
         m_nextIntervalStart = QDateTime::fromString(
             QString::fromStdString(m_config.startDatetime), Qt::ISODate);
         if (!m_nextIntervalStart.isValid())
@@ -254,35 +284,15 @@ bool DTRunner::init(QString &errorMessage)
             return false;
         }
         m_nextIntervalStart.setTimeSpec(Qt::UTC);
-        std::cout << "[Runner] Using config start_datetime: "
+        std::cout << "[Runner] Cold start at config start_datetime: "
                   << m_config.startDatetime << "\n";
     }
     else
     {
-        // Check if a prior state snapshot already encodes a next-start time
-        const QString latestSnapshot = findLatestStateSnapshot();
-        if (!latestSnapshot.isEmpty())
-        {
-            const QJsonObject state = readJson(latestSnapshot);
-            const QString nextStart = state.value("_dt_next_start_utc").toString();
-            if (!nextStart.isEmpty())
-            {
-                m_nextIntervalStart = QDateTime::fromString(nextStart, Qt::ISODate);
-            }
-        }
-
-        if (!m_nextIntervalStart.isValid())
-        {
-            // True fresh start: begin from now
-            m_nextIntervalStart = QDateTime::currentDateTimeUtc();
-            std::cout << "[Runner] No prior state found; starting from now: "
-                      << m_nextIntervalStart.toString(Qt::ISODate).toStdString() << "\n";
-        }
-        else
-        {
-            std::cout << "[Runner] Resuming from previous state; next interval start: "
-                      << m_nextIntervalStart.toString(Qt::ISODate).toStdString() << "\n";
-        }
+        // No snapshot and no configured anchor: begin from now.
+        m_nextIntervalStart = QDateTime::currentDateTimeUtc();
+        std::cout << "[Runner] No prior state or start_datetime; starting from now: "
+                  << m_nextIntervalStart.toString(Qt::ISODate).toStdString() << "\n";
     }
 
     // ------------------------------------------------------------------
