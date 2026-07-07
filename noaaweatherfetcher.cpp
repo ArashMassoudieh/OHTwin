@@ -110,6 +110,7 @@ QVector<WeatherData> NOAAWeatherFetcher::getWeatherPrediction(
     case datatype::Temperature:                dataTypeKey = "temperature"; break;
     }
 
+    request.setTransferTimeout(30000);   // 30 s: fail a hung fetch instead of blocking the event loop forever
     QNetworkReply *reply = manager->get(request);
     QEventLoop loop;
     connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
@@ -189,6 +190,7 @@ CPrecipitation NOAAWeatherFetcher::getOpenMeteoPrecipitation(
     request.setRawHeader("User-Agent",
                          "DTRunner/1.0 (openhydroqual@example.com)");
 
+    request.setTransferTimeout(30000);   // 30 s: fail a hung fetch instead of blocking the event loop forever
     QNetworkReply *reply = manager->get(request);
     QEventLoop loop;
     connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
@@ -300,6 +302,7 @@ CPrecipitation NOAAWeatherFetcher::getOpenMeteoHistoricalPrecipitation(
     request.setRawHeader("User-Agent",
                          "DTRunner/1.0 (openhydroqual@example.com)");
 
+    request.setTransferTimeout(30000);   // 30 s: fail a hung fetch instead of blocking the event loop forever
     QNetworkReply *reply = manager->get(request);
     QEventLoop loop;
     connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
@@ -399,6 +402,7 @@ TimeSeries<double> NOAAWeatherFetcher::getOpenMeteoTimeSeries(
     request.setRawHeader("User-Agent",
                          "DTRunner/1.0 (openhydroqual@example.com)");
 
+    request.setTransferTimeout(30000);   // 30 s: fail a hung fetch instead of blocking the event loop forever
     QNetworkReply *reply = manager->get(request);
     QEventLoop loop;
     connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
@@ -498,6 +502,7 @@ TimeSeries<double> NOAAWeatherFetcher::getOpenMeteoHistoricalTimeSeries(
     request.setRawHeader("User-Agent",
                          "DTRunner/1.0 (openhydroqual@example.com)");
 
+    request.setTransferTimeout(30000);   // 30 s: fail a hung fetch instead of blocking the event loop forever
     QNetworkReply *reply = manager->get(request);
     QEventLoop loop;
     connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);

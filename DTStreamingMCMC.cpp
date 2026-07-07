@@ -852,6 +852,12 @@ DTCycleResult DTStreamingMCMC::runCycle(const QDateTime &deadline)
     const int clockStride = std::max(1, streamSettings.stepsPerClockCheck);
     while (true)
     {
+        // Stop at whichever comes first: the sweep cap or the wall-clock
+        // deadline. With a bounded (rolling) window the deadline rarely
+        // binds, so maxSweeps becomes the effective control.
+        if (streamSettings.maxSweeps > 0 &&
+            m_sweepIndex >= streamSettings.maxSweeps)
+            break;
         if (m_sweepIndex % clockStride == 0 &&
             QDateTime::currentDateTimeUtc() >= deadline)
             break;

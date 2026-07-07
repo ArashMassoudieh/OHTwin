@@ -21,6 +21,7 @@
 #include "DTAssimilation.h"
 #include "DTConfig.h"
 #include "System.h"
+#include "Script.h"
 #include "GA.h"
 #include "Object.h"
 #include "ErrorHandler.h"
@@ -516,6 +517,131 @@ bool DTAssimilation::runCalibration(QString &errorMessage)
 }
 
 // ---------------------------------------------------------------------------
+// injectCalibrationWeather
+// Fetch precipitation + the four Penman ET forcings over [tStart, tEnd] and
+// inject them into `sys`. Shared by the calibration solve and the rolling-
+// window spin-up. Best-effort: a failed fetch injects an empty series (the
+// solver then sees no forcing for that gap) but never fails the cycle.
+// ---------------------------------------------------------------------------
+bool DTAssimilation::injectCalibrationWeather(System &sys,
+                                              double tStart, double tEnd,
+                                              QString &errorMessage)
+{
+    Q_UNUSED(errorMessage);
+    const QDateTime windowStart = QDateTime::fromMSecsSinceEpoch(
+        static_cast<qint64>((tStart - 25569.0) * 86400000.0), Qt::UTC);
+    const QDateTime windowEnd = QDateTime::fromMSecsSinceEpoch(
+        static_cast<qint64>((tEnd - 25569.0) * 86400000.0), Qt::UTC);
+
+    std::cout << "[Assim] fetching weather for "
+              << windowStart.toString(Qt::ISODate).toStdString() << " → "
+              << windowEnd.toString(Qt::ISODate).toStdString() << "\n";
+
+    CPrecipitation precip = DTWeather::fetchPrecipitation(
+        m_config.weatherSource, m_config.latitude, m_config.longitude,
+        windowStart, windowEnd);
+    DTWeather::injectPrecipitation(&sys, precip);
+
+    const std::string etSource = "Evapotranspiration_Penman (Soil)";
+
+    const auto temp = DTWeather::fetchWeatherVariable(
+        m_config.weatherSource, "temperature_2m",
+        m_config.latitude, m_config.longitude, windowStart, windowEnd);
+    DTWeather::injectWeather(&sys, etSource, "Temperature", temp);
+
+    auto rh = DTWeather::fetchWeatherVariable(
+        m_config.weatherSource, "relative_humidity_2m",
+        m_config.latitude, m_config.longitude, windowStart, windowEnd);
+    rh = rh / 100.0;
+    DTWeather::injectWeather(&sys, etSource, "R_h", rh);
+
+    const auto wind = DTWeather::fetchWeatherVariable(
+        m_config.weatherSource, "windspeed_10m",
+        m_config.latitude, m_config.longitude, windowStart, windowEnd);
+    DTWeather::injectWeather(&sys, etSource, "wind_speed", wind);
+
+    const auto rad = DTWeather::fetchWeatherVariable(
+        m_config.weatherSource, "shortwave_radiation",
+        m_config.latitude, m_config.longitude, windowStart, windowEnd);
+    DTWeather::injectWeather(&sys, etSource, "solar_radiation", rad);
+
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// buildSpinupSnapshot
+// One MAP-parameterized forward solve from t0 to tStart, starting from cold
+// (script) initial conditions, whose captured end state becomes the fixed IC
+// for every MCMC chain in a rolling-window cycle. Writes a state-capturing
+// snapshot (SavetoJson calculatevalue=true) to spinPath.
+// ---------------------------------------------------------------------------
+bool DTAssimilation::buildSpinupSnapshot(double t0, double tStart,
+                                         const QString &spinPath,
+                                         QString &errorMessage)
+{
+    const std::string defaultTemplatePath =
+        QCoreApplication::applicationDirPath().toStdString() + "/../../resources/";
+    const std::string settingsFile = defaultTemplatePath + "settings.json";
+
+    // 1. Read the latest MAP parameter values from the current snapshot.
+    System mapSrc;
+    mapSrc.SetDefaultTemplatePath(defaultTemplatePath);
+    if (!mapSrc.ReadSystemSettingsTemplate(settingsFile) ||
+        !mapSrc.LoadfromJson(m_latestSnapshotPath))
+    {
+        errorMessage = "spin-up: cannot load MAP snapshot " + m_latestSnapshotPath;
+        return false;
+    }
+    const unsigned int np = mapSrc.ParametersCount();
+    if (np == 0)
+    {
+        errorMessage = "spin-up: no parameters in MAP snapshot";
+        return false;
+    }
+    std::vector<double> mapVals(np);
+    for (unsigned int i = 0; i < np; ++i)
+        mapVals[i] = mapSrc.Parameters()[i]->GetValue();
+
+    // 2. Cold-start a fresh model from the script (state at t0 = script ICs).
+    System spin;
+    spin.SetDefaultTemplatePath(defaultTemplatePath);
+    Script scr(m_config.scriptFile, &spin);
+    spin.CreateFromScript(scr, settingsFile);
+    if (spin.ParametersCount() != np)
+    {
+        errorMessage = QString("spin-up: script model has %1 parameters, "
+                               "snapshot has %2").arg(spin.ParametersCount()).arg(np);
+        return false;
+    }
+
+    // 3. Apply the MAP parameters.
+    for (unsigned int i = 0; i < np; ++i)
+        spin.SetParameterValue(static_cast<int>(i), mapVals[i]);
+    spin.ApplyParameters();
+
+    // 4. Window [t0, tStart] + weather forcing over it.
+    spin.SetProp("simulation_start_time", t0);
+    spin.SetProp("simulation_end_time",   tStart);
+    spin.SetSystemSettings();
+    spin.SetSilent(true);
+    QString wErr;
+    injectCalibrationWeather(spin, t0, tStart, wErr);
+
+    // 5. Solve and capture the end state (calculatevalue=true) at tStart.
+    if (!spin.Solve())
+    {
+        errorMessage = "spin-up: forward Solve failed over [t0, tStart]";
+        return false;
+    }
+    if (!spin.SavetoJson(spinPath.toStdString(), {}, false, true))
+    {
+        errorMessage = "spin-up: cannot write IC snapshot " + spinPath;
+        return false;
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // prepareCalibrationSystem
 // Solver-agnostic calibration prep, shared by the GA and MCMC branches:
 //   1. load the Settings template and the latest forward snapshot
@@ -549,10 +675,52 @@ bool DTAssimilation::prepareCalibrationSystem(System &sys,
         return false;
     }
 
-    std::cout << "[Assim] loading snapshot: "
-              << m_latestSnapshotPath.toStdString() << "\n";
+    // ---- Rolling calibration window ----
+    // The scoring window is [tStart, tEnd] with tStart = tEnd - window. When
+    // that start is later than the overall data start, a single MAP-
+    // parameterized spin-up establishes the model state at tStart and the
+    // calibration loads THAT snapshot as its base (so every chain shares the
+    // same initial condition). Otherwise the window spans the whole record
+    // and we load the latest forward snapshot directly (cold ICs at t0).
+    if (m_buffer.pointCount() == 0)
+    {
+        errorMessage = "buffer is empty — nothing to calibrate against";
+        return false;
+    }
+    const double tStartOverall = m_buffer.tMin();
+    tEnd = m_buffer.tMax();
+    const double windowDays = m_config.assimilation.calibrationWindowDays;
+    tStart = (windowDays > 0.0)
+                 ? std::max(tStartOverall, tEnd - windowDays)
+                 : tStartOverall;
 
-    // 1. Load System from the latest snapshot.
+    QString baseSnapshotPath = m_latestSnapshotPath;
+    if (tStart > tStartOverall + 1e-6)
+    {
+        const QString spinPath =
+            QString::fromStdString(m_config.assimilation.calibrationOutputDir)
+            + "/_spinup_ic.json";
+        QString spinErr;
+        if (buildSpinupSnapshot(tStartOverall, tStart, spinPath, spinErr))
+        {
+            baseSnapshotPath = spinPath;
+            std::cout << "[Assim] rolling window: spun up IC at t=" << tStart
+                      << " (scoring " << (tEnd - tStart) << " d of a "
+                      << (tEnd - tStartOverall) << " d record)\n";
+        }
+        else
+        {
+            std::cerr << "[Assim] WARNING: spin-up failed (" << spinErr.toStdString()
+                      << "); falling back to full window\n";
+            tStart = tStartOverall;   // safe degrade — never breaks the cycle
+        }
+    }
+
+    std::cout << "[Assim] loading snapshot: "
+              << baseSnapshotPath.toStdString() << "\n";
+
+    // 1. Load System from the base snapshot (spin-up IC when rolling, else the
+    //    latest forward snapshot).
     //
     // Settings template must be loaded before LoadfromJson, otherwise the
     // Settings vector is empty and named Settings objects (Optimizer, MCMC,
@@ -574,9 +742,9 @@ bool DTAssimilation::prepareCalibrationSystem(System &sys,
               << " objects)\n";
 
     try {
-        if (!sys.LoadfromJson(m_latestSnapshotPath))
+        if (!sys.LoadfromJson(baseSnapshotPath))
         {
-            errorMessage = "System::LoadfromJson failed for " + m_latestSnapshotPath;
+            errorMessage = "System::LoadfromJson failed for " + baseSnapshotPath;
             recordCalibrationFailure(calStart, errorMessage);
             return false;
         }
@@ -635,7 +803,18 @@ bool DTAssimilation::prepareCalibrationSystem(System &sys,
             continue;
         }
 
-        TimeSeries<double> series = m_buffer.series(name);
+        // Clamp observed data to the scoring window [tStart, tEnd]: with a
+        // rolling window the model is only solved over that span, so points
+        // before tStart have no modeled counterpart to compare against.
+        TimeSeries<double> full = m_buffer.series(name);
+        if (full.size() == 0) continue;
+        TimeSeries<double> series;
+        for (int p = 0; p < static_cast<int>(full.size()); ++p)
+        {
+            const double t = full.getTime(p);
+            if (t >= tStart - 1e-9 && t <= tEnd + 1e-9)
+                series.append(t, full.getValue(p));
+        }
         if (series.size() == 0) continue;
         obs->Variable("observed_data")->SetTimeSeries(series);
         ++matched;
@@ -653,17 +832,9 @@ bool DTAssimilation::prepareCalibrationSystem(System &sys,
     std::cout << "\n";
 
     // 4. Standard inverse-run prep (mirrors oninverserun).
-    // Adjust the simulation window to span all buffered observations,
-    // so the inverse solver evaluates each candidate over the full data
-    // window. The temporal kernel handles down-weighting of older
-    // observations.
-    if (m_buffer.pointCount() == 0)
-    {
-        errorMessage = "buffer is empty — nothing to calibrate against";
-        return false;
-    }
-    tStart = m_buffer.tMin();
-    tEnd   = m_buffer.tMax();
+    // The scoring window [tStart, tEnd] was computed above (rolling window;
+    // possibly the full record). The temporal kernel down-weights older
+    // observations WITHIN the window.
 
     // Read snapshot's window *before* we override it, for diagnostic
     double snapshotStart = -1.0, snapshotEnd = -1.0;
@@ -694,55 +865,16 @@ bool DTAssimilation::prepareCalibrationSystem(System &sys,
     sys.SetSystemSettings();
     sys.SetSilent(true);
 
-    // Inject precipitation covering the calibration window so the inverse
-    // solver's forward solves see the same forcing the truth twin saw.
+    // Inject precip + Penman forcings over the scoring window (shared with
+    // the spin-up via injectCalibrationWeather).
     {
-        // Convert OHQ day-serial to QDateTime.
-        const QDateTime windowStart =
-            QDateTime::fromMSecsSinceEpoch(
-                static_cast<qint64>((tStart - 25569.0) * 86400000.0),
-                Qt::UTC);
-        const QDateTime windowEnd =
-            QDateTime::fromMSecsSinceEpoch(
-                static_cast<qint64>((tEnd - 25569.0) * 86400000.0),
-                Qt::UTC);
-
-        std::cout << "[Assim] fetching precipitation for "
-                  << windowStart.toString(Qt::ISODate).toStdString()
-                  << " → "
-                  << windowEnd.toString(Qt::ISODate).toStdString() << "\n";
-
-        CPrecipitation precip = DTWeather::fetchPrecipitation(
-            m_config.weatherSource,
-            m_config.latitude,
-            m_config.longitude,
-            windowStart, windowEnd);
-
-        DTWeather::injectPrecipitation(&sys, precip);
-
-        const std::string etSource = "Evapotranspiration_Penman (Soil)";
-
-        const auto temp = DTWeather::fetchWeatherVariable(
-            m_config.weatherSource, "temperature_2m",
-            m_config.latitude, m_config.longitude, windowStart, windowEnd);
-        DTWeather::injectWeather(&sys, etSource, "Temperature", temp);
-
-        auto rh = DTWeather::fetchWeatherVariable(
-            m_config.weatherSource, "relative_humidity_2m",
-            m_config.latitude, m_config.longitude, windowStart, windowEnd);
-
-        rh = rh/100.0;
-        DTWeather::injectWeather(&sys, etSource, "R_h", rh);
-
-        const auto wind = DTWeather::fetchWeatherVariable(
-            m_config.weatherSource, "windspeed_10m",
-            m_config.latitude, m_config.longitude, windowStart, windowEnd);
-        DTWeather::injectWeather(&sys, etSource, "wind_speed", wind);
-
-        const auto rad = DTWeather::fetchWeatherVariable(
-            m_config.weatherSource, "shortwave_radiation",
-            m_config.latitude, m_config.longitude, windowStart, windowEnd);
-        DTWeather::injectWeather(&sys, etSource, "solar_radiation", rad);
+        QString wErr;
+        if (!injectCalibrationWeather(sys, tStart, tEnd, wErr))
+        {
+            errorMessage = wErr;
+            recordCalibrationFailure(calStart, errorMessage);
+            return false;
+        }
     }
 
     std::cout << "[Assim] ===== Calibration window =====\n"
@@ -968,6 +1100,7 @@ bool DTAssimilation::runCalibrationMCMC(System &sys,
     mcmc.SetParameters(settings);
 
     mcmc.streamSettings.realizationInterval = m_config.assimilation.mcmcRealizationInterval;
+    mcmc.streamSettings.maxSweeps           = m_config.assimilation.mcmcMaxSweeps;
 
     std::cout << "[Assim] MCMC configured from Settings 'MCMC' ("
               << settings->GetVars()->size() << " quans), window "

@@ -124,6 +124,23 @@ private:
                                   double &tStart, double &tEnd,
                                   const QDateTime &calStart,
                                   QString &errorMessage);
+
+    // Rolling-window support. When the scoring window start (tStart) is later
+    // than the overall data start (t0), buildSpinupSnapshot runs ONE forward
+    // solve from t0 to tStart using the latest MAP parameter set (read from
+    // the current snapshot) starting from cold/script initial conditions, and
+    // writes a snapshot whose embedded state is the model state at tStart.
+    // That snapshot then seeds every MCMC chain, so all chains share a fixed,
+    // MAP-consistent initial condition at the window start. Returns false (and
+    // sets errorMessage) on any failure; the caller falls back to the full
+    // window. injectCalibrationWeather patches precip + Penman forcings over
+    // [tStart, tEnd]; factored out so the spin-up and the calibration solve
+    // share it.
+    bool buildSpinupSnapshot(double t0, double tStart,
+                             const QString &spinPath, QString &errorMessage);
+    bool injectCalibrationWeather(System &sys, double tStart, double tEnd,
+                                  QString &errorMessage);
+
     bool runCalibrationGA(System &sys,
                           double tStart, double tEnd,
                           const QDateTime &calStart,

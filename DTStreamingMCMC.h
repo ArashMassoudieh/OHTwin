@@ -124,6 +124,7 @@ struct DTStreamingSettings
     double explorerFraction       = 0.03;  // chains seeded raw from the prior
 
     // --- cycle driver (Sec. 3.8) ---
+    int    maxSweeps              = 0;     // hard cap on sweeps per cycle (0 = deadline only)
     int    stepsPerClockCheck     = 1;     // chain-sweeps between deadline checks
     int    adaptationBlock        = 20;    // sweeps between proposal-scale adaptations
     // (short: streaming cycles are ~100 sweeps and the target

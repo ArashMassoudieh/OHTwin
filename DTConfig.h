@@ -135,6 +135,20 @@ struct AssimilationConfig
     std::string posteriorSnapshotPath;
 
     int mcmcRealizationInterval = 10;   // publish realization band + posterior dist every Nth FULL cycle
+
+    // --- rolling calibration window ---
+    // Scoring window length in simulated DAYS. The calibration solves and
+    // scores observations over [tEnd - calibrationWindowDays, tEnd]. When
+    // that start is later than the overall data start, a single MAP-
+    // parameterized spin-up solve establishes the initial state at the
+    // window start (see DTAssimilation). Keeps per-cycle solve cost bounded
+    // instead of growing with the whole record. <= 0 disables (full window).
+    double calibrationWindowDays = 365.0;
+
+    // Hard cap on ensemble sweeps per MCMC cycle. The cycle stops at
+    // whichever comes first: the wall-clock deadline or this many sweeps.
+    // <= 0 means "no cap" (deadline only).
+    int mcmcMaxSweeps = 300;
 };
 
 

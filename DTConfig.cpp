@@ -562,6 +562,14 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
         if (as.contains("mcmc_realization_interval"))
             assimilation.mcmcRealizationInterval =
                 as["mcmc_realization_interval"].toInt(10);
+
+        // Rolling calibration window (simulated days) and per-cycle sweep cap.
+        if (as.contains("calibration_window_days"))
+            assimilation.calibrationWindowDays =
+                as["calibration_window_days"].toDouble(365.0);
+        if (as.contains("mcmc_max_sweeps"))
+            assimilation.mcmcMaxSweeps =
+                as["mcmc_max_sweeps"].toInt(300);
     }
 
     // --- parameter_drift (optional) ---
