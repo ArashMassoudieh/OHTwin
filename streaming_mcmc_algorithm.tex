@@ -52,6 +52,53 @@ Section~\ref{sec:status}.
 \tableofcontents
 
 % =====================================================================
+\section{Notation}\label{sec:notation}
+% =====================================================================
+
+Symbols used throughout, in order of first appearance. Defaults for the
+tunable constants are collected in Section~\ref{sec:defaults}.
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Symbol & Meaning\\
+\midrule
+$\psi=(\theta,\sigma)$ & full parameter vector: physical params $\theta$ and error std.\ devs.\ $\sigma$\\
+$n_p$ & number of parameters (dimension of $\psi$)\\
+$N_c$ & number of chains in the ensemble (\param{number\_of\_chains})\\
+$\pi_t(\psi)$ & target posterior at window end $t_{\text{now}}$ (streaming)\\
+$\log\pi_t$ & log-posterior $=$ log-prior $+$ log-likelihood (Sec.~\ref{sec:target})\\
+$t_{\text{now}}$ & current calibration-window end (OHQ day-serial)\\
+$\delta$ & observation age $t_{\text{now}}-t_i$\\
+$w(\delta)$ & recency (forgetting) kernel weight, Eq.~\eqref{eq:kernel}\\
+$\Delta_0,\tau,\alpha$ & kernel constants (plateau length, scale, decay exponent)\\
+$\sigma$ & per-observation error standard deviation (part of $\psi$)\\
+$x,X$ & current / proposed chain position\\
+$s_i$ & per-parameter proposal scale (\code{pertcoeff}$_i$)\\
+$\log J$ & Hastings log-correction for log-normal proposals\\
+$\log A$ & MH log-acceptance ratio\\
+$W_{\max},\,W_{\text{eff}}$ & max / effective plateau-classifier window (\param{plateauWindow})\\
+$g$ & sweeps elapsed so far in the cycle\\
+$n$ & trace points used in the trend test, $n=\min(|\text{trace}|,W_{\text{eff}})$\\
+$y_k$ & $k$-th log-posterior trace value, $y_k\equiv\log\pi_t(\psi^{(k)})$\\
+$k,\bar k$ & step index and its window mean $(n-1)/2$\\
+$b$ & least-squares slope of $y$ vs.\ $k$\\
+$s$ & residual scatter of the trend fit\\
+$T$ & total trend across the window, $T=|b|(n-1)$\\
+$R$ & decision statistic (trend-to-scatter ratio) $R=T/s$\\
+$a$ & accepted steps within the window (motion guard)\\
+$f_P$ & plateaued fraction $=$ \#Plateaued chains $/\,N_c$\\
+$W_s$ & inter-cycle stability ring length (\param{stabilityWindow})\\
+$\psi^{(r)}_i$ & parameter $i$'s point estimate at ring entry $r$\\
+$N$ & pooled-sample count in a cycle\\
+$\Sigma$ & joint sample covariance of the pool\\
+$\gamma_k,\ \tau_{\text{int}}$ & lag-$k$ autocovariance and integrated autocorr.\ time (ESS)\\
+$C$ & realization-reservoir capacity (\param{realizationCount})\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% =====================================================================
 \section{Overview and terminology}
 % =====================================================================
 
@@ -218,9 +265,13 @@ A chain is forced to \textbf{Climbing} if either:
 \end{enumerate}
 
 \subsection{Trend and scatter}
-Over the last $n$ trace points $y_0,\dots,y_{n-1}$ (with index $k$ as the
-regressor, $\bar k = (n-1)/2$), fit a least-squares line and measure its
-residual scatter:
+Each chain records a trace of its \emph{log-posterior} values: one entry
+$y_k \equiv \log\pi_t\!\big(\psi^{(k)}\big)$ is appended per Metropolis
+step ($\code{chain.trace.push\_back(chain.logp)}$), holding the newly
+accepted value on an accept and the retained current value on a reject.
+Over the last $n$ trace points $y_0,\dots,y_{n-1}$ (with the step index
+$k$ as the regressor, $\bar k = (n-1)/2$), fit a least-squares line to
+$y$ versus $k$ and measure its residual scatter:
 \begin{equation}
   b = \frac{\sum_{k}(k-\bar k)(y_k-\bar y)}{\sum_k (k-\bar k)^2},
   \qquad
