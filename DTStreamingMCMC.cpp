@@ -26,6 +26,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QFile>
+#include <QFileInfo>
 #include <QSaveFile>
 
 #include <algorithm>
@@ -546,6 +547,59 @@ bool DTStreamingMCMC::appendParameterCIRow(const DTCycleResult &result,
     if (!f.open(mode))
     {
         errorMessage = "cannot open parameter CI CSV: " + csvPath;
+        return false;
+    }
+    f.write(out.toUtf8());
+    f.close();
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+bool DTStreamingMCMC::appendPooledSamples(const DTCycleResult &result,
+                                          const QString &csvPath,
+                                          double tNow,
+                                          QString &errorMessage)
+{
+    const unsigned int np = MCMC_Settings.number_of_parameters;
+    const std::vector<std::vector<double>> &pool = result.pooledSamples;
+    if (pool.empty())
+        return true;   // no post-plateau samples retained this cycle
+
+    // Header once: fresh deployment's first cycle, or when the file does not
+    // yet exist (feature enabled mid-run). Otherwise append. On resume
+    // m_cycleIndex is restored > 1, so we append rather than clobber.
+    const bool truncate   = (m_cycleIndex <= 1);
+    const bool needHeader = truncate || !QFileInfo::exists(csvPath);
+
+    QString out;
+    if (needHeader)
+    {
+        out += "cycle,t_now,converged";
+        for (unsigned int i = 0; i < np; ++i)
+            out += "," + QString::fromStdString(parameter(i)->GetName());
+        out += "\n";
+    }
+
+    // One row per pooled sample, tagged with its origin cycle.
+    const QString prefix = QString("%1,%2,%3")
+                               .arg(m_cycleIndex)
+                               .arg(tNow, 0, 'f', 6)
+                               .arg(result.converged ? 1 : 0);
+    for (const std::vector<double> &samp : pool)
+    {
+        out += prefix;
+        for (unsigned int i = 0; i < np; ++i)
+            out += "," + QString::number(i < samp.size() ? samp[i] : 0.0, 'g', 8);
+        out += "\n";
+    }
+
+    QFile f(csvPath);
+    const QIODevice::OpenMode mode =
+        QIODevice::WriteOnly | (truncate ? QIODevice::Truncate
+                                         : QIODevice::Append);
+    if (!f.open(mode))
+    {
+        errorMessage = "cannot open posterior samples CSV: " + csvPath;
         return false;
     }
     f.write(out.toUtf8());

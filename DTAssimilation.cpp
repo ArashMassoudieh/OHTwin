@@ -1259,6 +1259,15 @@ bool DTAssimilation::runCalibrationMCMC(System &sys,
             std::cerr << "[Assim] WARNING: " << ciErr.toStdString() << "\n";
     }
 
+    // Cumulative raw pooled samples (one row per draw, tagged by cycle) for
+    // building smooth publication distributions. EVERY cycle; appends.
+    {
+        const QString samplesPath = calibDir + "/posterior_samples.csv";
+        QString sErr;
+        if (!mcmc.appendPooledSamples(result, samplesPath, tEnd, sErr))
+            std::cerr << "[Assim] WARNING: " << sErr.toStdString() << "\n";
+    }
+
     // Realization band + posterior distribution: on cycle 1 (early look)
     // and every Nth cycle thereafter.
     const int cyc      = static_cast<int>(m_cyclesCompleted + 1);

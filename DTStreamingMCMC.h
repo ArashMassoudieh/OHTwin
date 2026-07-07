@@ -310,6 +310,21 @@ public:
                               double tNow,
                               QString &errorMessage);
 
+    // Append this cycle's full pooled posterior samples to a cumulative CSV,
+    // ONE ROW PER SAMPLE: cycle, t_now, converged, <param columns...>. Called
+    // every cycle (provisional included) so the raw draws accumulate across
+    // cycles for building smooth publication distributions -- the per-cycle
+    // pool is otherwise discarded after the summary/histogram are computed.
+    // The `cycle` column tags each sample with its origin so consumers can
+    // pool over a chosen (e.g. stationary) window; naively pooling ALL cycles
+    // mixes the sliding-window targets. Header written on cycle 1 or when the
+    // file does not yet exist (feature enabled mid-run); appends otherwise, so
+    // the record survives across cycles and restarts.
+    bool appendPooledSamples(const DTCycleResult &result,
+                             const QString &csvPath,
+                             double tNow,
+                             QString &errorMessage);
+
     // Append one compact JSON line for this cycle to the cumulative
     // history file consumed by the viewer (point estimate, posterior
     // percentiles, diagnostics -- never samples, so the file stays ~1 KB
