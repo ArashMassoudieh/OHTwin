@@ -987,6 +987,16 @@ DTCycleResult DTStreamingMCMC::runCycle(const QDateTime &deadline)
     }
 
     // --- convergence certification (quorum OR inter-cycle stability) ---
+    // Two independent paths to a FULL cycle:
+    //   quorum    -- within-cycle: >= quorumFraction of chains plateaued this
+    //                cycle. Compatible with genuine parameter drift.
+    //   stability -- inter-cycle fallback: the point estimate has moved less
+    //                than stabilityTol across the last stabilityWindow cycles
+    //                AND >= stabilityMinPlateaued of chains plateaued. NOTE:
+    //                this path presumes an approximately STATIONARY target,
+    //                so it is at odds with drift detection -- it can be turned
+    //                off with stabilityEnabled=false (mcmc_stability_enabled),
+    //                or its strictness tuned via stabilityTol / stabilityWindow.
     // Push this cycle's point estimate onto the stability ring first, so
     // streamStable() sees the current cycle.
     result.pointEstimate = posteriorMAP(result);
@@ -1000,6 +1010,7 @@ DTCycleResult DTStreamingMCMC::runCycle(const QDateTime &deadline)
 
     const bool byQuorum = quorumHolds();
     const bool byStability =
+        streamSettings.stabilityEnabled &&
         !byQuorum &&
         streamStable() &&
         plateauedFraction() >= streamSettings.stabilityMinPlateaued;

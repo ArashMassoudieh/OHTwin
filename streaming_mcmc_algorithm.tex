@@ -69,6 +69,9 @@ $N_c$ & number of chains in the ensemble (\param{number\_of\_chains})\\
 $\pi_t(\psi)$ & target posterior at window end $t_{\text{now}}$ (streaming)\\
 $\log\pi_t$ & log-posterior $=$ log-prior $+$ log-likelihood (Sec.~\ref{sec:target})\\
 $t_{\text{now}}$ & current calibration-window end (OHQ day-serial)\\
+$t_0$ & earliest observation in the record (overall start)\\
+$t_{\text{start}}$ & scored-window start $=\max(t_0,\ t_{\text{now}}-W_c)$\\
+$W_c$ & rolling-window length (\param{calibration\_window\_days})\\
 $\delta$ & observation age $t_{\text{now}}-t_i$\\
 $w(\delta)$ & recency (forgetting) kernel weight, Eq.~\eqref{eq:kernel}\\
 $\Delta_0,\tau,\alpha$ & kernel constants (plateau length, scale, decay exponent)\\
@@ -188,6 +191,39 @@ with $\theta$. (For log-normal error structure the same form is applied
 to log-transformed series.) The sampler stores honest log-posteriors:
 the log-prior and this likelihood only; the Hastings/Jacobian correction
 of Section~\ref{sec:proposal} is \emph{not} folded in.
+
+\subsection{Rolling calibration window and initial
+condition}\label{sec:window}
+The likelihood above runs over a \emph{bounded} data window, not the
+entire record. Let $t_0$ be the earliest observation and $t_{\text{now}}$
+the latest. With window length $W_c$ (\param{calibration\_window\_days}),
+the scored window is
+\begin{equation}
+  [t_{\text{start}},\,t_{\text{now}}],\qquad
+  t_{\text{start}} = \max\!\big(t_0,\; t_{\text{now}} - W_c\big).
+\end{equation}
+Observations older than $t_{\text{start}}$ are \emph{excluded from the
+solve entirely} (not merely down-weighted): the model is integrated only
+over $[t_{\text{start}}, t_{\text{now}}]$. This is what keeps the
+per-cycle cost bounded --- without it, each cycle re-integrates the whole
+growing record and the number of sweeps affordable under a fixed budget
+collapses as the run lengthens. The recency kernel of
+Eq.~\eqref{eq:kernel} then applies \emph{within} the window. Setting
+$W_c \le 0$ recovers the full-record window ($t_{\text{start}}=t_0$).
+
+\paragraph{Initial condition via a MAP spin-up.} When
+$t_{\text{start}} > t_0$ the solve no longer starts from the known cold
+(script) initial state, so the model state at $t_{\text{start}}$ must be
+established. Each cycle performs \emph{one} forward solve from $t_0$ to
+$t_{\text{start}}$ using the latest maximum-a-posteriori (MAP) parameter
+set, started from the cold initial state, and captures its end state.
+That state seeds \emph{every} chain, so all chains share a single,
+MAP-consistent initial condition at the window start; each chain then
+integrates $[t_{\text{start}}, t_{\text{now}}]$ from it under its own
+proposed parameters. The spin-up is one solve per cycle --- negligible
+against the $N_c \times$(sweeps) solves of the sampling loop --- and its
+cost is dominated by that loop even though it grows with $t_{\text{start}}$.
+A spin-up failure degrades safely to the full-record window.
 
 % =====================================================================
 \section{The Metropolis--Hastings ensemble}
@@ -341,48 +377,67 @@ The \emph{plateaued fraction} is the ensemble-wide readiness statistic
 % =====================================================================
 
 At cycle end (\code{runCycle}) the result is certified \textbf{FULL}
-(publishable posterior) or \textbf{PROVISIONAL} (point product only) by
-\emph{two independent paths}; a cycle is FULL if \emph{either} holds:
+(publishable posterior) or \textbf{PROVISIONAL} (point product only). The
+\emph{primary} criterion is a within-cycle quorum; an \emph{optional},
+weaker inter-cycle stability path may additionally certify:
 \begin{equation}
   \texttt{converged} \;=\; \text{(byQuorum)} \ \lor\ \text{(byStability)}.
 \end{equation}
+All thresholds below are configurable (\param{mcmc\_quorum\_fraction},
+\param{mcmc\_stability\_*}); the values shown are code defaults.
 
-\subsection{Path 1 --- within-cycle quorum}
+\subsection{Path 1 --- within-cycle quorum (primary)}
 \begin{equation}
   \text{byQuorum} \iff f_P \ge \param{quorumFraction},
-  \qquad \param{quorumFraction}=0.5.
+  \qquad \param{quorumFraction}=0.5\ \text{(default)}.
 \end{equation}
-At least half the chains have independently reached stationarity within
-this single cycle---the primary, strongest certification.
+At least a fraction $q$ of the chains have \emph{independently} reached
+stationarity within this single cycle. This is a purely within-cycle test,
+so it is \textbf{compatible with genuine parameter drift}: a certified
+cycle whose estimate differs from the previous one records a real, tracked
+change, not a convergence failure. Lowering $q$ certifies a larger
+proportion of cycles (fewer plateaued chains required); it is the natural
+knob for trading certification rate against per-cycle evidence.
 
-\subsection{Path 2 --- inter-cycle stability}
-For the streaming regime where the data record grows faster than a
-within-cycle quorum can form (late cycles have too few sweeps to plateau
-half the chains), a weaker path certifies convergence when the
-\emph{point estimate has settled across cycles}. A ring buffer holds the
-last $W_s=\param{stabilityWindow}$ (default $5$) cycle point estimates.
-The stream is \emph{stable} (\code{streamStable}) iff the ring is full and
+\subsection{Path 2 --- inter-cycle stability (optional fallback)}
+This weaker path targets the regime where a within-cycle quorum cannot
+form (late cycles with few sweeps) but the point estimate has
+\emph{settled across cycles}. A ring buffer holds the last
+$W_s=\param{stabilityWindow}$ (default $5$) cycle point estimates, and the
+stream is \emph{stable} (\code{streamStable}) iff the ring is full and
 \emph{every} parameter's spread across the ring is small relative to its
 recent mean:
 \begin{equation}
   \text{streamStable} \iff
   \max_{i}\ \frac{\max_r \psi_i^{(r)} - \min_r \psi_i^{(r)}}
   {\max(|\bar\psi_i|,\,10^{-9})} \;\le\; \param{stabilityTol},
-  \qquad \param{stabilityTol}=0.02,
+  \qquad \param{stabilityTol}=0.02\ \text{(default)},
 \end{equation}
-where $r$ ranges over the $W_s$ ring entries. The small floor $10^{-9}$
-prevents a parameter sitting near zero from tripping the test on absolute
-noise. Stability is accepted \emph{only if a quorum did not already
-hold}, and additionally requires a minimum plateaued fraction so the
-partial pool is trustworthy:
+with the certified condition
 \begin{equation}
-  \text{byStability} \iff
+  \text{byStability} \iff \param{stabilityEnabled}\ \wedge\
   (\neg\,\text{byQuorum}) \ \wedge\ \text{streamStable} \ \wedge\
-  f_P \ge \param{stabilityMinPlateaued},
-  \quad \param{stabilityMinPlateaued}=0.1.
+  f_P \ge \param{stabilityMinPlateaued}\ (=0.1).
 \end{equation}
-Crucially, stability relaxes only \emph{how many} plateaued chains are
-required to trust the pool---never \emph{which} samples pool. Only the
+
+\paragraph{Caveat --- stationarity vs.\ drift.} This path
+\emph{presumes an approximately stationary target}: it certifies only when
+the point estimate stops moving. That is at odds with \emph{detecting
+parameter drift}, a core aim of the streaming method --- a genuinely
+drifting parameter would be (correctly) tracked cycle to cycle, yet this
+test would read the motion as non-convergence and withhold certification.
+It is therefore \textbf{off by default in drift studies}
+(\param{stabilityEnabled}=false, config key
+\param{mcmc\_stability\_enabled}), leaving the within-cycle quorum as the
+sole criterion. It is retained as an opt-in fallback for
+stationary-target deployments. A further subtlety: the point estimate is
+the sampled MAP (the mode), which for a \emph{non-identifiable} parameter
+wanders randomly inside its (stable, wide) posterior, so the mode-based
+spread overstates drift for such parameters --- another reason the path is
+unsuitable when non-identifiability is expected.
+
+Either way, certification relaxes only \emph{how many} plateaued chains
+are required to trust the pool---never \emph{which} samples pool. Only the
 current cycle's plateaued samples are ever used; no cross-cycle mixing
 occurs. The certification source (\code{"quorum"}, \code{"stability"}, or
 \code{""}) is recorded in the snapshot and history for auditing.
@@ -513,24 +568,41 @@ written to a single combined file with columns labelled
 the pooled samples with bin count $\mathrm{clamp}(\lfloor\sqrt N\rceil,
 10, 60)$, plus a mean/stdev/$2.5/50/97.5$ CI table.
 
+\subsection{Cumulative posterior samples}
+For building smooth publication distributions, \code{appendPooledSamples}
+appends every cycle's raw pooled draws to a single running file
+(\code{posterior\_samples.csv}), one row per draw, tagged with its origin
+\code{cycle}, \code{t\_now}, and \code{converged} flag. The per-cycle pool
+is otherwise discarded after the summary/histogram are computed, so this
+file is the only cumulative record of the individual draws. Because each
+cycle targets its own (sliding-window) posterior, downstream code should
+pool over a chosen set of cycles rather than the entire file; the tags
+make that selection explicit.
+
 % =====================================================================
 \section{Cycle driver and wall-clock budget}
 % =====================================================================
 
-A cycle is bounded by a wall-clock deadline (\code{runCycle}), derived
-from the calibration cadence: budget $=$ \param{poll\_interval} wall-clock
-duration minus a safety margin (or an explicit \param{mcmc\_budget}). The
-deadline is checked between sweeps (every \param{stepsPerClockCheck}
-sweeps); an in-flight sweep is never aborted, so a cycle may overrun by at
-most one forward-solve duration, which the margin absorbs. If the deadline
-is already past on entry, the cycle degrades to a zero-sweep provisional
-result rather than failing.
+A cycle stops at \emph{whichever comes first}: a wall-clock deadline or a
+sweep cap (\code{runCycle}). The deadline is derived from the calibration
+cadence: budget $=$ \param{poll\_interval} wall-clock duration minus a
+safety margin (or an explicit \param{mcmc\_budget}). The cap is
+\param{mcmc\_max\_sweeps} (default $300$; $\le 0$ disables it, leaving the
+deadline as the sole limit). With the bounded rolling window
+(Section~\ref{sec:window}) keeping solve cost roughly constant, the sweep
+cap is typically the effective control on cheap cycles and the deadline on
+expensive ones. The deadline is checked between sweeps (every
+\param{stepsPerClockCheck} sweeps); an in-flight sweep is never aborted, so
+a cycle may overrun by at most one forward-solve duration, which the margin
+absorbs. If the deadline is already past on entry, the cycle degrades to a
+zero-sweep provisional result rather than failing.
 
 \begin{algorithm}[h]
 \caption{One calibration cycle (\code{runCycle}), as implemented}
 \begin{algorithmic}[1]
+\State if window start $> t_0$: MAP spin-up $t_0\!\to\!t_{\text{start}}$ $\Rightarrow$ shared initial condition (Section~\ref{sec:window})
 \State choose seed mode from previous snapshot; seed and evaluate all $N_c$ chains
-\While{now $<$ deadline}
+\While{now $<$ deadline \textbf{and} sweeps $<$ \param{maxSweeps}}
   \ForAll{chains $c$ in parallel}
      \State one MH step (one forward solve); classify $c$ (Section~\ref{sec:plateau})
      \State if $c$ plateaued and step accepted: retain sample; offer outputs to reservoir
@@ -538,8 +610,7 @@ result rather than failing.
   \State \stub{(serial interventions: dissolution / cull --- currently stubs)}
   \If{sweep index $\bmod$ \param{adaptationBlock} $= 0$} adapt proposal scales (frozen after quorum) \EndIf
 \EndWhile
-\State push point estimate onto stability ring
-\State certify: \texttt{converged} $\gets$ byQuorum $\lor$ byStability (Section~\ref{sec:convergence})
+\State certify: \texttt{converged} $\gets$ byQuorum $\lor$ byStability\ (stability optional; Section~\ref{sec:convergence})
 \State assemble pool; compute summaries + ESS if pool non-empty
 \State \Return cycle result (FULL or PROVISIONAL)
 \end{algorithmic}
@@ -551,12 +622,18 @@ result rather than failing.
 
 Streaming-specific knobs live in \code{DTStreamingSettings}; the base MCMC
 knobs (chains, threads, target acceptance, scale-change factor) are parsed
-from the model file's \code{MCMC} settings object.
+from the model file's \code{MCMC} settings object. Entries marked
+\textsuperscript{$\dagger$} are set per deployment from \code{config.json}
+(keys in parentheses); the rest are code defaults.
 
 \begin{center}
 \begin{tabular}{@{}lll@{}}
 \toprule
 Symbol / setting & Default & Role\\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Rolling window \& driver (\S\ref{sec:window}, \S\ref{sec:convergence})}}\\
+\param{calibrationWindowDays}\textsuperscript{$\dagger$} & $365$ & scored-window length (\param{calibration\_window\_days}); $\le0$ = full record\\
+\param{maxSweeps}\textsuperscript{$\dagger$} & $300$ & per-cycle sweep cap (\param{mcmc\_max\_sweeps}); $\le0$ = deadline only\\
 \midrule
 \multicolumn{3}{@{}l}{\textit{Plateau classifier (\S\ref{sec:plateau})}}\\
 \param{plateauWindow} & $60$ & max trace length for the trend test\\
@@ -566,10 +643,11 @@ Symbol / setting & Default & Role\\
 \param{minAcceptedFraction} & $0.05$ & motion (anti-stagnation) floor\\
 \midrule
 \multicolumn{3}{@{}l}{\textit{Convergence (\S\ref{sec:convergence})}}\\
-\param{quorumFraction} & $0.5$ & plateaued fraction for byQuorum\\
-\param{stabilityWindow} & $5$ & cycles compared for byStability\\
-\param{stabilityTol} & $0.02$ & max relative point-estimate drift\\
-\param{stabilityMinPlateaued} & $0.1$ & plateaued floor to trust a partial pool\\
+\param{quorumFraction}\textsuperscript{$\dagger$} & $0.5$ & plateaued fraction for byQuorum (\param{mcmc\_quorum\_fraction})\\
+\param{stabilityEnabled}\textsuperscript{$\dagger$} & \code{true} & enable inter-cycle path (\param{mcmc\_stability\_enabled})\\
+\param{stabilityWindow}\textsuperscript{$\dagger$} & $5$ & cycles compared for byStability\\
+\param{stabilityTol}\textsuperscript{$\dagger$} & $0.02$ & max relative point-estimate drift\\
+\param{stabilityMinPlateaued}\textsuperscript{$\dagger$} & $0.1$ & plateaued floor to trust a partial pool\\
 \midrule
 \multicolumn{3}{@{}l}{\textit{Driver \& adaptation}}\\
 \param{adaptationBlock} & $20$ & sweeps between scale adaptations\\
@@ -577,7 +655,7 @@ Symbol / setting & Default & Role\\
 \midrule
 \multicolumn{3}{@{}l}{\textit{Predictive products}}\\
 \param{realizationCount} & $100$ & reservoir size (predictive band)\\
-\param{realizationInterval} & $10$ & publish band/dist every $N$th cycle\\
+\param{realizationInterval}\textsuperscript{$\dagger$} & $10$ & publish band/dist every $N$th cycle (\param{mcmc\_realization\_interval})\\
 \midrule
 \multicolumn{3}{@{}l}{\textit{Designed but stubbed (\S\ref{sec:status})}}\\
 \param{cullEnabled} & \code{true} & (cull check is a stub)\\

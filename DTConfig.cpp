@@ -570,6 +570,21 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
         if (as.contains("mcmc_max_sweeps"))
             assimilation.mcmcMaxSweeps =
                 as["mcmc_max_sweeps"].toInt(300);
+        if (as.contains("mcmc_quorum_fraction"))
+            assimilation.mcmcQuorumFraction =
+                as["mcmc_quorum_fraction"].toDouble(0.5);
+        if (as.contains("mcmc_stability_enabled"))
+            assimilation.mcmcStabilityEnabled =
+                as["mcmc_stability_enabled"].toBool(true);
+        if (as.contains("mcmc_stability_window"))
+            assimilation.mcmcStabilityWindow =
+                as["mcmc_stability_window"].toInt(5);
+        if (as.contains("mcmc_stability_tol"))
+            assimilation.mcmcStabilityTol =
+                as["mcmc_stability_tol"].toDouble(0.02);
+        if (as.contains("mcmc_stability_min_plateaued"))
+            assimilation.mcmcStabilityMinPlateaued =
+                as["mcmc_stability_min_plateaued"].toDouble(0.1);
     }
 
     // --- parameter_drift (optional) ---
