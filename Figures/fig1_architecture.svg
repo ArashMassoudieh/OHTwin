@@ -1,0 +1,136 @@
+<svg viewBox="0 0 1080 660" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+      <path d="M0,0 L9,4 L0,8 z" fill="#555555"/>
+    </marker>
+    <marker id="arrTan" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+      <path d="M0,0 L9,4 L0,8 z" fill="#8a6a1a"/>
+    </marker>
+    <marker id="arrGray" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+      <path d="M0,0 L9,4 L0,8 z" fill="#888888"/>
+    </marker>
+  </defs>
+
+  <!-- ================= LEFT COLUMN: context ================= -->
+
+  <!-- Sensor observation stream -->
+  <rect x="25" y="75" width="225" height="50" rx="10" fill="#f7f7f7" stroke="#999999" stroke-width="1.2" stroke-dasharray="5,3"/>
+  <text x="137" y="96" text-anchor="middle" font-size="12" fill="#444444">Sensor observation</text>
+  <text x="137" y="112" text-anchor="middle" font-size="12" fill="#444444">stream y&#8305;&#8317;&#690;&#8318;</text>
+
+  <!-- label on obs arrow -->
+  <text x="137" y="146" text-anchor="middle" font-size="10" fill="#666666" font-style="italic">record grows each cycle;</text>
+  <text x="137" y="159" text-anchor="middle" font-size="10" fill="#666666" font-style="italic">recency kernel w(&#948;) applied</text>
+
+  <!-- Forward loop -->
+  <rect x="25" y="195" width="225" height="86" rx="6" fill="#EAF1F8" stroke="#4A6FA5" stroke-width="1.4"/>
+  <text x="137" y="214" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#2c4a75">Forward simulation loop (&#916;)</text>
+  <text x="137" y="231" text-anchor="middle" font-size="10.5" fill="#2c4a75">propagates posterior draws: nowcast +</text>
+  <text x="137" y="245" text-anchor="middle" font-size="10.5" fill="#2c4a75">forecast with 95% credible bands</text>
+  <text x="137" y="263" text-anchor="middle" font-size="10" font-style="italic" fill="#2c4a75">loop architecture: Shakouri et al. (2026)</text>
+
+  <!-- Snapshot store -->
+  <rect x="25" y="520" width="225" height="76" rx="6" fill="#EDEDF5" stroke="#6A6A9A" stroke-width="1.4"/>
+  <text x="137" y="548" text-anchor="middle" font-size="12" font-weight="bold" fill="#3d3d6b">Versioned on-disk snapshots</text>
+  <text x="137" y="566" text-anchor="middle" font-size="10.5" fill="#3d3d6b">forward S(t) &#183; calibrated S<tspan dy="3" font-size="8">cal</tspan><tspan dy="-3">(&#952;&#770; + posterior draws)</tspan></text>
+
+  <!-- forward <-> snapshots arrows -->
+  <line x1="110" y1="520" x2="110" y2="284" stroke="#555555" stroke-width="1.3" marker-end="url(#arr)"/>
+  <text x="101" y="402" text-anchor="middle" font-size="9.5" fill="#555555" transform="rotate(-90 101 402)">adopt S<tspan dy="2.5" font-size="7.5">cal</tspan><tspan dy="-2.5"> (&#952;&#770; + draws) at next tick</tspan></text>
+  <line x1="168" y1="281" x2="168" y2="517" stroke="#555555" stroke-width="1.3" marker-end="url(#arr)"/>
+  <text x="180" y="402" text-anchor="middle" font-size="9.5" fill="#555555" transform="rotate(-90 180 402)">write forward S(t)</text>
+
+  <!-- obs -> sampling elbow -->
+  <path d="M 250 100 L 260 100 L 260 210 L 292 210" fill="none" stroke="#555555" stroke-width="1.3" marker-end="url(#arr)"/>
+
+  <!-- ================= MAIN CONTAINER: assimilation cycle ================= -->
+
+  <rect x="270" y="40" width="500" height="570" rx="8" fill="#FBF6EA" stroke="#B07D2B" stroke-width="1.6"/>
+  <text x="520" y="62" text-anchor="middle" font-size="14" font-weight="bold" fill="#7A5A17">Streaming MCMC assimilation &#8212; cycle k</text>
+  <text x="520" y="79" text-anchor="middle" font-size="11" font-style="italic" fill="#7A5A17">period &#916;<tspan dy="3" font-size="8">cal</tspan><tspan dy="-3"> &#183; hard wall-clock budget B</tspan></text>
+
+  <!-- Box 1: warm start -->
+  <rect x="295" y="92" width="380" height="58" rx="5" fill="#FAF3E3" stroke="#B07D2B" stroke-width="1.3"/>
+  <text x="485" y="110" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#5c440f">Warm start</text>
+  <text x="485" y="127" text-anchor="middle" font-size="10.5" fill="#5c440f">chain states {&#952;&#8317;&#7580;&#8318;} and proposal scales from cycle k&#8722;1;</text>
+  <text x="485" y="141" text-anchor="middle" font-size="10.5" fill="#5c440f">model baseline reloaded from latest disk snapshot</text>
+
+  <!-- Box 2: sampling -->
+  <rect x="295" y="178" width="380" height="64" rx="5" fill="#FAF3E3" stroke="#B07D2B" stroke-width="1.3"/>
+  <text x="485" y="197" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#5c440f">Multi-chain Metropolis sampling</text>
+  <text x="485" y="214" text-anchor="middle" font-size="10.5" fill="#5c440f">chain-private model copies; wall-clock-bounded sweeps;</text>
+  <text x="485" y="228" text-anchor="middle" font-size="10.5" fill="#5c440f">target: kernel-weighted posterior over the growing record</text>
+
+  <!-- Box 3: plateau classifier -->
+  <rect x="295" y="272" width="380" height="64" rx="5" fill="#FAF3E3" stroke="#B07D2B" stroke-width="1.3"/>
+  <text x="485" y="291" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#5c440f">Per-chain plateau classifier</text>
+  <text x="485" y="308" text-anchor="middle" font-size="10.5" fill="#5c440f">trajectory-based burn-in exclusion; sweep-adaptive window,</text>
+  <text x="485" y="322" text-anchor="middle" font-size="10.5" fill="#5c440f">stagnation guard, hysteresis</text>
+
+  <!-- Box 4: pool -->
+  <rect x="295" y="366" width="380" height="56" rx="5" fill="#FAF3E3" stroke="#B07D2B" stroke-width="1.3"/>
+  <text x="485" y="385" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#5c440f">Pool post-plateau samples</text>
+  <text x="485" y="404" text-anchor="middle" font-size="10.5" fill="#5c440f">posterior medians, 95% credible intervals, Geyer ESS</text>
+
+  <!-- Gate diamond -->
+  <polygon points="385,475 485,442 585,475 485,508" fill="#F3E6C8" stroke="#B07D2B" stroke-width="1.4"/>
+  <text x="485" y="471" text-anchor="middle" font-size="12" font-weight="bold" fill="#5c440f">Certification</text>
+  <text x="485" y="487" text-anchor="middle" font-size="12" font-weight="bold" fill="#5c440f">gate</text>
+
+  <!-- Box 6: publish -->
+  <rect x="295" y="532" width="380" height="56" rx="5" fill="#FAF3E3" stroke="#B07D2B" stroke-width="1.3"/>
+  <text x="485" y="551" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#5c440f">Publish (cycle end)</text>
+  <text x="485" y="570" text-anchor="middle" font-size="10.5" fill="#5c440f">calibrated snapshot &#952;&#770;, parameter CI rows, posterior sample</text>
+
+  <!-- pipeline arrows -->
+  <line x1="485" y1="150" x2="485" y2="175" stroke="#8a6a1a" stroke-width="1.4" marker-end="url(#arrTan)"/>
+  <line x1="485" y1="242" x2="485" y2="269" stroke="#8a6a1a" stroke-width="1.4" marker-end="url(#arrTan)"/>
+  <line x1="485" y1="336" x2="485" y2="363" stroke="#8a6a1a" stroke-width="1.4" marker-end="url(#arrTan)"/>
+  <line x1="485" y1="422" x2="485" y2="439" stroke="#8a6a1a" stroke-width="1.4" marker-end="url(#arrTan)"/>
+  <line x1="485" y1="508" x2="485" y2="529" stroke="#8a6a1a" stroke-width="1.4" marker-end="url(#arrTan)"/>
+  <text x="497" y="524" text-anchor="start" font-size="9.5" fill="#8a6a1a" font-style="italic">certified or provisional (flagged)</text>
+
+  <!-- loop-back rail (left, inside container) -->
+  <path d="M 295 545 L 282 545 L 282 121 L 292 121" fill="none" stroke="#8a6a1a" stroke-width="1.4" stroke-dasharray="6,3" marker-end="url(#arrTan)"/>
+  <text x="277" y="333" text-anchor="middle" font-size="9.5" fill="#8a6a1a" transform="rotate(-90 277 333)">terminal ensemble + proposal scales seed cycle k+1</text>
+
+  <!-- publish -> snapshots -->
+  <path d="M 295 575 L 253 575" fill="none" stroke="#555555" stroke-width="1.3" marker-end="url(#arr)"/>
+  <text x="274" y="568" text-anchor="middle" font-size="9.5" fill="#555555">write</text>
+
+  <!-- ================= RIGHT COLUMN: by-products + gate inset ================= -->
+
+  <!-- reservoir -->
+  <rect x="800" y="170" width="250" height="70" rx="6" fill="#F2F2F2" stroke="#888888" stroke-width="1.3"/>
+  <text x="925" y="190" text-anchor="middle" font-size="12" font-weight="bold" fill="#444444">Realization reservoir</text>
+  <text x="925" y="207" text-anchor="middle" font-size="10.5" fill="#444444">uniform sample of N output trajectories</text>
+  <text x="925" y="221" text-anchor="middle" font-size="10.5" fill="#444444">captured during sampling (no extra solves)</text>
+
+  <line x1="675" y1="207" x2="797" y2="207" stroke="#888888" stroke-width="1.3" stroke-dasharray="5,3" marker-end="url(#arrGray)"/>
+
+  <!-- predictive band -->
+  <rect x="800" y="290" width="250" height="70" rx="6" fill="#F2F2F2" stroke="#888888" stroke-width="1.3"/>
+  <text x="925" y="310" text-anchor="middle" font-size="12" font-weight="bold" fill="#444444">95% posterior-predictive band</text>
+  <text x="925" y="327" text-anchor="middle" font-size="10.5" fill="#444444">appended over the cycle's incremental</text>
+  <text x="925" y="341" text-anchor="middle" font-size="10.5" fill="#444444">window; continuous ribbon across cycles</text>
+
+  <line x1="925" y1="240" x2="925" y2="287" stroke="#888888" stroke-width="1.3" marker-end="url(#arrGray)"/>
+
+  <!-- certification inset -->
+  <rect x="800" y="405" width="250" height="150" rx="6" fill="#FFFFFF" stroke="#B07D2B" stroke-width="1.3" stroke-dasharray="4,3"/>
+  <text x="925" y="426" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#5c440f">Certification gate outcomes</text>
+
+  <circle cx="812" cy="446" r="4" fill="#2E7D32"/>
+  <text x="822" y="450" font-size="10.5" fill="#333333"><tspan font-weight="bold">certified &#183; quorum:</tspan></text>
+  <text x="822" y="464" font-size="10.5" fill="#333333">&#8805; q fraction of chains plateaued</text>
+
+  <circle cx="812" cy="484" r="4" fill="#1B7A70"/>
+  <text x="822" y="488" font-size="10.5" fill="#333333"><tspan font-weight="bold">certified &#183; stability:</tspan></text>
+  <text x="822" y="502" font-size="10.5" fill="#333333">summaries agree over last 5 cycles</text>
+
+  <circle cx="812" cy="522" r="4" fill="#E6A817"/>
+  <text x="822" y="526" font-size="10.5" fill="#333333"><tspan font-weight="bold">provisional:</tspan></text>
+  <text x="822" y="540" font-size="10.5" fill="#333333">published flagged; zero-width band point</text>
+
+  <line x1="585" y1="475" x2="797" y2="475" stroke="#B07D2B" stroke-width="1.2" stroke-dasharray="4,3"/>
+</svg>
