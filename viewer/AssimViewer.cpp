@@ -896,7 +896,9 @@ void AssimViewer::updateParameterSeries(const QVector<CycleSummary> &cycles)
         if (yMax > yMin)
         {
             const double pad = (yMax - yMin) * 0.08 + 1e-9;
-            pp.yAxis->setRange(yMin - pad, yMax + pad);
+            // These quantities are physically non-negative; never let the
+            // padded axis dip below zero.
+            pp.yAxis->setRange(std::max(0.0, yMin - pad), yMax + pad);
         }
     }
 }
@@ -990,7 +992,13 @@ void AssimViewer::updatePosteriorDistCharts(
                 a->setGridLineColor(kGridColor);
                 a->setLinePenColor(kGridColor);
             }
-            dp.yAxis->setLabelFormat("%.0f");
+            // Both axes carry continuous values: X is the parameter value
+            // (some are ~1e-3, e.g. Std_PondWaterDepth) and Y is a normalized
+            // probability density (integrates to 1), often fractional and
+            // spanning orders of magnitude -- so use general precision, not
+            // an integer format.
+            dp.xAxis->setLabelFormat("%.3g");
+            dp.yAxis->setLabelFormat("%.2g");
             dp.chart->addAxis(dp.xAxis, Qt::AlignBottom);
             dp.chart->addAxis(dp.yAxis, Qt::AlignLeft);
 
@@ -1188,7 +1196,9 @@ void AssimViewer::updateDiagnosticsSeries(const QVector<CycleSummary> &cycles)
         const double pad = (yMax > yMin)
                                ? (yMax - yMin) * 0.08
                                : std::max(0.5, std::abs(yMax) * 0.1);
-        dp.yAxis->setRange(yMin - pad, yMax + pad);
+        // Sampler diagnostics (ESS, plateaued fraction, acceptance rate, pool
+        // size) are all non-negative; keep the axis floor at zero.
+        dp.yAxis->setRange(std::max(0.0, yMin - pad), yMax + pad);
 
         dp.dateAxis->setRange(
             QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(xMin)),
@@ -1503,11 +1513,13 @@ void AssimViewer::updateComparisonPanels()
         if (yMax > yMin)
         {
             const double pad = (yMax - yMin) * 0.05 + 1e-9;
-            p.yAxis->setRange(yMin - pad, yMax + pad);
+            // Observed/modeled quantities (flows, depths, moisture) are
+            // non-negative; keep the padded axis floor at zero.
+            p.yAxis->setRange(std::max(0.0, yMin - pad), yMax + pad);
         }
         else if (yMax == yMin)
         {
-            p.yAxis->setRange(yMin - 1.0, yMax + 1.0);
+            p.yAxis->setRange(std::max(0.0, yMin - 1.0), yMax + 1.0);
         }
     }
 }
