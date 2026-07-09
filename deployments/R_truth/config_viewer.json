@@ -1,0 +1,7 @@
+{
+    "csv_url":                "http://localhost:8091/outputs/selected_output.csv",
+    "viz_url":                "http://localhost:8091/outputs/viz.svg",
+    "viz_state_url":          "http://localhost:8091/outputs/viz_state.json",
+    "forecast_viz_url":       "http://localhost:8091/outputs/forecast_viz.svg",
+    "forecast_viz_state_url": "http://localhost:8091/outputs/forecast_viz_state.json"
+}
