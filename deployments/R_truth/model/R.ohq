@@ -26,8 +26,8 @@ setvalue; object=system, quantity=alloutputfile, value=output.txt
 setvalue; object=system, quantity=observed_outputfile, value=observedoutput.txt
 setvalue; object=system, quantity=simulation_end_time, value=40542.8
 setvalue; object=system, quantity=simulation_start_time, value=40178.8
-setvalue; object=system, quantity=maxpop, value=40
-setvalue; object=system, quantity=ngen, value=40
+setvalue; object=system, quantity=maxpop, value=20
+setvalue; object=system, quantity=ngen, value=4
 setvalue; object=system, quantity=numthreads, value=8
 setvalue; object=system, quantity=outputfile, value=/mnt/3rd900/Projects/DryWellScriptGenerator/Models/OHQ_output.txt
 setvalue; object=system, quantity=pcross, value=1

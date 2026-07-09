@@ -26,8 +26,8 @@ setvalue; object=system, quantity=alloutputfile, value=output.txt
 setvalue; object=system, quantity=observed_outputfile, value=observedoutput.txt
 setvalue; object=system, quantity=simulation_end_time, value=40542.8
 setvalue; object=system, quantity=simulation_start_time, value=40178.8
-setvalue; object=system, quantity=maxpop, value=40
-setvalue; object=system, quantity=ngen, value=40
+setvalue; object=system, quantity=maxpop, value=20
+setvalue; object=system, quantity=ngen, value=4
 setvalue; object=system, quantity=numthreads, value=8
 setvalue; object=system, quantity=outputfile, value=/mnt/3rd900/Projects/DryWellScriptGenerator/Models/OHQ_output.txt
 setvalue; object=system, quantity=pcross, value=1
@@ -40,7 +40,7 @@ setvalue; object=system, quantity=jacobian_method, value=Inverse Jacobian
 setvalue; object=system, quantity=max_timestep_decrease_factor, value=100000
 setvalue; object=system, quantity=max_timestep_increase_factor, value=50
 setvalue; object=system, quantity=maximum_number_of_matrix_inverstions, value=200000
-setvalue; object=system, quantity=maximum_time_allowed, value=86400
+setvalue; object=system, quantity=maximum_time_allowed, value=3600
 setvalue; object=system, quantity=minimum_timestep, value=1e-06
 setvalue; object=system, quantity=n_threads, value=4
 setvalue; object=system, quantity=nr_timestep_reduction_factor, value=0.75

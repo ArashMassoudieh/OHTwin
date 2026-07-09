@@ -1,6 +1,6 @@
 {
     "deployment": {
-        "name": "R",
+        "name": "R_truth",
         "model_file": "model/R_LF.ohq",
         "viz_file": "viz_r_lf.json",
         "port": 8091
