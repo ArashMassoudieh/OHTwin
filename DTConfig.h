@@ -149,6 +149,19 @@ struct AssimilationConfig
     // whichever comes first: the wall-clock deadline or this many sweeps.
     // <= 0 means "no cap" (deadline only).
     int mcmcMaxSweeps = 300;
+
+    // Certification quorum: a cycle is certified FULL iff at least this
+    // fraction of chains reached stationarity within the cycle. Primary
+    // criterion; lower it to certify a larger proportion of cycles.
+    double mcmcQuorumFraction = 0.5;
+
+    // Inter-cycle stability certification (weaker fallback path, presumes an
+    // approximately stationary target). Turn OFF entirely with
+    // mcmc_stability_enabled=false, or relax via the tolerance/window.
+    bool   mcmcStabilityEnabled      = true;
+    int    mcmcStabilityWindow       = 5;      // consecutive cycles compared
+    double mcmcStabilityTol          = 0.02;   // max relative point-estimate drift
+    double mcmcStabilityMinPlateaued = 0.1;    // plateaued floor to trust the partial pool
 };
 
 

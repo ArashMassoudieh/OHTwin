@@ -1,9 +1,9 @@
 {
     "deployment": {
-        "name": "Bioretention_assimilation_MCMC",
+        "name": "Bioretention_assimilation_MCMC_drift",
         "model_file": "model/Bioretention.ohq",
         "viz_file": "viz_bioretention.json",
-        "port": 8182
+        "port": 8183
     },
     "runtime": {
         "weather_source": "openmeteo_historical",
@@ -30,8 +30,8 @@
         "truncate": true
     },
     "assimilation": {
-        "truth_csv_url": "http://localhost:8084/outputs/selected_output.csv",
-        "truth_meta_url": "http://localhost:8084/outputs/selected_output_meta.json",
+        "truth_csv_url": "http://localhost:8086/outputs/selected_output.csv",
+        "truth_meta_url": "http://localhost:8086/outputs/selected_output_meta.json",
         "posterior_snapshot_path": "outputs/calibration/posterior_latest.json",
         "poll_interval": "3day",
         "method": "MCMC",

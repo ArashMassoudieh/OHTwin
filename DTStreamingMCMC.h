@@ -92,21 +92,24 @@ struct DTStreamingSettings
     // its length is STAGNATION, never a plateau (a flat trace of
     // rejections is a stuck chain, not a converged one)
 
-    // --- quorum (Sec. 3.2 / 3.9) ---
+    // --- quorum (Sec. 3.2 / 3.9): primary certification criterion ---
+    // A cycle is certified FULL iff at least this fraction q of chains reached
+    // stationarity within the cycle. Within-cycle test, so it is compatible
+    // with genuine cross-cycle parameter drift. Set from config
+    // (mcmc_quorum_fraction). Lower it to certify a larger proportion of
+    // cycles (fewer plateaued chains required).
     double quorumFraction         = 0.5;   // fraction q of chains that must be plateaued
 
-    // --- inter-cycle stability certification (Fix B) ---
-    // A second, weaker path to a FULL publication for the streaming
-    // regime where the record grows faster than a within-cycle quorum can
-    // form (late cycles have too few sweeps to plateau half the chains),
-    // yet the point estimate is demonstrably stationary across cycles.
-    // When the last stabilityWindow point estimates have all moved less
-    // than stabilityTol (relative to their recent mean) AND the current
-    // cycle has at least stabilityMinPlateaued of its chains plateaued,
-    // the current cycle's partial pool is published as FULL. Only the
-    // CURRENT cycle's samples are pooled (never cross-cycle), so no
-    // mixing of distinct per-cycle targets occurs; stability only relaxes
-    // HOW MANY plateaued chains are required, not which samples pool.
+    // --- inter-cycle stability certification (weaker fallback) ---
+    // A second path to FULL for the streaming regime where a within-cycle
+    // quorum cannot form but the point estimate is stationary across cycles:
+    // the last stabilityWindow point estimates all moved < stabilityTol
+    // (relative to their recent mean) AND >= stabilityMinPlateaued of chains
+    // plateaued. This path PRESUMES a stationary target, so it is at odds with
+    // parameter-drift detection; set stabilityEnabled=false to turn it off
+    // entirely, or widen stabilityTol / shrink stabilityWindow to relax it.
+    // All four are config-driven (mcmc_stability_*).
+    bool   stabilityEnabled       = true;  // false => quorum is the sole criterion
     int    stabilityWindow        = 5;     // consecutive cycles compared
     double stabilityTol           = 0.02;  // max relative point-estimate drift
     double stabilityMinPlateaued  = 0.1;   // floor on plateaued fraction to trust the partial pool
@@ -427,10 +430,9 @@ private:
     double plateauedFraction() const;
     bool   quorumHolds() const;
 
-    // Inter-cycle stability test (Fix B): true iff the ring is full and
-    // every parameter's spread across the ring is below stabilityTol
-    // relative to its recent mean. Called after the current cycle's point
-    // estimate has been pushed onto the ring.
+    // Inter-cycle stability test: true iff the ring is full and every
+    // parameter's spread across the ring is below stabilityTol relative to
+    // its recent mean. Called after this cycle's point estimate is pushed.
     bool   streamStable() const;
 
     // Median current logp over plateaued chains — the ensemble level the
@@ -518,9 +520,8 @@ private:
     std::vector<double>              m_prevLogp;     // their posterior values (for ratio reseed)
     std::vector<double>              m_prevPertcoeff; // proposal scales carried across cycles
 
-    // Inter-cycle stability ring (Fix B): the last stabilityWindow point
-    // estimates, oldest-first. Certifies streaming convergence when a
-    // within-cycle quorum cannot form but the estimate has settled.
+    // Inter-cycle stability ring: the last stabilityWindow point estimates,
+    // oldest-first. Feeds streamStable().
     std::deque<std::vector<double>> m_pointEstimateHistory;
 
     // Per-cycle bookkeeping
