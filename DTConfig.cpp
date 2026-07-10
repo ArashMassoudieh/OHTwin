@@ -573,6 +573,9 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
         if (as.contains("mcmc_quorum_fraction"))
             assimilation.mcmcQuorumFraction =
                 as["mcmc_quorum_fraction"].toDouble(0.5);
+        if (as.contains("mcmc_proposal_mode"))
+            assimilation.mcmcProposalMode =
+                as["mcmc_proposal_mode"].toString().trimmed().toStdString();
         if (as.contains("mcmc_stability_enabled"))
             assimilation.mcmcStabilityEnabled =
                 as["mcmc_stability_enabled"].toBool(true);

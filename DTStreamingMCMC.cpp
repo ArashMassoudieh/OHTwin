@@ -1052,6 +1052,10 @@ DTCycleResult DTStreamingMCMC::runCycle(const QDateTime &deadline)
     {
         result.summary             = computeSummary(result.pooledSamples);
         result.effectiveSampleSize = effectiveSampleSize();
+        // Fold this cycle's pool into the running proposal covariance so the
+        // NEXT cycle proposes with the accumulated correlation structure.
+        if (streamSettings.adaptiveCovariance)
+            accumulateProposalCovariance(result);
     }
     // (result.pointEstimate was set above, before the stability ring push.)
 
@@ -1462,8 +1466,35 @@ std::vector<double> DTStreamingMCMC::proposeFrom(const std::vector<double> &x,
     const unsigned int np = MCMC_Settings.number_of_parameters;
     std::vector<double> X(np);
     std::normal_distribution<double> N(0.0, 1.0);
-
     logJacobian = 0.0;
+
+    // --- adaptive-covariance proposal: X = x + kappa * L z, in the per-
+    // coordinate proposal space (log for log-normal). Falls through to the
+    // legacy per-coordinate walk until the running covariance is ready. ---
+    if (streamSettings.adaptiveCovariance && m_propReady)
+    {
+        const int d = static_cast<int>(np);
+        std::vector<double> z(d);
+        for (int i = 0; i < d; ++i) z[i] = N(rng);
+        for (int i = 0; i < d; ++i)
+        {
+            double delta = 0.0;                 // (L z)_i, L lower-triangular
+            for (int k = 0; k <= i; ++k) delta += m_propChol[i][k] * z[k];
+            delta *= m_kappa;
+            if (parameter(i)->GetPriorDistribution() == "log-normal")
+            {
+                X[i] = x[i] * std::exp(delta);  // log-space move
+                logJacobian += delta;           // = log(X_i/x_i)
+            }
+            else
+            {
+                X[i] = x[i] + delta;            // symmetric (no correction)
+            }
+        }
+        return X;
+    }
+
+    // --- legacy per-coordinate global-scale random walk ---
     for (unsigned int i = 0; i < np; ++i)
     {
         if (parameter(i)->GetPriorDistribution() == "log-normal")
@@ -1479,6 +1510,106 @@ std::vector<double> DTStreamingMCMC::proposeFrom(const std::vector<double> &x,
         }
     }
     return X;
+}
+
+// ---------------------------------------------------------------------------
+// Accumulate this cycle's mean-centered posterior covariance (in proposal
+// space) into a running, all-cycles estimate. The correlation structure is
+// model-determined and stationary, so no forgetting is applied; per-cycle
+// mean-centering removes the drifting location. Weighted by (n-1).
+// ---------------------------------------------------------------------------
+void DTStreamingMCMC::accumulateProposalCovariance(const DTCycleResult &result)
+{
+    const int d = static_cast<int>(MCMC_Settings.number_of_parameters);
+    const std::vector<std::vector<double>> &S = result.pooledSamples;
+    const int n = static_cast<int>(S.size());
+    if (d <= 0 || n < d + 2) return;   // too few draws to estimate a d-dim covariance
+
+    std::vector<char> isLog(d);
+    for (int i = 0; i < d; ++i)
+        isLog[i] = (parameter(i)->GetPriorDistribution() == "log-normal") ? 1 : 0;
+
+    // Transform each sample to proposal space (log for log-normal coords).
+    std::vector<std::vector<double>> Z(n, std::vector<double>(d, 0.0));
+    for (int s = 0; s < n; ++s)
+        for (int i = 0; i < d; ++i)
+        {
+            const double v = (i < static_cast<int>(S[s].size())) ? S[s][i] : 0.0;
+            Z[s][i] = isLog[i] ? std::log(std::max(v, 1e-300)) : v;
+        }
+
+    std::vector<double> mean(d, 0.0);
+    for (const auto &z : Z) for (int i = 0; i < d; ++i) mean[i] += z[i];
+    for (int i = 0; i < d; ++i) mean[i] /= n;
+
+    // Cycle covariance Sigma_k (n-1 denominator), symmetric.
+    std::vector<std::vector<double>> Sk(d, std::vector<double>(d, 0.0));
+    for (const auto &z : Z)
+        for (int i = 0; i < d; ++i)
+        {
+            const double di = z[i] - mean[i];
+            for (int j = i; j < d; ++j) Sk[i][j] += di * (z[j] - mean[j]);
+        }
+    const double w = n - 1;
+    for (int i = 0; i < d; ++i)
+        for (int j = i; j < d; ++j) { Sk[i][j] /= w; Sk[j][i] = Sk[i][j]; }
+
+    // Running weighted mean of per-cycle covariances (no forgetting).
+    if (static_cast<int>(m_propCov.size()) != d)
+    {
+        m_propCov.assign(d, std::vector<double>(d, 0.0));
+        m_propCovWeight = 0.0;
+    }
+    const double W = m_propCovWeight;
+    for (int i = 0; i < d; ++i)
+        for (int j = 0; j < d; ++j)
+            m_propCov[i][j] = (W * m_propCov[i][j] + w * Sk[i][j]) / (W + w);
+    m_propCovWeight = W + w;
+
+    refactorProposalCholesky();
+}
+
+// Cholesky of (m_propCov + ridge); sets m_propChol and m_propReady.
+void DTStreamingMCMC::refactorProposalCholesky()
+{
+    const int d = static_cast<int>(m_propCov.size());
+    if (d == 0) { m_propReady = false; return; }
+
+    double tr = 0.0;
+    for (int i = 0; i < d; ++i) tr += m_propCov[i][i];
+    const double ridge = std::max(1e-12, 1e-8 * tr / d);   // positive-definiteness
+
+    std::vector<std::vector<double>> A = m_propCov;
+    for (int i = 0; i < d; ++i) A[i][i] += ridge;
+
+    std::vector<std::vector<double>> L(d, std::vector<double>(d, 0.0));
+    bool ok = true;
+    for (int i = 0; i < d && ok; ++i)
+        for (int j = 0; j <= i; ++j)
+        {
+            double sum = A[i][j];
+            for (int k = 0; k < j; ++k) sum -= L[i][k] * L[j][k];
+            if (i == j)
+            {
+                if (sum <= 0.0) { ok = false; break; }
+                L[i][j] = std::sqrt(sum);
+            }
+            else
+            {
+                L[i][j] = sum / L[j][j];
+            }
+        }
+
+    if (ok)
+    {
+        m_propChol = std::move(L);
+        if (m_kappa <= 0.0) m_kappa = 2.38 / std::sqrt(static_cast<double>(d));
+        m_propReady = (m_propCovWeight >= 2 * d);   // enough accumulated
+    }
+    else
+    {
+        m_propReady = false;   // fall back to the global proposal this cycle
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1806,6 +1937,20 @@ void DTStreamingMCMC::adaptProposalScale()
     if (quorumHolds()) return;
 
     const double rate = blockRate;
+
+    // Adaptive-covariance mode: tune the SINGLE global scalar kappa; the
+    // proposal SHAPE comes from the accumulated covariance, so kappa can no
+    // longer freeze the broad directions chasing the sharp one.
+    if (streamSettings.adaptiveCovariance)
+    {
+        if (rate > MCMC_Settings.acceptance_rate)
+            m_kappa /= MCMC_Settings.purt_change_scale;   // enlarge steps
+        else
+            m_kappa *= MCMC_Settings.purt_change_scale;   // shrink steps
+        m_kappa = std::min(std::max(m_kappa, 1e-4), 1e3); // floor/ceiling
+        return;
+    }
+
     if (rate > MCMC_Settings.acceptance_rate)
     {
         // Accepting too often: proposals too timid -- enlarge steps.
