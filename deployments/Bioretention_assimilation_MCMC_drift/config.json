@@ -1,0 +1,51 @@
+{
+    "deployment": {
+        "name": "Bioretention_assimilation_MCMC_drift",
+        "model_file": "model/Bioretention.ohq",
+        "viz_file": "viz_bioretention.json",
+        "port": 8183
+    },
+    "runtime": {
+        "weather_source": "openmeteo_historical",
+        "latitude": 38.91088,
+        "longitude": -76.98569,
+        "interval": "1day",
+        "forecast_horizon": "6day",
+        "start_datetime": "2020-01-03T00:00:00",
+        "stop_datetime": "2022-01-03T00:00:00",
+        "time_acceleration": 200,
+        "advance_to_observations": true,
+        "state_variables": [],
+        "keep_debug_outputs": false
+    },
+    "observations": {
+        "save_interval": "1hr",
+        "noise_sigma": 0.0
+    },
+    "logging": {
+        "enabled": true,
+        "file": "outputs/debug.log",
+        "categories": ["assim", "mcmc", "snapshot"],
+        "flush_every": 1,
+        "truncate": true
+    },
+    "assimilation": {
+        "truth_csv_url": "http://localhost:8086/outputs/selected_output.csv",
+        "truth_meta_url": "http://localhost:8086/outputs/selected_output_meta.json",
+        "posterior_snapshot_path": "outputs/calibration/posterior_latest.json",
+        "poll_interval": "3day",
+        "method": "MCMC",
+        "mcmc_budget_margin": "60s",
+        "mcmc_realization_interval": 10,
+        "calibration_window_days": 100,
+        "mcmc_max_sweeps": 300,
+        "mcmc_quorum_fraction": 0.25,
+        "mcmc_stability_enabled": false,
+        "calibration_output_dir": "outputs/calibration",
+        "calibration_observations": [
+            "Underdrain flow (m3/day)",
+            "Soil Moisture",
+            "Pond water depth (m)"
+        ]
+    }
+}
