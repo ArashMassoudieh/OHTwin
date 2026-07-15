@@ -126,6 +126,15 @@ struct DTStreamingSettings
     int    coldStartMultiplier    = 20;    // K = multiplier * Nc prior candidates
     double explorerFraction       = 0.03;  // chains seeded raw from the prior
 
+    // --- proposal preconditioning (alternative to the global scale) ---
+    // When true, propose X = x + kappa * L z with L = chol(Sigma), where
+    // Sigma is a mean-centered posterior covariance ACCUMULATED across all
+    // cycles (the correlation structure is model-determined and stationary
+    // even as parameter values drift), built in the per-coordinate proposal
+    // space (log for log-normal priors), and kappa a single adapted scalar.
+    // false => the legacy per-coordinate global-scale random walk.
+    bool   adaptiveCovariance    = false;  // config: mcmc_proposal_mode == "covariance"
+
     // --- cycle driver (Sec. 3.8) ---
     int    maxSweeps              = 0;     // hard cap on sweeps per cycle (0 = deadline only)
     int    stepsPerClockCheck     = 1;     // chain-sweeps between deadline checks
@@ -430,6 +439,14 @@ private:
     double plateauedFraction() const;
     bool   quorumHolds() const;
 
+    // Adaptive-covariance proposal (streamSettings.adaptiveCovariance).
+    // accumulateProposalCovariance folds this cycle's pooled, mean-centered
+    // covariance (in proposal space) into a running all-cycles estimate;
+    // refactorProposalCholesky recomputes the ridged Cholesky factor used by
+    // proposeFrom. The accumulator persists across cycles (never reset).
+    void   accumulateProposalCovariance(const DTCycleResult &result);
+    void   refactorProposalCholesky();
+
     // Inter-cycle stability test: true iff the ring is full and every
     // parameter's spread across the ring is below stabilityTol relative to
     // its recent mean. Called after this cycle's point estimate is pushed.
@@ -523,6 +540,16 @@ private:
     // Inter-cycle stability ring: the last stabilityWindow point estimates,
     // oldest-first. Feeds streamStable().
     std::deque<std::vector<double>> m_pointEstimateHistory;
+
+    // Adaptive-covariance proposal state (persists across cycles; not reset in
+    // initializeCycle). m_propCov is the running mean-centered posterior
+    // covariance in proposal space; m_propCovWeight the accumulated sample
+    // weight; m_propChol its ridged Cholesky factor; m_kappa the global scale.
+    std::vector<std::vector<double>> m_propCov;
+    std::vector<std::vector<double>> m_propChol;
+    double m_propCovWeight = 0.0;
+    bool   m_propReady     = false;
+    double m_kappa         = 0.0;   // lazily set to 2.38/sqrt(d)
 
     // Per-cycle bookkeeping
     qint64 m_sweepIndex        = 0;

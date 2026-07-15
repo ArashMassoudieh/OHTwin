@@ -1102,6 +1102,7 @@ bool DTAssimilation::runCalibrationMCMC(System &sys,
     mcmc.streamSettings.realizationInterval = m_config.assimilation.mcmcRealizationInterval;
     mcmc.streamSettings.maxSweeps           = m_config.assimilation.mcmcMaxSweeps;
     mcmc.streamSettings.quorumFraction      = m_config.assimilation.mcmcQuorumFraction;
+    mcmc.streamSettings.adaptiveCovariance  = (m_config.assimilation.mcmcProposalMode == "covariance");
     mcmc.streamSettings.stabilityEnabled      = m_config.assimilation.mcmcStabilityEnabled;
     mcmc.streamSettings.stabilityWindow       = m_config.assimilation.mcmcStabilityWindow;
     mcmc.streamSettings.stabilityTol          = m_config.assimilation.mcmcStabilityTol;

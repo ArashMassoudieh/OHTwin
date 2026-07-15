@@ -1,0 +1,356 @@
+% =====================================================================
+%  Proposal-scale adaptation for the streaming MCMC sampler
+%  Three candidate methods, motivation, and recommendation.
+%  Build:  pdflatex proposal_adaptation_methods.tex   (run twice for refs)
+% =====================================================================
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\param}[1]{\textsf{#1}}
+\newcommand{\pc}{\code{pertcoeff}}
+
+\title{\bfseries Proposal-scale adaptation for the streaming MCMC sampler\\[3pt]
+\large Three candidate methods, with a recommendation}
+\author{OpenHydroTwin --- \code{DTStreamingMCMC}}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The streaming sampler currently proposes all parameters jointly with a
+random walk whose per-parameter step widths are scaled by a \emph{single
+global factor} adapted toward a target acceptance rate. On an
+ill-conditioned posterior --- one sharp direction alongside broad,
+weakly-identified ones --- this single knob cannot serve both: the global
+scale collapses chasing acceptance in the sharp direction, freezing the
+broad directions, so chains stop mixing and never plateau. This note
+defines the failure precisely, then lays out three standard remedies ---
+(A) componentwise Metropolis-within-Gibbs, (B) diagonal adaptive scaling,
+and (C) adaptive-covariance --- with their proposal mechanics, how each
+sets the per-parameter (or per-direction) scale, cost, handling of the
+model's log-normal parameters, and trade-offs. The recommendation, and
+what is implemented (as a config-toggled alternative), is (C) with the
+posterior covariance \emph{accumulated across all cycles}: since the
+correlation structure is model-determined and stationary, accumulation
+gives a large effective sample size that removes the full covariance's only
+weakness, with (B) as its diagonal special case.
+\end{abstract}
+
+% =====================================================================
+\section*{Notation}
+% =====================================================================
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Symbol & Meaning\\
+\midrule
+$\psi=(\psi_1,\dots,\psi_d)$ & parameter vector being sampled\\
+$d$ & number of parameters ($=n_p$; here $d=9$)\\
+$\theta$ & the physical parameters (subset of $\psi$; the rest are error SDs)\\
+$\pi(\psi)$ & target posterior; $\log\pi$ its log\\
+$x,\,X$ & current / proposed chain position\\
+$q(\cdot\mid\cdot)$ & proposal density\\
+$a(x\to X)$ & Metropolis--Hastings acceptance probability, Eq.~\eqref{eq:mh}\\
+$q(x\mid X)/q(X\mid x)$ & Hastings correction (unity for a symmetric proposal)\\
+$z,\,z_i$ & standard-normal draws, $z\sim\mathcal N(0,I_d)$\\
+$s_i$ & per-coordinate proposal scale (\code{pertcoeff}$_i$)\\
+$\kappa$ & single global proposal scalar; $\kappa_0=2.38/\sqrt d$\\
+$\eta$ & Robbins--Monro adaptation step size\\
+$\hat a$ & observed joint acceptance rate over a block\\
+$\hat a_i$ & observed per-coordinate acceptance rate (Method A)\\
+$a^\star$ & target acceptance; $a^\star\!\approx\!0.234$ (joint), $a^\star_{1\mathrm D}\!\approx\!0.44$ (1-D)\\
+$\hat\sigma_i$ & posterior marginal standard deviation of parameter $i$\\
+$\hat\Sigma$ & posterior covariance (accumulated across cycles here)\\
+$\Sigma_k$ & cycle $k$'s mean-centered covariance, Eq.~\eqref{eq:accum}\\
+$L$ & lower-triangular Cholesky factor, $\hat\Sigma=LL^{\!\top}$\\
+$\varepsilon I_d$ & ridge added for positive-definiteness; $I_d$ the $d\times d$ identity\\
+$\phi_k^{(s)}$ & cycle $k$, draw $s$, in \emph{proposal space} (log for log-normal coords)\\
+$\bar\phi_k$ & cycle $k$'s own sample mean (used to mean-center)\\
+$n_k$ & number of pooled draws in cycle $k$\\
+$W$ & accumulated sample weight in the running covariance\\
+$\operatorname{diag}(\cdot)$, $\operatorname{chol}(\cdot)$ & diagonal matrix from a vector; Cholesky factor\\
+$\mathcal N(\mu,\Sigma)$ & multivariate normal with mean $\mu$, covariance $\Sigma$\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% =====================================================================
+\section{Setting and the observed failure}
+% =====================================================================
+
+Let $\psi=(\psi_1,\dots,\psi_d)\in\mathbb R^{d}$ be the parameter vector
+($d=n_p$; here $d=9$) with target $\pi(\psi)\propto\exp[\log\pi(\psi)]$,
+the kernel-weighted posterior. A chain at position $x$ proposes $X$ and
+accepts with the Metropolis--Hastings probability
+\begin{equation}
+  a(x\to X) = \min\!\Big\{1,\ \frac{\pi(X)}{\pi(x)}\,
+  \frac{q(x\mid X)}{q(X\mid x)}\Big\},
+  \label{eq:mh}
+\end{equation}
+where $q$ is the proposal density and the ratio $q(x\mid X)/q(X\mid x)$ is
+the Hastings correction (unity for a symmetric proposal).
+
+\paragraph{Current proposal (\code{proposeFrom}).} Per coordinate, with
+scale $s_i=\pc_i$ and $z_i\sim\mathcal N(0,1)$:
+\begin{equation}
+  \text{additive (normal/uniform prior):}\ \ X_i = x_i + s_i z_i,
+  \qquad
+  \text{multiplicative (log-normal prior):}\ \ X_i = x_i\,e^{\,s_i z_i}.
+  \label{eq:current}
+\end{equation}
+The multiplicative form is an additive random walk in $\log\psi_i$; its
+Hastings correction is $\prod_i (X_i/x_i)$ over the log-normal
+coordinates, which the sampler already carries explicitly. All $s_i$ are
+adapted by \emph{one common multiplier} toward a target acceptance rate
+$a^\star$ (\code{adaptProposalScale}), frozen once a quorum forms.
+
+\paragraph{The failure.} Diagnosed from \code{debug.log}: as the data
+window slid, the posterior became ill-conditioned. The global scale was
+driven to $s\!\approx\!1.5\times10^{-4}$ yet acceptance stayed at
+$2$--$16\%$ and oscillated; chains crawled, failed the plateau motion
+guard, and certification collapsed. The single scalar cannot match a
+sharp direction (needs tiny steps) and a broad direction (needs large
+steps) simultaneously --- shrinking it to accept in the former freezes
+the latter. All three methods below give the proposal \emph{direction- or
+coordinate-specific} scale so the two regimes decouple.
+
+\paragraph{What the sampler already computes.} At each cycle
+\code{computeSummary} produces, from the pooled samples, the
+per-parameter standard deviations $\hat\sigma_i$ and the full
+$d\times d$ posterior covariance $\hat\Sigma$. These are the natural
+inputs for methods (B) and (C), and (like \pc) can be warm-started from
+the previous cycle.
+
+% =====================================================================
+\section{Method A --- Componentwise Metropolis-within-Gibbs}
+% =====================================================================
+
+\paragraph{Idea.} Abandon the joint proposal: update one coordinate at a
+time, each with its own accept/reject, so each parameter has a genuine
+per-parameter acceptance rate to adapt against.
+
+\paragraph{Mechanics.} A sweep visits coordinates $i=1,\dots,d$ (fixed or
+random order). For coordinate $i$, propose $X_i$ from
+Eq.~\eqref{eq:current} holding $\psi_{-i}$ fixed, and accept/reject via
+Eq.~\eqref{eq:mh} using the full posterior (each proposal still requires a
+forward solve). Track the per-coordinate acceptance $\hat a_i$ over a
+window.
+
+\paragraph{Setting the scale.} Each $s_i$ is adapted independently by
+Robbins--Monro toward the one-dimensional optimum,
+\begin{equation}
+  \log s_i \leftarrow \log s_i + \eta\,(\hat a_i - a^\star_{1\mathrm D}),
+  \qquad a^\star_{1\mathrm D}\approx 0.44,
+\end{equation}
+(the optimal acceptance for a single-coordinate random walk;
+\cite{gelman1996}). Because each coordinate has its own $\hat a_i$, sharp
+and broad parameters converge to very different $s_i$ automatically.
+
+\paragraph{Cost \& fit here.} Clean and robust, but a full sweep now costs
+$d$ forward solves instead of one --- a $\sim\!9\times$ increase in the
+dominant expense. Under a fixed wall-clock budget that cuts the effective
+sweep count by $\sim\!9\times$, which is severe for this application.
+Correlated directions are also handled only indirectly (one coordinate at
+a time mixes slowly along a correlated ridge).
+
+% =====================================================================
+\section{Method B --- Diagonal adaptive scaling (recommended first step)}
+% =====================================================================
+
+\paragraph{Idea.} Keep the joint proposal (one solve per step) but set each
+coordinate's step width proportional to that parameter's \emph{posterior
+marginal spread}. No per-parameter acceptance is needed: the geometry
+supplies the per-coordinate scale directly.
+
+\paragraph{Mechanics.} With a single global scalar $\kappa>0$ and the
+per-parameter posterior standard deviation $\hat\sigma_i$,
+\begin{equation}
+  s_i = \kappa\,\hat\sigma_i,
+  \qquad\text{i.e.}\qquad
+  X = x + \kappa\,\operatorname{diag}(\hat\sigma_1,\dots,\hat\sigma_d)\,z,
+  \label{eq:diag}
+\end{equation}
+so a sharp direction ($\hat\sigma_i$ small) automatically receives small
+steps and a broad, weakly-identified direction ($\hat\sigma_i$ large)
+receives large steps. Only the \emph{single} scalar $\kappa$ is then
+adapted toward the high-dimensional optimum,
+\begin{equation}
+  \log\kappa \leftarrow \log\kappa + \eta\,(\hat a - a^\star),
+  \qquad a^\star\approx 0.234,\quad
+  \kappa_0 = \frac{2.38}{\sqrt d},
+  \label{eq:kappa}
+\end{equation}
+using the ordinary joint acceptance $\hat a$ (\cite{roberts2001}). Because
+the \emph{shape} is fixed by $\hat\sigma$, $\kappa$ can no longer freeze
+the broad directions while chasing the sharp one --- the exact pathology
+that broke the current sampler.
+
+\paragraph{This is a symmetric proposal} in the additive coordinates
+(Gaussian random walk), so no Hastings correction there; for log-normal
+coordinates the width $\hat\sigma_i$ is measured in \emph{log space}
+(std.\ dev.\ of $\log\psi_i$) and the multiplicative form of
+Eq.~\eqref{eq:current} is retained, leaving the existing Jacobian
+correction unchanged.
+
+\paragraph{Where $\hat\sigma$ comes from.} The carried posterior spread
+from the previous cycle (warm-started, exactly as \pc\ is today), refreshed
+mid-cycle from the retained samples once a pool forms. On cycle~1 / before
+a pool exists, fall back to a prior-range width per coordinate.
+
+\paragraph{Cost \& fit here.} One solve per step (no cost increase); uses
+$\hat\sigma_i$ already computed; a contained change to \code{proposeFrom}
+plus a scalar adaptation. It fixes the diagonal ill-conditioning that
+caused the failure. Its one limitation: it ignores \emph{correlations} ---
+a stiff \emph{diagonal-of-a-rotated} direction (e.g.\ the
+$n_{\text{eng}}$--$n_{\text{nat}}$ compensation) is not straightened by a
+purely diagonal scaling.
+
+% =====================================================================
+\section{Method C --- Adaptive covariance, accumulated across cycles (implemented)}
+% =====================================================================
+
+\paragraph{Idea.} Precondition the joint proposal by the \emph{full}
+posterior covariance, so both scales and correlations are matched --- the
+gold standard for ill-conditioned, correlated targets.
+
+\paragraph{Mechanics.} With $\hat\Sigma$ the (accumulated) posterior
+covariance and $L$ its Cholesky factor ($\hat\Sigma = LL^{\!\top}$),
+\begin{equation}
+  X = x + \kappa\,L\,z,\qquad z\sim\mathcal N(0,I_d),
+  \label{eq:full}
+\end{equation}
+which draws $X\sim\mathcal N(x,\ \kappa^2\hat\Sigma)$. Following adaptive
+Metropolis \cite{haario2001}, $\kappa_0 = 2.38/\sqrt d$, with a ridge
+$\varepsilon I_d$ guaranteeing positive-definiteness (and preventing a
+collapsed non-identifiable direction from giving a singular, zero-width
+proposal). The single scalar $\kappa$ is adapted per cycle toward
+$a^\star\approx0.234$ as in Eq.~\eqref{eq:kappa}, so the proposal
+\emph{shape} is set by $\hat\Sigma$ and its \emph{overall size} by
+$\kappa$ --- the two decoupled. Since $\mathcal N(x,\kappa^2\hat\Sigma)$ is
+symmetric, no Hastings correction is needed for additive coordinates; the
+log-normal coordinates are handled by building $\hat\Sigma$ in the
+transformed (log) space and proposing there, then mapping back (retaining
+the multiplicative Jacobian).
+
+\paragraph{Estimating $\hat\Sigma$: accumulate across all cycles, no
+forgetting.} The posterior covariance separates into a \emph{shape}
+(correlation structure --- which directions are stiff/sloppy, how
+parameters compensate) and a \emph{location} (the mean). The shape is set
+by the model's sensitivity structure $\partial(\text{outputs})/\partial
+\theta$; because the \emph{model is fixed}, that structure is essentially
+\textbf{stationary across cycles even as the parameter values drift}. The
+location is what drifts. This licenses estimating $\hat\Sigma$ from
+\emph{all} cycles rather than one:
+\begin{equation}
+  \Sigma_k = \frac{1}{n_k-1}\sum_{s}\big(\phi_k^{(s)}-\bar\phi_k\big)
+             \big(\phi_k^{(s)}-\bar\phi_k\big)^{\!\top},
+  \qquad
+  \hat\Sigma \leftarrow \frac{W\hat\Sigma + (n_k-1)\Sigma_k}{W+(n_k-1)},
+  \ \ W \mathrel{+}= n_k-1,
+  \label{eq:accum}
+\end{equation}
+where $\phi_k^{(s)}$ is cycle $k$'s draw $s$ in \emph{proposal space} (log
+for log-normal coordinates), $\bar\phi_k$ its \emph{own} cycle mean, and
+$\Sigma_k$ is therefore \emph{mean-centered per cycle} --- removing the
+drifting location so it cannot inflate the estimate. No forgetting factor
+is applied: with a stationary shape, more cycles simply give a better
+estimate, so the running average over the whole run yields a large
+effective sample size and a well-conditioned $\hat\Sigma$ --- and
+shrinkage toward the diagonal (needed only when samples are scarce)
+becomes unnecessary; a small ridge suffices. Only the fast-timescale
+overall scale is left to $\kappa$.
+
+\paragraph{Cost \& fit here.} Still one solve per step; the extra work is a
+$d\times d$ Cholesky per cycle and an $L z$ product per proposal ---
+negligible at $d=9$. Caveats: strictly the covariance is a local
+linearization, so the shape can shift somewhat if the parameters wander far
+or the data window exercises different sensitivities --- but a proposal
+preconditioner need only be \emph{approximately} right (MH accept/reject
+corrects the rest), so the accumulated average structure is more than
+adequate and its stability outweighs the small time-variation. The
+earliest cold-start cycles have distorted spreads and are best excluded
+from the accumulation (or down-weighted by ESS).
+
+% =====================================================================
+\section{Comparison}
+% =====================================================================
+
+\begin{center}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+ & \textbf{A. Componentwise} & \textbf{B. Diagonal} & \textbf{C. Full covariance}\\
+\midrule
+Proposal & one coord.\ at a time & joint, diag.\ scaled & joint, $\hat\Sigma$-scaled\\
+Scale source & per-coord.\ acceptance $\hat a_i$ & marginal $\hat\sigma_i$ & covariance $\hat\Sigma$\\
+Adapted quantity & $d$ scales $s_i$ & one scalar $\kappa$ & one scalar $\kappa$ (+ $\hat\Sigma$)\\
+Target accept.\ & $\approx0.44$ (1-D) & $\approx0.234$ & $\approx0.234$\\
+Solves per sweep & $d\times$ (expensive) & $1\times$ & $1\times$\\
+Fixes diag.\ stiffness & yes & yes & yes\\
+Fixes correlations & weakly & no & yes\\
+Extra code & sweep restructure & small & small (Cholesky)\\
+Hastings correction & unchanged & unchanged & unchanged (log-space)\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% =====================================================================
+\section{Recommendation and implementation notes}
+% =====================================================================
+
+\textbf{Adopt Method~C with the all-cycles accumulated covariance of
+Eq.~\eqref{eq:accum}.} Because the correlation \emph{shape} is
+model-determined and stationary, accumulating it over the whole run
+(mean-centered per cycle) gives a large effective sample size --- which
+dissolves the one drawback of the full covariance (fragility on thin
+pools) and makes shrinkage unnecessary. Method~B is then simply its
+diagonal special case, and Method~A is ruled out by its $\sim\!9\times$
+solve cost. This is implemented as a config-toggled alternative
+(\param{mcmc\_proposal\_mode}: \code{"global"} $\to$ legacy,
+\code{"covariance"} $\to$ this method) so it can be validated against the
+current sampler before adoption, and, if effective, ported to the OHQ MCMC
+module.
+
+As implemented in \code{DTStreamingMCMC}:
+\begin{itemize}[leftmargin=1.4em,nosep]
+  \item \textbf{Accumulation:} \code{accumulateProposalCovariance} folds
+  each cycle's pooled, mean-centered, proposal-space covariance into the
+  running $\hat\Sigma$ (Eq.~\ref{eq:accum}); the accumulator persists across
+  cycles (never reset in \code{initializeCycle}).
+  \item \textbf{Bootstrap:} the proposal falls back to the legacy
+  per-coordinate walk until the accumulated weight exceeds $\sim\!2d$, then
+  switches to $\kappa L z$.
+  \item \textbf{Log-normal parameters:} $\hat\Sigma$ is built in $\log\psi$
+  for those coordinates; the multiplicative proposal is kept so the existing
+  Jacobian correction is untouched.
+  \item \textbf{Adaptation:} the single scalar $\kappa$ replaces the global
+  width multiplier ($\kappa_0=2.38/\sqrt d$), adapted toward the target
+  acceptance with the freeze-on-quorum retained and a $\kappa$
+  floor/ceiling so it cannot run away.
+  \item \textbf{Guardrails:} a ridge $\varepsilon I_d$ on $\hat\Sigma$ before
+  the Cholesky; on a (rare) failed factorization the cycle falls back to the
+  legacy proposal.
+  \item \textbf{Follow-ups (not yet done):} persist $\hat\Sigma$ in the
+  posterior snapshot so it survives restarts; optionally exclude the
+  earliest cold-start cycles from the accumulation.
+\end{itemize}
+
+\begin{thebibliography}{9}
+\bibitem{gelman1996} A.~Gelman, G.~O.~Roberts, W.~R.~Gilks (1996).
+  Efficient Metropolis jumping rules. \emph{Bayesian Statistics 5}, 599--607.
+\bibitem{roberts2001} G.~O.~Roberts, J.~S.~Rosenthal (2001).
+  Optimal scaling for various Metropolis--Hastings algorithms.
+  \emph{Statistical Science} 16(4), 351--367.
+\bibitem{haario2001} H.~Haario, E.~Saksman, J.~Tamminen (2001).
+  An adaptive Metropolis algorithm. \emph{Bernoulli} 7(2), 223--242.
+\end{thebibliography}
+
+\end{document}

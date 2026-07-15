@@ -41,6 +41,7 @@
         "mcmc_max_sweeps": 300,
         "mcmc_quorum_fraction": 0.25,
         "mcmc_stability_enabled": false,
+        "mcmc_proposal_mode": "covariance",
         "calibration_output_dir": "outputs/calibration",
         "calibration_observations": [
             "Underdrain flow (m3/day)",

@@ -155,6 +155,11 @@ struct AssimilationConfig
     // criterion; lower it to certify a larger proportion of cycles.
     double mcmcQuorumFraction = 0.5;
 
+    // Proposal preconditioning: "global" (legacy per-coordinate random walk
+    // with one adapted scale) or "covariance" (adaptive-covariance proposal
+    // preconditioned by the accumulated posterior correlation structure).
+    std::string mcmcProposalMode = "global";
+
     // Inter-cycle stability certification (weaker fallback path, presumes an
     // approximately stationary target). Turn OFF entirely with
     // mcmc_stability_enabled=false, or relax via the tolerance/window.
