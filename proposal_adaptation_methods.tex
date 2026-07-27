@@ -323,8 +323,14 @@ As implemented in \code{DTStreamingMCMC}:
 \begin{itemize}[leftmargin=1.4em,nosep]
   \item \textbf{Accumulation:} \code{accumulateProposalCovariance} folds
   each cycle's pooled, mean-centered, proposal-space covariance into the
-  running $\hat\Sigma$ (Eq.~\ref{eq:accum}); the accumulator persists across
-  cycles (never reset in \code{initializeCycle}).
+  running $\hat\Sigma$ (Eq.~\ref{eq:accum}). Because each per-cycle
+  $\Sigma_k$ carries weight $n_k-1$ and is centered on its own mean, the
+  running estimate expands to $\hat\Sigma = \sum_k S_k / \sum_k (n_k-1)$
+  with $S_k$ the raw scatter --- i.e.\ the \emph{pooled within-cycle}
+  covariance, in which every retained draw contributes equally. Duplicate
+  draws (a rejected step re-pushes the current state) are retained: they are
+  part of the correct MH estimator, and removing them would over-weight
+  rarely visited points.
   \item \textbf{Bootstrap:} the proposal falls back to the legacy
   per-coordinate walk until the accumulated weight exceeds $\sim\!2d$, then
   switches to $\kappa L z$.
@@ -338,10 +344,44 @@ As implemented in \code{DTStreamingMCMC}:
   \item \textbf{Guardrails:} a ridge $\varepsilon I_d$ on $\hat\Sigma$ before
   the Cholesky; on a (rare) failed factorization the cycle falls back to the
   legacy proposal.
-  \item \textbf{Follow-ups (not yet done):} persist $\hat\Sigma$ in the
-  posterior snapshot so it survives restarts; optionally exclude the
-  earliest cold-start cycles from the accumulation.
+  \item \textbf{Persistence (added 2026-07; load-bearing, not optional).}
+  $\hat\Sigma$, its weight $W$ and $\kappa$ round-trip through
+  \code{posterior\_latest.json} and are restored --- and refactorised --- in
+  \code{initializeCycle}. This was originally listed as a follow-up needed
+  only to survive \emph{restarts}. That was wrong: \code{DTStreamingMCMC} is
+  constructed fresh \emph{every calibration cycle}, so without persistence
+  the accumulator was rebuilt from a single cycle, armed only at cycle end
+  (the fold happens after the sampling loop), then destroyed. In a 244-cycle
+  run \code{m\_propReady} was true for exactly zero proposals; and because
+  \code{adaptProposalScale} takes the $\kappa$ branch and returns before
+  touching \pc, the net effect of selecting \code{"covariance"} was the
+  legacy walk \emph{with adaptation switched off}. Bootstrapping is
+  unaffected: one cycle's pool typically gives $W\approx 25 > 2d = 18$, so
+  the kernel arms on cycle~2.
+  \item \textbf{$\kappa$ initialisation (added 2026-07).} $\kappa$ is set to
+  $\kappa_0 = 2.38/\sqrt d$ in \code{initializeCycle}. Its lazy assignment
+  previously lived in \code{refactorProposalCholesky}, reached only at cycle
+  end, so during sampling $\kappa$ was still $0$: each adaptation block
+  computed $0\cdot\param{purt\_change\_scale}=0$ and the clamp lifted it to
+  the $10^{-4}$ floor, some $8000\times$ below $\kappa_0$. Fixing
+  persistence alone would have been actively harmful --- a correct
+  $\hat\Sigma$ scaled by $10^{-4}$ gives near-unit acceptance with immobile
+  chains, which \emph{passes} the plateau motion guard and would have
+  certified convergence on frozen chains.
+  \item \textbf{Follow-ups (not yet done):} exclude the earliest cold-start
+  cycles from the accumulation, or down-weight by ESS --- measured pools
+  average $26.6$ draws but only $15.2$ distinct, so the $n_k-1$ weight
+  over-credits thin cycles. Empirically the pooled spread is within
+  $0.71$--$1.18\times$ the across-chain spread, so the shape estimate is
+  adequate to bootstrap from without this refinement.
 \end{itemize}
+
+\paragraph{Diagnostic note.} In \code{"covariance"} mode \pc\ is never
+written, and is therefore the one quantity guaranteed \emph{not} to move.
+The adaptation log line now reports $\kappa$ and the covariance-readiness
+flag alongside it for exactly this reason: a flat \pc\ trace in this mode is
+expected behaviour, not evidence of a broken adapter --- a distinction that
+cost three passes to establish.
 
 \begin{thebibliography}{9}
 \bibitem{gelman1996} A.~Gelman, G.~O.~Roberts, W.~R.~Gilks (1996).

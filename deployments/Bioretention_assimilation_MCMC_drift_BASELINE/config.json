@@ -1,9 +1,9 @@
 {
     "deployment": {
-        "name": "Wetland_assimilation_MCMC",
-        "model_file": "model/Wetland.ohq",
-        "viz_file": "viz_wetland.json",
-        "port": 8184
+        "name": "Bioretention_assimilation_MCMC_drift",
+        "model_file": "model/Bioretention.ohq",
+        "viz_file": "viz_bioretention.json",
+        "port": 8183
     },
     "runtime": {
         "weather_source": "openmeteo_historical",
@@ -16,38 +16,22 @@
         "time_acceleration": 200,
         "advance_to_observations": true,
         "state_variables": [],
-        "keep_debug_outputs": true
+        "keep_debug_outputs": false
     },
     "observations": {
         "save_interval": "1hr",
-        "noise_sigma": {
-            "default": 0.0,
-            "Precipitation (mm/day)": 0.0,
-            "Wetland inflow (m3/day)": 0.0,
-            "Wetland inlet stage (m)": 0.0,
-            "Wetland mid-stage (m)": 0.0,
-            "Wetland outlet stage (m)": 0.0,
-            "Wetland outflow (m3/day)": 0.0,
-            "Wetland Cell 1 Water depth (m)": 0.0,
-            "Wetland Cell 6 Water depth (m)": 0.0,
-            "HRT": 0.0
-        },
-        "noise_correlation_time": "6hr"
+        "noise_sigma": 0.0
     },
     "logging": {
         "enabled": true,
         "file": "outputs/debug.log",
-        "categories": [
-            "assim",
-            "mcmc",
-            "snapshot"
-        ],
+        "categories": ["assim", "mcmc", "snapshot"],
         "flush_every": 1,
         "truncate": true
     },
     "assimilation": {
-        "truth_csv_url": "http://localhost:8088/outputs/selected_output.csv",
-        "truth_meta_url": "http://localhost:8088/outputs/selected_output_meta.json",
+        "truth_csv_url": "http://localhost:8086/outputs/selected_output.csv",
+        "truth_meta_url": "http://localhost:8086/outputs/selected_output_meta.json",
         "posterior_snapshot_path": "outputs/calibration/posterior_latest.json",
         "poll_interval": "3day",
         "method": "MCMC",
@@ -60,9 +44,9 @@
         "mcmc_stability_enabled": false,
         "calibration_output_dir": "outputs/calibration",
         "calibration_observations": [
-            "Wetland outflow (m3/day)",
-            "Wetland inlet stage (m)",
-            "Wetland outlet stage (m)"
+            "Underdrain flow (m3/day)",
+            "Soil Moisture",
+            "Pond water depth (m)"
         ]
     }
 }

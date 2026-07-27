@@ -2,9 +2,9 @@
     "mode": "assimilation",
     "refresh_seconds": 300,
     "assimilation": {
-        "posterior_history_url": "http://localhost:8183/outputs/calibration/posterior_history.jsonl",
+        "posterior_history_url": "http://localhost:8184/outputs/calibration/posterior_history.jsonl",
         "observed_csv_url": "http://localhost:8088/outputs/selected_output.csv",
-        "modeled_csv_url":  "http://localhost:8183/outputs/selected_output.csv",
+        "modeled_csv_url":  "http://localhost:8184/outputs/selected_output.csv",
         "x_axis": "t_now",
         "parameter_panel": {
             "show_population_band": true

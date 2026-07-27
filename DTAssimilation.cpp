@@ -1309,6 +1309,27 @@ bool DTAssimilation::runCalibrationMCMC(System &sys,
                                        QString("posterior dist skipped: %1").arg(dErr));
             DTDebugLog::instance().flush();
         }
+
+        // Post-hoc analysis dumps. Both are write-only records of state that
+        // is otherwise destroyed at cycle end (the covariance is overwritten
+        // in the snapshot; the chain traces are a capped rolling deque).
+        // Failures are warnings -- neither feeds the sampler.
+        QString cErr;
+        if (!mcmc.writeProposalCovariance(outputDir, tEnd, cErr))
+        {
+            std::cerr << "[Assim] WARNING: proposal covariance: " << cErr.toStdString() << "\n";
+            DTDebugLog::instance().log(DTDebugLog::Category::Assim,
+                                       QString("proposal covariance skipped: %1").arg(cErr));
+            DTDebugLog::instance().flush();
+        }
+        QString tErr;
+        if (!mcmc.writeChainTraces(outputDir, tEnd, tErr))
+        {
+            std::cerr << "[Assim] WARNING: chain traces: " << tErr.toStdString() << "\n";
+            DTDebugLog::instance().log(DTDebugLog::Category::Assim,
+                                       QString("chain traces skipped: %1").arg(tErr));
+            DTDebugLog::instance().flush();
+        }
     }
     else
     {

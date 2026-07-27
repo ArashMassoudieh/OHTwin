@@ -207,6 +207,14 @@ struct DTChainState
 
     bool explorer = false;               // seeded raw from the prior (Sec. 3.3)
     int  reseedCount = 0;                // times culled/dissolved this cycle
+
+    // Full within-cycle history, for post-hoc analysis only -- never read by
+    // the sampler. `trace` above is a rolling deque capped at plateauWindow,
+    // so the climb->plateau trajectory is otherwise unrecoverable after the
+    // cycle ends. Bounded by maxSweeps (~300), so ~2.4 kB per chain.
+    std::vector<double> fullTraceLogp;
+    std::vector<char>   fullTraceAccepted;   // 1 = this step was accepted
+    std::vector<char>   fullTracePhase;      // 'C' climbing, 'P' plateaued
 };
 
 // ---------------------------------------------------------------------------
@@ -310,6 +318,17 @@ public:
                                     const QString &outputPath,
                                     double tNow,
                                     QString &errorMessage);
+
+    // Post-hoc analysis dumps, written by the caller on the same realization
+    // interval as the two above. Both record state that is otherwise
+    // destroyed at cycle end -- the accumulated proposal covariance (which
+    // the snapshot overwrites) and the per-chain log-posterior trajectories
+    // (DTChainState::trace is a rolling deque capped at plateauWindow).
+    // Neither is ever read back by the sampler.
+    bool writeProposalCovariance(const QString &outputPath, double tNow,
+                                 QString &errorMessage);
+    bool writeChainTraces(const QString &outputPath, double tNow,
+                          QString &errorMessage);
 
     // Append one wide row per cycle to a running parameter-CI CSV
     // (mean/stdev/p2.5/p50/p97.5 per parameter). Called EVERY cycle, not
@@ -536,6 +555,19 @@ private:
     std::vector<std::vector<double>> m_prevSamples;  // pooled samples (full) or chain states (provisional)
     std::vector<double>              m_prevLogp;     // their posterior values (for ratio reseed)
     std::vector<double>              m_prevPertcoeff; // proposal scales carried across cycles
+
+    // Adaptive-covariance state carried across cycles. DTStreamingMCMC is
+    // constructed fresh every calibration cycle, so the running covariance
+    // only accumulates if it round-trips through the posterior snapshot;
+    // without this it was rebuilt from one cycle and discarded, and
+    // m_propReady was never true for a single proposal.
+    std::vector<std::vector<double>> m_prevPropCov;
+    double m_prevPropCovWeight = 0.0;
+    double m_prevKappa         = 0.0;
+
+    // Seeding regime actually used this cycle, recorded for the history file.
+    SeedMode m_lastSeedMode = SeedMode::ColdStart;
+    static const char *seedModeName(SeedMode m);
 
     // Inter-cycle stability ring: the last stabilityWindow point estimates,
     // oldest-first. Feeds streamStable().

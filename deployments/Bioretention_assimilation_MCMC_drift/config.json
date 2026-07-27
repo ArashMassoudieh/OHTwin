@@ -16,7 +16,7 @@
         "time_acceleration": 200,
         "advance_to_observations": true,
         "state_variables": [],
-        "keep_debug_outputs": false
+        "keep_debug_outputs": true
     },
     "observations": {
         "save_interval": "1hr",
@@ -38,6 +38,7 @@
         "mcmc_budget_margin": "60s",
         "mcmc_realization_interval": 10,
         "calibration_window_days": 100,
+        "mcmc_proposal_mode": "covariance",
         "mcmc_max_sweeps": 300,
         "mcmc_quorum_fraction": 0.25,
         "mcmc_stability_enabled": false,

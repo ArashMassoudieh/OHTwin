@@ -254,3 +254,5 @@ viewer/build/WebAssembly_Qt_6_8_2_multi_threaded-Release/.qtc_clangd/.cache/clan
 viewer/build/WebAssembly_Qt_6_8_2_multi_threaded-Release/.qtc_clangd/
 
 viewer/build/WebAssembly_Qt_6_8_2_multi_threaded-Release/
+
+*.zip

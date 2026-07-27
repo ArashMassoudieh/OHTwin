@@ -183,12 +183,30 @@ effective count $W=\sum_i w_i$, and error standard deviation $\sigma$
 (\param{error\_standard\_deviation}, itself calibratable), the engine
 returns as objective the negative log-likelihood contribution
 \begin{equation}
-  -\log L_{o,t} \;=\; W\!\left(\frac{\mathrm{MSE}_w}{\sigma^2}
+  -\log L_{o,t} \;=\; W\!\left(\frac{\mathrm{MSE}_w}{2\sigma^2}
   + \log\sigma\right),
+  \label{eq:nll}
 \end{equation}
 so that $\sigma$ remains statistically identifiable when sampled jointly
 with $\theta$. (For log-normal error structure the same form is applied
-to log-transformed series.) The sampler stores honest log-posteriors:
+to log-transformed series.)
+
+Because $\mathrm{MSE}_w$ is a weighted \emph{mean}, $\sum_i w_i r_i^2 = W\,
+\mathrm{MSE}_w$, and Eq.~\eqref{eq:nll} is the Gaussian negative
+log-likelihood $W\log\sigma + \sum_i w_i r_i^2/(2\sigma^2)$ with the
+additive constant $\tfrac{W}{2}\log 2\pi$ dropped. The factor $2$ is what
+makes $\hat\sigma$ the RMS residual: minimising Eq.~\eqref{eq:nll} over
+$\sigma$ gives $\hat\sigma^2 = \mathrm{MSE}_w$. \emph{Historical note:} the
+engine omitted this factor until 2026-07, returning
+$W(\mathrm{MSE}_w/\sigma^2 + \log\sigma)$, whose minimiser is
+$\hat\sigma = \sqrt2\,\mathrm{RMS}$ --- so every calibrated
+\param{error\_standard\_deviation} in runs predating the fix is inflated by
+exactly $\sqrt2$. Profiling $\sigma$ out gives
+$\text{const} + \tfrac{W}{2}\log \mathrm{MSE}_w(\theta)$ under \emph{both}
+forms, so the correction shifts $\sigma$ only and leaves inference on
+$\theta$ unchanged.
+
+The sampler stores honest log-posteriors:
 the log-prior and this likelihood only; the Hastings/Jacobian correction
 of Section~\ref{sec:proposal} is \emph{not} folded in.
 
@@ -254,6 +272,18 @@ Hastings log-correction is accumulated explicitly,
   \log J \;=\; \sum_{i \in \text{log-normal}} \big(\log X_i - \log x_i\big),
 \end{equation}
 and is $0$ for an all-additive parameter set.
+
+\paragraph{Adaptive-covariance mode.} When
+\param{mcmc\_proposal\_mode}${}=$\code{"covariance"}, the coordinate-wise
+walk above is replaced by a proposal preconditioned by the accumulated
+posterior covariance $\hat\Sigma = LL^{\!\top}$ (Cholesky $L$, ridge
+$\varepsilon I_d$), $X = x + \kappa L z$ with $z\sim\mathcal N(0,I_d)$ and
+$\kappa_0 = 2.38/\sqrt d$. The factorisation is carried out in
+\emph{proposal space} --- log coordinates for log-normal priors --- so the
+multiplicative form and its Hastings correction are unchanged. Until
+$\hat\Sigma$ has accumulated weight $\ge 2d$ the proposal falls back to the
+coordinate-wise walk. See \code{proposal\_adaptation\_methods.tex} for the
+derivation and the accumulation rule.
 
 \subsection{Acceptance rule}
 The proposal is accepted (\code{stepChain}) by the standard MH rule in
@@ -473,6 +503,36 @@ would break the invariance the pooled posterior rests on. Acceptance
 bookkeeping continues so the cycle acceptance rate stays accurate, but
 $s_i$ is held fixed---post-plateau draws are taken under a fixed kernel.
 
+\textbf{In adaptive-covariance mode} the same block rule drives the single
+global scalar $\kappa$ instead of the vector $s$, clamped to
+$[10^{-4},10^{3}]$; the proposal \emph{shape} is then set by $\hat\Sigma$
+and only its overall size is adapted, which is what stops one scalar from
+having to serve a sharp and a broad direction at once. In this mode $s_i$
+is left at its initialisation value and is not a meaningful diagnostic.
+
+\paragraph{Two defects fixed in 2026-07 (both silent).} They are recorded
+here because a run predating the fix will show the pathology and no error.
+\begin{enumerate}[leftmargin=1.6em,nosep]
+  \item \textbf{$\hat\Sigma$ did not survive the cycle.} \code{DTStreamingMCMC}
+  is constructed fresh per calibration cycle, so the accumulator --- folded
+  in \emph{after} the sampling loop and never persisted --- was rebuilt from
+  one cycle and discarded. The readiness test $W\ge 2d$ was therefore
+  satisfied only moments before destruction, and the covariance proposal ran
+  for exactly zero proposals in a 244-cycle run. $\hat\Sigma$, $W$ and
+  $\kappa$ now round-trip through \code{posterior\_latest.json} and are
+  restored (and refactorised) in \code{initializeCycle}, so the kernel is
+  armed from the first sweep.
+  \item \textbf{$\kappa$ was pinned at its floor.} $\kappa$ initialised to
+  $0$ and its lazy assignment lived in \code{refactorProposalCholesky},
+  reached only at cycle end; every adaptation block computed
+  $0\cdot\param{purt\_change\_scale}=0$ and the clamp lifted it to
+  $10^{-4}$ --- about $8000\times$ below $\kappa_0$. It is now initialised
+  in \code{initializeCycle}, before any adaptation block can run.
+\end{enumerate}
+Together these meant \code{"covariance"} silently degraded to the legacy
+walk \emph{with adaptation disabled}: $s_i$ frozen at initialisation for the
+whole run, while $\kappa$ was tuned diligently and read by nothing.
+
 % =====================================================================
 \section{Cross-cycle seeding}\label{sec:seeding}
 % =====================================================================
@@ -577,7 +637,37 @@ is otherwise discarded after the summary/histogram are computed, so this
 file is the only cumulative record of the individual draws. Because each
 cycle targets its own (sliding-window) posterior, downstream code should
 pool over a chosen set of cycles rather than the entire file; the tags
-make that selection explicit.
+make that selection explicit. This is the mechanism that makes a usable
+posterior out of small per-cycle pools: a single cycle retains only tens of
+draws (of which a substantial fraction are the repeats a rejected step
+re-pushes), so publication densities are built by pooling a window of
+consecutive cycles within one regime.
+
+\subsection{Post-hoc analysis dumps}
+Two records exist only for offline analysis; neither is read back by the
+sampler, and both are written on the \param{mcmc\_realization\_interval}
+gate alongside the products above.
+
+\code{writeProposalCovariance} emits
+\code{proposal\_cov\_cycle\_<t>.txt}: the accumulated $\hat\Sigma$ in
+proposal space, together with the marginal standard deviations and the
+derived correlation matrix, plus $W$, $\kappa$ and the readiness flag in
+the header. Without it the running estimate is visible only in the latest
+snapshot, which each cycle overwrites, so its convergence over a run is
+unrecoverable.
+
+\code{writeChainTraces} emits \code{chain\_traces\_cycle\_<t>.csv} with
+columns \code{chain, sweep, logp, accepted, phase}. \code{DTChainState::trace}
+is a rolling deque capped at \param{plateauWindow}, so the climb-to-plateau
+trajectory that the classifier of Section~\ref{sec:plateau} acts on is
+otherwise destroyed as the cycle proceeds; this is its only record. The
+recorded \code{phase} is the one in force when the step was taken, so a
+\code{'P'} row is a step whose sample entered the pool.
+
+Per-cycle scalars --- including $\kappa$, the covariance readiness flag and
+weight, the seed mode, the distinct-draw count and the across-chain
+$\log\pi$ spread --- are written to \code{posterior\_history.jsonl}
+(Section~\ref{sec:status}).
 
 % =====================================================================
 \section{Cycle driver and wall-clock budget}
@@ -702,7 +792,30 @@ an accurate reading of runtime behaviour:
   band), tagged \code{converged=false}. These are uncertified estimates,
   useful for monitoring while the ensemble migrates; a certified posterior
   width requires a FULL cycle.
+  \item \textbf{Inter-cycle stability (Path 2) cannot fire.}
+  \code{m\_pointEstimateHistory} is a member of an object rebuilt every
+  cycle and receives one push per cycle, so \code{streamStable()} always
+  fails its \code{size() >= stabilityWindow} test and returns false. Quorum
+  is therefore the sole certification path regardless of
+  \param{mcmc\_stability\_enabled}. \stub{Not yet fixed}; it would need the
+  ring persisted in the posterior snapshot, exactly as $\hat\Sigma$ and
+  $\kappa$ now are.
 \end{itemize}
+
+\paragraph{Certification in practice (measured).} In the 244-cycle drift
+run of 2026-07, \param{plateaued\_fraction} was \emph{exactly zero in every
+cycle} and no cycle certified. The chain is mechanical rather than
+statistical: with the proposal scale frozen (the two defects of
+Section~``Proposal-scale adaptation''), acceptance sat near $1\%$ against a
+target of $0.15$; the motion guard of Section~\ref{sec:plateau} requires
+$\param{minAcceptedFraction}\times\param{plateauWindow} = 3$ accepted moves
+in the trailing $60$ sweeps, i.e.\ an acceptance of $\ge 5\%$; so chains
+flickered between \code{PLATEAUED} and \code{REVERTED} and were classified
+climbing whenever the end-of-cycle snapshot was taken. Samples still pooled
+from the brief flickers, which is why the point estimates tracked the
+drifting truth accurately regardless. \emph{Lowering
+\param{mcmc\_quorum\_fraction} cannot address this} --- the input to the
+quorum test is already zero; the acceptance rate is the lever.
 
 \paragraph{Source of truth.} The authoritative definitions are
 \code{DTStreamingMCMC.h} / \code{DTStreamingMCMC.cpp} (sampler, criteria,

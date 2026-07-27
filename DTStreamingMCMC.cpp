@@ -33,6 +33,7 @@
 #include <cmath>
 #include <iostream>
 #include <random>
+#include <set>
 
 #ifndef NO_OPENMP
 #include <omp.h>
@@ -105,6 +106,9 @@ bool DTStreamingMCMC::loadPosteriorSnapshot(const QString &path,
     m_prevSamples.clear();
     m_prevLogp.clear();
     m_prevPertcoeff.clear();
+    m_prevPropCov.clear();
+    m_prevPropCovWeight = 0.0;
+    m_prevKappa         = 0.0;
 
     // An absent snapshot is not an error -- it is the definition of a
     // cold start (first cycle of a deployment, or after a reset).
@@ -162,6 +166,31 @@ bool DTStreamingMCMC::loadPosteriorSnapshot(const QString &path,
     std::vector<double> pc = fromJsonArray(root.value("pertcoeff").toArray());
     if (pc.size() == np)
         m_prevPertcoeff = std::move(pc);
+
+    // Adaptive-covariance state. Carried on the same terms as pertcoeff:
+    // the parameter-name audit above already guarantees the coordinate
+    // system is unchanged, so a dimensionally valid matrix is meaningful.
+    // Restored even when the sample payload turns out to be unusable --
+    // the accumulated proposal shape is still valid.
+    std::vector<std::vector<double>> pcov =
+        fromJsonMatrix(root.value("proposal_covariance").toArray());
+    const double pcovW = root.value("proposal_covariance_weight").toDouble(0.0);
+    bool pcovValid = (pcov.size() == np) && (pcovW > 0.0);
+    if (pcovValid)
+    {
+        for (const std::vector<double> &row : pcov)
+        {
+            if (row.size() != np) { pcovValid = false; break; }
+        }
+    }
+    if (pcovValid)
+    {
+        m_prevPropCov       = std::move(pcov);
+        m_prevPropCovWeight = pcovW;
+    }
+    const double kap = root.value("kappa").toDouble(0.0);
+    if (kap > 0.0 && std::isfinite(kap))
+        m_prevKappa = kap;
 
     // Full snapshot -> pooled posterior samples; provisional -> carried
     // chain states. Both land in m_prevSamples/m_prevLogp; SeedMode
@@ -223,6 +252,19 @@ bool DTStreamingMCMC::writePosteriorSnapshot(const QString &path,
 
     root["pertcoeff"]      = toJsonArray(pertcoeff);
     root["point_estimate"] = toJsonArray(result.pointEstimate);
+
+    // Adaptive-covariance state. This object is destroyed at the end of the
+    // cycle, so the running covariance accumulates across cycles only by
+    // round-tripping here. Written unconditionally (converged or not) --
+    // the proposal shape is a sampler property, not a posterior claim.
+    // accumulateProposalCovariance() has already folded in this cycle's pool
+    // by the time the caller reaches here.
+    if (!m_propCov.empty() && m_propCovWeight > 0.0)
+    {
+        root["proposal_covariance"]        = toJsonMatrix(m_propCov);
+        root["proposal_covariance_weight"] = m_propCovWeight;
+    }
+    if (m_kappa > 0.0) root["kappa"] = m_kappa;
 
     if (result.converged)
     {
@@ -482,6 +524,131 @@ bool DTStreamingMCMC::writePosteriorDistribution(const DTCycleResult &result,
 }
 
 // ---------------------------------------------------------------------------
+// writeProposalCovariance
+//
+// Archives the accumulated proposal covariance (proposal space: log
+// coordinates for log-normal priors) as proposal_cov_cycle_<t>.txt.
+// Analysis-only -- the sampler reads its covariance from the posterior
+// snapshot, never from here. Without this the running estimate is visible
+// only in the latest snapshot, which is overwritten every cycle, so its
+// convergence over the run is unrecoverable.
+//
+// Emits the covariance, the derived correlation matrix and the marginal
+// standard deviations, so a correlation heatmap needs no post-processing.
+// ---------------------------------------------------------------------------
+bool DTStreamingMCMC::writeProposalCovariance(const QString &outputPath,
+                                              double tNow,
+                                              QString &errorMessage)
+{
+    const int d = static_cast<int>(m_propCov.size());
+    if (d == 0) return true;          // nothing accumulated yet: not an error
+
+    const QString path = outputPath + "/proposal_cov_cycle_" +
+                         QString::number(tNow, 'f', 0) + ".txt";
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
+        errorMessage = "cannot open proposal covariance file: " + path;
+        return false;
+    }
+
+    std::vector<double> sd(d);
+    for (int i = 0; i < d; ++i) sd[i] = std::sqrt(std::max(m_propCov[i][i], 0.0));
+
+    QString out;
+    out += QString("# proposal covariance, proposal space "
+                   "(log coords for log-normal priors)\n");
+    out += QString("# t_now=%1 cycle=%2 weight=%3 ready=%4 kappa=%5\n")
+               .arg(tNow, 0, 'f', 5).arg(m_cycleIndex)
+               .arg(m_propCovWeight).arg(m_propReady ? 1 : 0).arg(m_kappa);
+
+    QStringList names;
+    for (int i = 0; i < d; ++i)
+        names << QString::fromStdString(parameter(i)->GetName());
+
+    out += "sd," + names.join(',') + "\n";
+    { QStringList v; for (int i = 0; i < d; ++i) v << QString::number(sd[i], 'g', 8);
+      out += "sd," + v.join(',') + "\n"; }
+
+    out += "\ncov," + names.join(',') + "\n";
+    for (int i = 0; i < d; ++i)
+    {
+        QStringList v;
+        for (int j = 0; j < d; ++j) v << QString::number(m_propCov[i][j], 'g', 8);
+        out += names[i] + "," + v.join(',') + "\n";
+    }
+
+    out += "\ncorr," + names.join(',') + "\n";
+    for (int i = 0; i < d; ++i)
+    {
+        QStringList v;
+        for (int j = 0; j < d; ++j)
+        {
+            const double den = sd[i] * sd[j];
+            v << QString::number(den > 0.0 ? m_propCov[i][j] / den : 0.0, 'g', 8);
+        }
+        out += names[i] + "," + v.join(',') + "\n";
+    }
+
+    file.write(out.toUtf8());
+    file.close();
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// writeChainTraces
+//
+// Dumps every chain's full within-cycle log-posterior trajectory as
+// chain_traces_cycle_<t>.csv. DTChainState::trace is a rolling deque capped
+// at plateauWindow (60), so the climb->plateau trajectory that the
+// classifier acts on is otherwise destroyed as the cycle proceeds; this is
+// the only record of it. Columns:
+//
+//   chain    chain index
+//   sweep    0-based step index within the cycle
+//   logp     the chain's log-posterior AFTER the step (rejected steps
+//            re-record the current level, matching classifier input)
+//   accepted 1 if the step was accepted
+//   phase    'C' climbing / 'P' plateaued, in force when the step was taken;
+//            a 'P' row is one whose sample entered the pool
+// ---------------------------------------------------------------------------
+bool DTStreamingMCMC::writeChainTraces(const QString &outputPath,
+                                       double tNow,
+                                       QString &errorMessage)
+{
+    if (m_chains.empty()) return true;
+
+    const QString path = outputPath + "/chain_traces_cycle_" +
+                         QString::number(tNow, 'f', 0) + ".csv";
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
+        errorMessage = "cannot open chain trace file: " + path;
+        return false;
+    }
+
+    QString out = "chain,sweep,logp,accepted,phase\n";
+    for (size_t c = 0; c < m_chains.size(); ++c)
+    {
+        const DTChainState &ch = m_chains[c];
+        for (size_t k = 0; k < ch.fullTraceLogp.size(); ++k)
+        {
+            out += QString("%1,%2,%3,%4,%5\n")
+                       .arg(c).arg(k)
+                       .arg(ch.fullTraceLogp[k], 0, 'g', 10)
+                       .arg(k < ch.fullTraceAccepted.size()
+                                ? int(ch.fullTraceAccepted[k]) : 0)
+                       .arg(QChar(k < ch.fullTracePhase.size()
+                                      ? ch.fullTracePhase[k] : 'C'));
+        }
+        if (out.size() > (1 << 20)) { file.write(out.toUtf8()); out.clear(); }
+    }
+    file.write(out.toUtf8());
+    file.close();
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 bool DTStreamingMCMC::appendParameterCIRow(const DTCycleResult &result,
                                            const QString &csvPath,
                                            double tNow,
@@ -648,6 +815,38 @@ bool DTStreamingMCMC::appendHistoryRecord(const QString &path,
     rec["sweeps"]             = static_cast<double>(result.totalSweeps);
     rec["evaluations"]        = static_cast<double>(result.totalEvaluations);
 
+    // ------------------------------------------------------------------
+    // Proposal-kernel state. None of this was recoverable post-hoc before:
+    // kappa lived only in the (overwritten) snapshot and the debug log, and
+    // the covariance-readiness flag nowhere at all. One line per cycle here
+    // makes the kernel's whole trajectory plottable from the history file.
+    // ------------------------------------------------------------------
+    rec["kappa"]           = m_kappa;
+    rec["prop_cov_ready"]  = m_propReady;
+    rec["prop_cov_weight"] = m_propCovWeight;
+    rec["pertcoeff"]       = toJsonArray(pertcoeff);
+    rec["seed_mode"]       = seedModeName(m_lastSeedMode);
+
+    // Pool quality. pool_size counts retained draws including the repeats a
+    // rejected step re-pushes; the distinct count is the honest measure of
+    // how much shape information the cycle actually contributed.
+    {
+        std::set<std::vector<double>> distinct(result.pooledSamples.begin(),
+                                               result.pooledSamples.end());
+        rec["unique_pool_size"] = static_cast<double>(distinct.size());
+    }
+
+    // Ensemble log-posterior spread at cycle end -- the natural convergence
+    // diagnostic across chains, and otherwise only visible as debug-log text.
+    if (!result.chainLogp.empty())
+    {
+        std::vector<double> lp = result.chainLogp;
+        std::sort(lp.begin(), lp.end());
+        rec["chain_logp_min"]    = lp.front();
+        rec["chain_logp_median"] = lp[lp.size() / 2];
+        rec["chain_logp_max"]    = lp.back();
+    }
+
     // First cycle of a fresh deployment truncates (mirrors
     // archiveGAOutput); resumed deployments (cycle restored from the
     // posterior snapshot) append, preserving history across restarts.
@@ -691,8 +890,22 @@ SeedMode DTStreamingMCMC::chooseSeedMode(bool driftDetected) const
 // ---------------------------------------------------------------------------
 // Cycle lifecycle
 // ---------------------------------------------------------------------------
+const char *DTStreamingMCMC::seedModeName(SeedMode m)
+{
+    switch (m)
+    {
+        case SeedMode::ColdStart:         return "cold_start";
+        case SeedMode::WarmStart:         return "warm_start";
+        case SeedMode::RatioReseed:       return "ratio_reseed";
+        case SeedMode::ProvisionalResume: return "provisional_resume";
+    }
+    return "unknown";
+}
+
 bool DTStreamingMCMC::initializeCycle(SeedMode mode, QString &errorMessage)
 {
+    m_lastSeedMode = mode;
+
     const unsigned int np = MCMC_Settings.number_of_parameters;
     const unsigned int nc = MCMC_Settings.number_of_chains;
 
@@ -763,6 +976,55 @@ bool DTStreamingMCMC::initializeCycle(SeedMode mode, QString &errorMessage)
                                (parameter(i)->GetRange().high -
                                 parameter(i)->GetRange().low);
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Adaptive-covariance proposal state.
+    //
+    // kappa MUST be positive before the first adaptProposalScale() call.
+    // It was previously initialized lazily inside refactorProposalCholesky(),
+    // which only runs at cycle END via accumulateProposalCovariance() -- so
+    // during sampling kappa was still 0.0, every adaptation block computed
+    // 0.0 * purt_change_scale = 0, and the clamp pinned it at the 1e-4 floor
+    // for the whole run (~8000x below kappa_0).
+    //
+    // Restoring m_propCov here (and refactoring now, not at cycle end) is
+    // what lets the covariance actually precondition proposals: m_propReady
+    // must be true from the first sweep, not armed moments before the object
+    // is destroyed.
+    // ------------------------------------------------------------------
+    m_kappa = (m_prevKappa > 0.0)
+                  ? m_prevKappa
+                  : 2.38 / std::sqrt(static_cast<double>(np));
+
+    if (streamSettings.adaptiveCovariance && m_prevPropCov.size() == np
+        && m_prevPropCovWeight > 0.0)
+    {
+        m_propCov       = m_prevPropCov;
+        m_propCovWeight = m_prevPropCovWeight;
+        refactorProposalCholesky();   // sets m_propChol and m_propReady now
+    }
+    else
+    {
+        m_propCov.clear();
+        m_propChol.clear();
+        m_propCovWeight = 0.0;
+        m_propReady     = false;
+    }
+
+    {
+        DTDebugLog &dlog = DTDebugLog::instance();
+        if (dlog.enabled(DTDebugLog::Category::MCMC) &&
+            streamSettings.adaptiveCovariance)
+            dlog.log(DTDebugLog::Category::MCMC,
+                     QString("proposal covariance: %1 (weight=%2, need>=%3), "
+                             "kappa=%4 (%5)")
+                         .arg(m_propReady ? "READY -- preconditioning proposals"
+                                          : "not ready -- legacy walk")
+                         .arg(m_propCovWeight)
+                         .arg(2 * np)
+                         .arg(m_kappa)
+                         .arg(m_prevKappa > 0.0 ? "carried" : "init 2.38/sqrt(d)"));
     }
 
     // Position the chains per the seeding regime (Sec. 3.3 / 3.9).
@@ -1423,6 +1685,15 @@ bool DTStreamingMCMC::stepChain(int c, std::mt19937_64 &rng)
     while (chain.acceptTrace.size() > chain.trace.size())
         chain.acceptTrace.pop_front();
 
+    // Uncapped mirror of the above, for post-hoc analysis only. The phase
+    // recorded here is the one in force when the step was taken, i.e.
+    // before classifyChain() runs for this sweep -- so a 'P' row is a step
+    // whose sample was actually retained.
+    chain.fullTraceLogp.push_back(chain.logp);
+    chain.fullTraceAccepted.push_back(accepted ? 1 : 0);
+    chain.fullTracePhase.push_back(
+        chain.phase == ChainPhase::Plateaued ? 'P' : 'C');
+
     // Burn-in exclusion at retention time (Sec. 3.4): only a plateaued
     // chain's states enter the retained store. Rejected steps repeat the
     // current state -- required for correct MH sample density.
@@ -1916,7 +2187,7 @@ void DTStreamingMCMC::adaptProposalScale()
         if (dlog.enabled(DTDebugLog::Category::MCMC))
             dlog.log(DTDebugLog::Category::MCMC,
                      QString("adapt block: rate=%1 target=%2 %3 "
-                             "(pertcoeff[0]=%4)")
+                             "(pertcoeff[0]=%4, kappa=%5, cov=%6)")
                          .arg(blockRate)
                          .arg(MCMC_Settings.acceptance_rate)
                          .arg(quorumHolds()
@@ -1924,7 +2195,11 @@ void DTStreamingMCMC::adaptProposalScale()
                                   : (blockRate > MCMC_Settings.acceptance_rate
                                          ? "-> enlarge steps"
                                          : "-> shrink steps"))
-                         .arg(pertcoeff.empty() ? 0.0 : pertcoeff[0]));
+                         .arg(pertcoeff.empty() ? 0.0 : pertcoeff[0])
+                         .arg(m_kappa)
+                         .arg(streamSettings.adaptiveCovariance
+                                  ? (m_propReady ? "ready" : "not-ready")
+                                  : "off"));
     }
 
     // Freeze the proposal kernel once a quorum has plateaued: continued
