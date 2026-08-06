@@ -1,377 +1,109 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-
-import argparse
-import csv
-import json
-import math
-import re
-import sys
+import argparse,csv,json,math,re
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime,timedelta
 from pathlib import Path
-from typing import Iterable, Optional
-
+from typing import Optional
 import matplotlib
-matplotlib.use("Agg")
+matplotlib.use('Agg')
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
-
-
 @dataclass
-class Table:
-    time_raw: list[float]
-    time_plot: list
-    headers: list[str]
-    columns: dict[str, list[float]]
-
-
-def clean_name(value: str) -> str:
-    value = re.sub(r"\([^)]*\)", " ", value.strip().lower())
-    value = value.replace("_", " ").replace("-", " ")
-    return re.sub(r"\s+", " ", value).strip()
-
-
-def finite_float(value: object) -> float:
+class Series: name:str; time:list[float]; values:list[float]
+@dataclass
+class Dataset: path:Path; headers:list[str]; series:dict[str,Series]; minimum_time:float; maximum_time:float
+def clean(s): return re.sub(r'\s+',' ',re.sub(r'\([^)]*\)',' ',s.strip()).replace('_',' ')).strip()
+def canon(s): return clean(s).lower()
+def ff(v):
     try:
-        result = float(str(value).strip())
-        return result if math.isfinite(result) else float("nan")
-    except Exception:
-        return float("nan")
-
-
-def detect_delimiter(path: Path) -> str:
-    sample = path.read_text(encoding="utf-8", errors="replace")[:8192]
-    try:
-        return csv.Sniffer().sniff(sample, delimiters=",;\t").delimiter
-    except csv.Error:
-        return ","
-
-
-def find_header_index(headers: list[str], aliases: Iterable[str]) -> Optional[int]:
-    cleaned = [clean_name(h) for h in headers]
-    aliases_clean = [clean_name(a) for a in aliases]
-
-    for alias in aliases_clean:
-        for i, header in enumerate(cleaned):
-            if header == alias:
-                return i
-
-    for alias in aliases_clean:
-        if len(alias) < 3:
-            continue
-        for i, header in enumerate(cleaned):
-            if alias in header:
-                return i
-    return None
-
-
-def excel_serial_to_datetime(value: float) -> datetime:
-    return datetime(1899, 12, 30) + timedelta(days=value)
-
-
-def convert_time(values: list[float]) -> tuple[list, str]:
-    valid = [v for v in values if math.isfinite(v)]
-    if not valid:
-        return values, "numeric"
-
-    median = sorted(valid)[len(valid) // 2]
-
-    # Excel serial dates normally used by OpenHydroQual selected_output.csv.
-    if 20000 <= median <= 80000:
-        return [
-            excel_serial_to_datetime(v) if math.isfinite(v) else None
-            for v in values
-        ], "datetime"
-
-    # Unix seconds.
-    if median > 100_000_000:
-        return [
-            datetime.fromtimestamp(v) if math.isfinite(v) else None
-            for v in values
-        ], "datetime"
-
-    return values, "numeric"
-
-
-def read_table(path: Path, config: dict) -> Table:
-    delimiter = detect_delimiter(path)
-    with path.open(newline="", encoding="utf-8", errors="replace") as stream:
-        rows = list(csv.reader(stream, delimiter=delimiter))
-
-    if not rows:
-        raise ValueError(f"Empty CSV: {path}")
-
-    headers = rows[0]
-    data_rows = [row for row in rows[1:] if row]
-
-    time_index = find_header_index(headers, config.get("time_aliases", []))
-    if time_index is None:
-        # OpenHydroQual frequently places a time column immediately before
-        # each requested output. Prefer a literal t column, otherwise column 1.
-        literal_t = [i for i, h in enumerate(headers) if clean_name(h) == "t"]
-        time_index = literal_t[0] if literal_t else 0
-
-    time_raw = [
-        finite_float(row[time_index] if time_index < len(row) else "nan")
-        for row in data_rows
-    ]
-    time_plot, _ = convert_time(time_raw)
-
-    columns: dict[str, list[float]] = {}
-    for spec in config.get("series", []):
-        index = find_header_index(headers, spec.get("aliases", []))
-        if index is None:
-            continue
-        columns[spec["key"]] = [
-            finite_float(row[index] if index < len(row) else "nan")
-            for row in data_rows
-        ]
-
-    return Table(time_raw=time_raw, time_plot=time_plot, headers=headers, columns=columns)
-
-
-def valid_xy(table: Table, key: str):
-    y = table.columns.get(key, [])
-    pairs = [
-        (x, value)
-        for x, value in zip(table.time_plot, y)
-        if x is not None and math.isfinite(value)
-    ]
-    if not pairs:
-        return [], []
-    return [p[0] for p in pairs], [p[1] for p in pairs]
-
-
-def common_series(config: dict, truth: Table, assimilation: Optional[Table]):
-    output = []
-    for spec in config.get("series", []):
-        key = spec["key"]
-        if key not in truth.columns:
-            continue
-        if not any(math.isfinite(v) for v in truth.columns[key]):
-            continue
-        output.append(spec)
-    return output
-
-
-def set_time_axis(axis, datetime_mode: bool):
-    if datetime_mode:
-        locator = mdates.AutoDateLocator(minticks=4, maxticks=8)
-        axis.xaxis.set_major_locator(locator)
-        axis.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
-    axis.grid(True, alpha=0.25)
-
-
-def draw_series(axis, spec, truth: Table, assimilation: Optional[Table]):
-    key = spec["key"]
-    x, y = valid_xy(truth, key)
-    axis.plot(x, y, linewidth=1.4, label="Truth")
-
-    if assimilation is not None and key in assimilation.columns:
-        xa, ya = valid_xy(assimilation, key)
-        if xa:
-            axis.plot(xa, ya, linewidth=1.2, linestyle="--", label="Assimilation")
-
-    label = spec.get("label", key)
-    unit = spec.get("unit", "")
-    axis.set_ylabel(f"{label} ({unit})" if unit else label)
-    if assimilation is not None:
-        axis.legend(loc="best", frameon=False)
-
-
-def save_multi_panel(
-    output: Path,
-    specs: list[dict],
-    truth: Table,
-    assimilation: Optional[Table],
-    title: str,
-    xlim=None,
-):
-    if not specs:
-        return
-
-    n = len(specs)
-    fig, axes = plt.subplots(
-        nrows=n,
-        ncols=1,
-        figsize=(12, max(3.0 * n, 4.5)),
-        sharex=True,
-        constrained_layout=True,
-    )
-    if n == 1:
-        axes = [axes]
-
-    datetime_mode = bool(
-        truth.time_plot and isinstance(next((x for x in truth.time_plot if x is not None), None), datetime)
-    )
-
-    for axis, spec in zip(axes, specs):
-        draw_series(axis, spec, truth, assimilation)
-        set_time_axis(axis, datetime_mode)
-        if xlim is not None:
-            axis.set_xlim(*xlim)
-
-    axes[-1].set_xlabel("Time")
-    fig.suptitle(title, fontsize=14)
-    fig.savefig(output, dpi=240, bbox_inches="tight")
-    plt.close(fig)
-    print(f"[ok] wrote {output}")
-
-
-def write_inventory(path: Path, config: dict, truth: Table, assimilation: Optional[Table]):
-    configured = {s["key"]: s for s in config.get("series", [])}
-    lines = [
-        "# JM plot-variable inventory",
-        "",
-        "## Truth CSV headers",
-        "",
-    ]
-    lines.extend(f"- `{h}`" for h in truth.headers)
-    lines += ["", "## Matched configured series", ""]
-    for key in truth.columns:
-        lines.append(f"- `{key}` → {configured.get(key, {}).get('label', key)}")
-
-    missing = [s for s in config.get("series", []) if s["key"] not in truth.columns]
-    lines += ["", "## Configured series not found", ""]
-    lines.extend(f"- `{s['key']}`: {', '.join(s.get('aliases', []))}" for s in missing)
-
-    if assimilation is not None:
-        lines += ["", "## Assimilation overlay", "", "Enabled."]
-    else:
-        lines += ["", "## Assimilation overlay", "", "Disabled or unavailable."]
-
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"[ok] wrote {path}")
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate JM truth and optional assimilation plots.")
-    parser.add_argument("--truth", type=Path, required=True)
-    parser.add_argument("--assimilation", type=Path)
-    parser.add_argument("--output-dir", type=Path, default=Path("JM_plot_results"))
-    parser.add_argument("--window-days", type=float, default=10.0)
-    parser.add_argument("--config", type=Path, default=Path("jm_plot_config.json"))
-    args = parser.parse_args()
-
-    config = json.loads(args.config.read_text(encoding="utf-8"))
-    truth = read_table(args.truth, config)
-    assimilation = read_table(args.assimilation, config) if args.assimilation else None
-
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    specs = common_series(config, truth, assimilation)
-
-    write_inventory(
-        args.output_dir / "jm_variable_inventory.md",
-        config,
-        truth,
-        assimilation,
-    )
-
-    if not specs:
-        print("[error] No configured JM variables matched the truth CSV.", file=sys.stderr)
-        print("[error] See jm_variable_inventory.md and update aliases in jm_plot_config.json.", file=sys.stderr)
-        return 1
-
-    state_keys = {
-        "catch_basin_stage",
-        "surface_depth",
-        "soil_moisture",
-        "groundwater",
-    }
-    flow_keys = {
-        "precipitation",
-        "catchment_runoff",
-        "gutter_flow",
-        "catch_basin_inflow",
-        "facility_inflow",
-        "underdrain_flow",
-        "infiltration",
-        "overflow",
-    }
-
-    states = [s for s in specs if s["key"] in state_keys]
-    flows = [s for s in specs if s["key"] in flow_keys]
-    remaining = [s for s in specs if s not in states and s not in flows]
-
-    suffix = "truth_vs_assimilation" if assimilation else "truth"
-
-    save_multi_panel(
-        args.output_dir / f"paper_jm_states_full_{suffix}.png",
-        states or specs,
-        truth,
-        assimilation,
-        "JM hydraulic states — full period",
-    )
-    save_multi_panel(
-        args.output_dir / f"paper_jm_flows_full_{suffix}.png",
-        flows or specs,
-        truth,
-        assimilation,
-        "JM hydrologic and hydraulic fluxes — full period",
-    )
-    if remaining:
-        save_multi_panel(
-            args.output_dir / f"paper_jm_additional_full_{suffix}.png",
-            remaining,
-            truth,
-            assimilation,
-            "JM additional outputs — full period",
-        )
-
-    valid_times = [v for v in truth.time_raw if math.isfinite(v)]
-    if valid_times:
-        minimum = min(valid_times)
-        maximum = max(valid_times)
-        width = min(args.window_days, max(0.0, maximum - minimum))
-        early_raw = (minimum, minimum + width)
-        late_raw = (maximum - width, maximum)
-
-        plot_times, mode = convert_time(
-            [early_raw[0], early_raw[1], late_raw[0], late_raw[1]]
-        )
-        early_xlim = (plot_times[0], plot_times[1])
-        late_xlim = (plot_times[2], plot_times[3])
-
-        selected = states + flows
-        selected = selected[:8] if selected else specs[:8]
-
-        save_multi_panel(
-            args.output_dir / f"paper_jm_early_window_{suffix}.png",
-            selected,
-            truth,
-            assimilation,
-            f"JM early window — first {width:g} days",
-            early_xlim,
-        )
-        save_multi_panel(
-            args.output_dir / f"paper_jm_late_window_{suffix}.png",
-            selected,
-            truth,
-            assimilation,
-            f"JM late window — last {width:g} days",
-            late_xlim,
-        )
-
-        window_file = args.output_dir / "jm_plot_windows.json"
-        window_file.write_text(
-            json.dumps(
-                {
-                    "minimum_time": minimum,
-                    "maximum_time": maximum,
-                    "window_days": width,
-                    "early": list(early_raw),
-                    "late": list(late_raw),
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        print(f"[ok] wrote {window_file}")
-
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+        x=float(str(v).strip()); return x if math.isfinite(x) else float('nan')
+    except Exception:return float('nan')
+def delim(path):
+    sample=path.read_text(encoding='utf-8',errors='replace')[:16384]
+    try:return csv.Sniffer().sniff(sample,delimiters=',;\t').delimiter
+    except csv.Error:return ','
+def to_dt(v): return datetime(1899,12,30)+timedelta(days=v)
+def plot_time(vals):
+    finite=[v for v in vals if math.isfinite(v)]
+    if not finite:return vals
+    med=sorted(finite)[len(finite)//2]
+    if 20000<=med<=80000:return [to_dt(v) if math.isfinite(v) else None for v in vals]
+    if med>100_000_000:return [datetime.fromtimestamp(v) if math.isfinite(v) else None for v in vals]
+    return vals
+def read_csv(path):
+    with path.open(newline='',encoding='utf-8',errors='replace') as f: rows=list(csv.reader(f,delimiter=delim(path)))
+    if not rows: raise ValueError(f'Empty CSV: {path}')
+    headers=rows[0]; data=[r for r in rows[1:] if r]; series={}
+    for j,h in enumerate(headers):
+        name=clean(h)
+        if not name or canon(name) in {'t','time','date','datetime','timestamp'}: continue
+        ti=max(0,j-1); pairs=[]
+        for row in data:
+            t=ff(row[ti] if ti<len(row) else 'nan'); v=ff(row[j] if j<len(row) else 'nan')
+            if math.isfinite(t) and math.isfinite(v): pairs.append((t,v))
+        if pairs: series[canon(name)]=Series(name,[p[0] for p in pairs],[p[1] for p in pairs])
+    times=[t for s in series.values() for t in s.time]
+    if not times: raise ValueError(f'No valid time series found in {path}')
+    return Dataset(path,headers,series,min(times),max(times))
+def exact(ds,name): return ds.series.get(canon(name))
+def grouped(ds,pattern):
+    rx=re.compile(pattern,re.I); out=[]
+    for s in ds.series.values():
+        m=rx.fullmatch(s.name.strip())
+        if m: out.append((int(m.group(1)),s))
+    return sorted(out)
+def match(assim,s): return None if assim is None else assim.series.get(canon(s.name))
+def style(ax,isdt):
+    ax.grid(True,alpha=.25)
+    if isdt:
+        loc=mdates.AutoDateLocator(minticks=4,maxticks=8); ax.xaxis.set_major_locator(loc); ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc))
+def one(ax,s,assim,label=None):
+    ax.plot(plot_time(s.time),s.values,lw=1.35,label=label or s.name)
+    a=match(assim,s)
+    if a: ax.plot(plot_time(a.time),a.values,lw=1.15,ls='--',label=f'{label or s.name} — assimilation')
+def save_group(path,items,assim,title,ylabel,xlim=None):
+    if not items:return
+    fig,ax=plt.subplots(figsize=(12,5.5),constrained_layout=True); isdt=isinstance(plot_time([items[0][1].time[0]])[0],datetime)
+    for lab,s in items: one(ax,s,assim,lab)
+    ax.set(title=title,xlabel='Time',ylabel=ylabel); style(ax,isdt)
+    if xlim: ax.set_xlim(*xlim)
+    ax.legend(loc='best',frameon=False,ncol=2); fig.savefig(path,dpi=240,bbox_inches='tight'); plt.close(fig); print(f'[ok] wrote {path}')
+def save_stack(path,panels,assim,title,xlim=None):
+    if not panels:return
+    fig,axes=plt.subplots(len(panels),1,figsize=(12,max(3*len(panels),5)),sharex=True,constrained_layout=True)
+    if len(panels)==1: axes=[axes]
+    isdt=isinstance(plot_time([panels[0][1].time[0]])[0],datetime)
+    for ax,(lab,s) in zip(axes,panels):
+        one(ax,s,assim,'Truth'); ax.set_ylabel(lab); style(ax,isdt)
+        if xlim: ax.set_xlim(*xlim)
+        if match(assim,s): ax.legend(loc='best',frameon=False)
+    axes[-1].set_xlabel('Time'); fig.suptitle(title,fontsize=14); fig.savefig(path,dpi=240,bbox_inches='tight'); plt.close(fig); print(f'[ok] wrote {path}')
+def window(ds,days,late):
+    w=min(days,max(0,ds.maximum_time-ds.minimum_time)); raw=[ds.maximum_time-w,ds.maximum_time] if late else [ds.minimum_time,ds.minimum_time+w]; p=plot_time(raw); return raw,(p[0],p[1])
+def main():
+    p=argparse.ArgumentParser(); p.add_argument('--truth',type=Path,required=True); p.add_argument('--assimilation',type=Path); p.add_argument('--output-dir',type=Path,default=Path('JM_plot_results')); p.add_argument('--window-days',type=float,default=10); a=p.parse_args()
+    truth=read_csv(a.truth); assim=read_csv(a.assimilation) if a.assimilation else None; a.output_dir.mkdir(parents=True,exist_ok=True)
+    ponds=grouped(truth,r'Pond\s+(\d+)\s+water\s+depth'); soils=grouped(truth,r'Soil\s+(\d+)\s+moisture'); infil=grouped(truth,r'Pond\s+(\d+)\s+infiltration'); over=grouped(truth,r'Pond\s+(\d+)\s+overflow')
+    singles={'Precipitation':exact(truth,'Precipitation'),'DA-01 runoff':exact(truth,'DA-01 runoff'),'Gutter 4 depth':exact(truth,'Gutter 4 depth'),'Underdrain outlet flow':exact(truth,'Underdrain outlet flow'),'Groundwater recharge':exact(truth,'Groundwater recharge'),'Catch basin depth':exact(truth,'Catch basin depth'),'Catch basin outlet flow':exact(truth,'Catch basin outlet flow')}
+    inv=['# JM plot-variable inventory','',f'- Truth file: `{truth.path}`',f'- Assimilation file: `{assim.path if assim else "disabled or unavailable"}`','','## Truth CSV outputs','']+[f'- `{s.name}`' for s in truth.series.values()]
+    for title,items in [('Pond water depths',ponds),('Soil moisture',soils),('Pond infiltration',infil),('Pond overflow',over)]: inv+=['',f'## {title}','']+([f'- {n}: `{s.name}`' for n,s in items] or ['- None detected'])
+    inv+=['','## System outputs','']+[f'- {k}: `{v.name if v else "not found"}`' for k,v in singles.items()]
+    (a.output_dir/'jm_variable_inventory.md').write_text('\n'.join(inv)+'\n'); print(f'[ok] wrote {a.output_dir/"jm_variable_inventory.md"}')
+    suffix='truth_vs_assimilation' if assim else 'truth'
+    save_group(a.output_dir/f'paper_jm_pond_depths_{suffix}.png',[(f'Pond {n}',s) for n,s in ponds],assim,'JM pond water depths','Water depth')
+    save_group(a.output_dir/f'paper_jm_soil_moisture_{suffix}.png',[(f'Soil {n}',s) for n,s in soils],assim,'JM soil moisture','Moisture')
+    save_group(a.output_dir/f'paper_jm_infiltration_{suffix}.png',[(f'Pond {n}',s) for n,s in infil],assim,'JM pond infiltration','Infiltration')
+    save_group(a.output_dir/f'paper_jm_overflow_{suffix}.png',[(f'Pond {n}',s) for n,s in over],assim,'JM pond overflow','Overflow')
+    flows=[(k,singles[k]) for k in ['Precipitation','DA-01 runoff','Underdrain outlet flow','Groundwater recharge','Catch basin outlet flow'] if singles[k]]
+    save_stack(a.output_dir/f'paper_jm_system_flows_{suffix}.png',flows,assim,'JM system fluxes — full period')
+    states=[(k,singles[k]) for k in ['Gutter 4 depth','Catch basin depth'] if singles[k]]+[(f'Pond {n} depth',s) for n,s in ponds]
+    save_stack(a.output_dir/f'paper_jm_hydraulic_states_{suffix}.png',states,assim,'JM hydraulic states — full period')
+    summary=[(k,singles[k]) for k in ['Precipitation','DA-01 runoff','Gutter 4 depth','Catch basin depth','Underdrain outlet flow','Groundwater recharge','Catch basin outlet flow'] if singles[k]]
+    if ponds: summary.append((f'Pond {ponds[-1][0]} depth',ponds[-1][1]))
+    er,ex=window(truth,a.window_days,False); lr,lx=window(truth,a.window_days,True)
+    save_stack(a.output_dir/f'paper_jm_summary_full_{suffix}.png',summary,assim,'JM system summary — full period')
+    save_stack(a.output_dir/f'paper_jm_summary_early_{suffix}.png',summary,assim,f'JM system summary — first {a.window_days:g} days',ex)
+    save_stack(a.output_dir/f'paper_jm_summary_late_{suffix}.png',summary,assim,f'JM system summary — last {a.window_days:g} days',lx)
+    wp=a.output_dir/'jm_plot_windows.json'; wp.write_text(json.dumps({'minimum_time':truth.minimum_time,'maximum_time':truth.maximum_time,'window_days':a.window_days,'early':er,'late':lr},indent=2)+'\n'); print(f'[ok] wrote {wp}')
+if __name__=='__main__': main()
