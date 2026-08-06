@@ -1,0 +1,83 @@
+{
+  "time_aliases": [
+    "time",
+    "date",
+    "datetime",
+    "timestamp",
+    "t"
+  ],
+  "series": [
+    {
+      "key": "precipitation",
+      "label": "Precipitation",
+      "unit": "",
+      "aliases": ["precipitation", "precip", "rainfall", "rain"]
+    },
+    {
+      "key": "catchment_runoff",
+      "label": "Catchment runoff",
+      "unit": "",
+      "aliases": ["catchment runoff", "runoff", "catchment flow"]
+    },
+    {
+      "key": "gutter_flow",
+      "label": "Gutter flow",
+      "unit": "",
+      "aliases": ["gutter flow", "gutter discharge", "gutter"]
+    },
+    {
+      "key": "catch_basin_inflow",
+      "label": "Catch-basin inflow",
+      "unit": "",
+      "aliases": ["catch basin inflow", "catch-basin inflow", "basin inflow"]
+    },
+    {
+      "key": "catch_basin_stage",
+      "label": "Catch-basin stage",
+      "unit": "",
+      "aliases": ["catch basin stage", "catch-basin stage", "basin stage", "catch basin depth"]
+    },
+    {
+      "key": "facility_inflow",
+      "label": "Bioretention inflow",
+      "unit": "",
+      "aliases": ["bioretention inflow", "facility inflow", "jm inflow", "inflow"]
+    },
+    {
+      "key": "surface_depth",
+      "label": "Surface-water depth",
+      "unit": "",
+      "aliases": ["surface water depth", "surface depth", "ponding depth", "pond depth"]
+    },
+    {
+      "key": "soil_moisture",
+      "label": "Media water content",
+      "unit": "",
+      "aliases": ["soil moisture", "media moisture", "water content", "theta"]
+    },
+    {
+      "key": "underdrain_flow",
+      "label": "Underdrain flow",
+      "unit": "",
+      "aliases": ["underdrain flow", "underdrain discharge", "drain flow"]
+    },
+    {
+      "key": "infiltration",
+      "label": "Infiltration",
+      "unit": "",
+      "aliases": ["infiltration", "infiltration rate", "native soil infiltration"]
+    },
+    {
+      "key": "overflow",
+      "label": "Overflow",
+      "unit": "",
+      "aliases": ["overflow", "overflow flow", "weir flow"]
+    },
+    {
+      "key": "groundwater",
+      "label": "Groundwater state",
+      "unit": "",
+      "aliases": ["groundwater", "ground water", "water table", "gw head"]
+    }
+  ]
+}
