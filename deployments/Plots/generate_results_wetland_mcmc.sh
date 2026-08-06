@@ -5,13 +5,17 @@ cd "$SCRIPT_DIR"
 TRUTH_DIR="${TRUTH_DIR:-Wetland_truth}"
 MCMC_DIR="${MCMC_DIR:-Wetland_assimilation_MCMC}"
 OUTDIR="$MCMC_DIR/outputs/paper_plot_inputs_mcmc"
+WINDOW_DAYS="${WINDOW_DAYS:-10}"
+WINDOW_CONFIG="plot_windows_wetland_mcmc.gp"
 mkdir -p "$OUTDIR"
 
 python3 prepare_wetland_mcmc_plot_inputs.py \
   --truth "$TRUTH_DIR/outputs/selected_output.csv" \
   --mcmc "$MCMC_DIR/outputs/selected_output.csv" \
   --reanalysis "$MCMC_DIR/outputs/reanalysis_output.csv" \
-  --outdir "$OUTDIR"
+  --outdir "$OUTDIR" \
+  --window-days "$WINDOW_DAYS" \
+  --window-config "$WINDOW_CONFIG"
 
 python3 prepare_wetland_mcmc_history.py \
   --history "$MCMC_DIR/outputs/calibration/posterior_history.jsonl" \

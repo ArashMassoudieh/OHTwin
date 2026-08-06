@@ -5,7 +5,7 @@ outfile="paper_truth_vs_mcmc_wetland.png"
 set terminal pngcairo size 1600,1800 enhanced font "Helvetica,18"; set output outfile
 epoch(d)=(d-25569.0)*86400.0
 set xdata time; set timefmt "%s"; set format x "%Y-%m-%d"
-x0=epoch(43833.0); x1=epoch(43843.0); x2=epoch(44555.0); x3=epoch(44565.0)
+load "plot_windows_wetland_mcmc.gp"
 set multiplot layout 4,2
 set grid xtics ytics lc rgb "#cccccc" lw 0.8; set tics nomirror; set border 3
 ct="#d62728"; cm="#1f77b4"; lw=2.2; ps=0.6; sub=3
