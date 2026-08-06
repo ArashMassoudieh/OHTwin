@@ -49,4 +49,17 @@ Written to `Wetland_assimilation_MCMC/outputs/paper_plot_inputs_mcmc/`:
 
 The truth-vs-MCMC main figure uses the configured MCMC calibration targets (Cell 1 depth, Cell 6 depth, and outflow) plus inlet stage for hydraulic context. The separate diagnostic figures retain mid-stage, HRT, outlet stage, and reanalysis views.
 
-Edit `x0`, `x1`, `x2`, and `x3` in the windowed `.gp` files to change the early and late paper windows.
+The early and late paper windows are generated automatically from the current
+`mcmc_normalized.csv`. By default, the package uses the first 10 days and the
+last 10 days. For shorter runs, it automatically uses two equal non-overlapping
+windows.
+
+To request another window length without editing code:
+
+```bash
+WINDOW_DAYS=7 ./generate_results_wetland_mcmc.sh
+```
+
+The generated shared Gnuplot configuration is:
+
+- `plot_windows_wetland_mcmc.gp`
