@@ -1,0 +1,25 @@
+{
+    "deployment_name": "Bioretention_truth",
+    "last_updated_utc": "2026-07-31T07:52:49Z",
+    "observations": {
+        "noise_correlation_time_days": 0.25,
+        "noise_correlation_time_ms": 21600000,
+        "noise_model": "multiplicative_log_normal_OU x_obs = x_model * exp(sigma * epsilon)",
+        "noise_sigma": {
+            "default": 0,
+            "evaporation": 0,
+            "groundwater recharge": 0,
+            "infiltration rate": 0,
+            "inflow to the pond": 0,
+            "overflow": 0,
+            "pond water depth": 0.1,
+            "precipitation": 0,
+            "soil moisture": 0.05,
+            "underdrain flow": 0.1
+        },
+        "ou_stationary_variance": 1,
+        "save_interval_days": 0.041666666666666664,
+        "save_interval_ms": 3600000
+    },
+    "runs_completed": 731
+}

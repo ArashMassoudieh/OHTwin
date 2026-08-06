@@ -1,209 +1,184 @@
-# Session handoff — proposal-kernel fixes + paper instrumentation (2026-07-27)
+# Session handoff — ensemble collapse diagnosis + anti-collapse work (2026-08-06)
 
-Work on `DTStreamingMCMC` / `DTAssimilation` and the OpenHydroQual likelihood,
-preparing a re-run of the bioretention **drift** experiment for the methods paper.
+Supersedes the 2026-07-27 handoff. Binary built and clean: `build-qmake/bin/OHTwin`.
 
-Previous handoff (2026-07-06→07: rolling window, MAP spin-up, seamless resume)
-is superseded by this file; its open item #2 ("convergence never certifies") is
-diagnosed and addressed below.
+## Where things stand in one paragraph
 
-## Starting point
+The proposal-kernel fixes from the previous session **worked mechanically and
+failed scientifically**. Acceptance went 0.0086 → 0.166, ESS 24 → 73, convergence
+0/244 → 172/244 — and inference got *worse*: 95% CI coverage of the known truth
+fell to 10% (3% at accel 100), and Ksat ended at 6.17 against a truth of 2.0,
+never recovering. Cause: **ensemble variance collapse**. A test run
+(`Bioretention_assimilation_MCMC_drift_INFLATE`) is now in flight testing the
+first countermeasure.
 
-`deployments/Bioretention_assimilation_MCMC_drift` held a finished 244-cycle run
-(t_now 43837→44565) against `Bioretention_truth_drift`, in which the truth drives
-`EngSoilKsat` 10 → 2 across t=44166–44197 via `drift/ksat_drift.csv`.
+## The three completed runs
 
-**Scientific result was good.** Ksat tracked the step with a **99-day recovery
-lag ≈ `calibration_window_days`=100**; `EngineeredSoilAlpha/Ksat/n` and
-`RunoffCoeff` recovered to within a few percent of truth; CI width inflated ~3×
-during the shock and re-tightened. `NativeSoilKsat`/`NativeSoiln` are not
-identifiable from the three calibration observations (relative CI width
-250–650%, estimates outside their declared prior bounds), which shows up
-downstream as a persistent −0.45 m³/day groundwater-recharge bias.
+| deployment | config | outcome |
+|---|---|---|
+| `..._MCMC_drift_BASELINE` | frozen proposal (pre-fix) | 0/244 converged, but **accurate**: Ksat 2.20 vs truth 2.0, 93-day recovery lag |
+| `..._MCMC_drift` | fixed kernel, accel 200 | 172/244 converged, coverage **10%**, Ksat 6.17 (+209%), never recovers |
+| `..._MCMC_drift (Copy)` | fixed kernel, accel **100** | 186/244 converged, coverage **3%**, Ksat 7.56 (+278%) |
 
-**Sampler health was not.** `converged=false` and `plateaued_fraction` **exactly
-0 in all 244 cycles**; acceptance median 0.0086 against a target of 0.15.
+Truth outputs for run 1 are preserved at `Bioretention_truth_drift_RUN1_outputs/`.
 
-## Root cause (three interacting defects, all silent)
+**The accel-100 run is the key evidence:** doubling the compute per cycle made
+every scientific measure worse while improving every diagnostic. That rules out
+undersampling and identifies a self-reinforcing contraction driven by sampling
+steps.
 
-1. **Σ̂ did not survive the cycle.** `DTStreamingMCMC` is a stack local rebuilt
-   every cycle (`DTAssimilation.cpp:1090`). `accumulateProposalCovariance` runs
-   *after* the sampling loop "so the NEXT cycle benefits", but the object is
-   destroyed immediately and `m_propCov` was not persisted. `m_propReady` was
-   therefore true for **zero proposals ever drawn**.
-2. **κ pinned at its floor.** `m_kappa` initialised to 0.0 with its lazy init
-   inside `refactorProposalCholesky()` — reached only at cycle end. Every
-   adaptation block computed `0 × 0.75 = 0` and the clamp lifted it to 1e-4,
-   ~8000× below κ₀ = 2.38/√d.
-3. Consequently `mcmc_proposal_mode: "covariance"` degraded to the **legacy walk
-   with adaptation switched off**: `adaptProposalScale` takes the κ branch and
-   returns before touching `pertcoeff`. Verified — all nine final `pertcoeff`
-   match `0.05 × range` to machine precision (rel. diff ≤ 2.4e-16).
+## Diagnosis (all measured, not inferred)
 
-Chain: frozen proposal → ~1% acceptance → below the classifier's motion guard
-(`minAcceptedFraction × plateauWindow` = 0.05 × 60 = **3 accepts per 60 sweeps**,
-i.e. ≥5% acceptance) → chains thrash PLATEAUED↔REVERTED (3145 vs 3179 events) →
-`plateauedFraction()` = 0 at cycle end → quorum never fires.
+- Pool spread collapsed **377×** (0.147 → 0.00039 over 244 cycles); 81/242 cycles
+  had pool sd < 1e-3; cycle 111 pooled **1 distinct draw out of 3**.
+- Accumulated Σ̂ moved only **1.7×**, so it ended **250–1000× wider** than the
+  posterior it preconditions. It isn't collapsing — it's *frozen* (no forgetting,
+  W reached ~60,000, each cycle shifts it ~1%).
+- κ absorbed the mismatch until it **saturated at its 1e-4 floor**.
+- Contraction locus: **warm-start seeding**. Chains draw from the previous
+  cycle's already-narrow pool, so under-dispersion compounds every cycle. Extra
+  sweeps don't escape it — they estimate the collapsed state more precisely,
+  which is why CIs got 6.6× tighter at accel 100.
+- Measured contraction rate: **×0.976 per cycle**.
 
-**Lowering `mcmc_quorum_fraction` cannot help — its input is already 0.**
-Switching to `"global"` is also wrong: that is the mode whose failure
-`proposal_adaptation_methods.tex` §1 documents (global scale collapses to
-~1.5e-4 while the weakly-identified directions freeze).
+Secondary (≈2.45×, i.e. ~150× less important than the collapse): the likelihood
+treats 6-hour-correlated noise as independent at hourly sampling.
 
-## Changes
+## What was implemented (all default OFF — nothing changes unless enabled)
 
-### `DTStreamingMCMC.{h,cpp}` — kernel fixes
-- Σ̂ / `W` / κ round-trip via `posterior_latest.json` (`proposal_covariance`,
-  `proposal_covariance_weight`, `kappa`). Restored **and refactorised** in
-  `initializeCycle`, so `m_propReady` is armed from sweep 1. Written on
-  provisional cycles too — the proposal shape is a sampler property, not a
-  posterior claim, and nothing certifies.
-- `m_kappa = 2.38/√d` in `initializeCycle`, before any adaptation block.
-- Adapt-block log now prints `kappa=` and `cov=ready|not-ready`. It previously
-  printed only `pertcoeff[0]`, the one value guaranteed not to move in this mode.
+### `DTStreamingMCMC` — anti-collapse
+- **Seed inflation** `inflateSeedEnsemble()`: `φ ← φ̄ + r(φ − φ̄)` in proposal
+  space (log coords for log-normal, so it's geometric in the physical parameter
+  and can't go negative). Mean preserved to 4e-16, spread scaled by exactly `r`.
+  This is EnKF covariance inflation; chains stay at the mode, so nothing has to
+  traverse the prior. Config `mcmc_seed_inflation` (1.0 = off).
+- **Configurable proposal-scale floor** `proposalScaleFloor()`, replacing the
+  hard-coded 1e-4. Can floor the *effective step* `κ·sd_i` against prior width.
+  Config `mcmc_kappa_min`, `mcmc_min_step_fraction` (0 = off).
 
-The accumulation math was already what we want and is **unchanged**: weight
-`n_k−1` with per-cycle mean-centering expands to the pooled within-cycle
-covariance `Σ_k S_k / Σ_k (n_k−1)` — every retained draw equally weighted, drift
-removed. Duplicates (rejected steps re-pushing state) are kept; they are part of
-the correct MH estimator.
+### `DTStreamingMCMC` — drift detection
+- **CUSUM** per parameter on pooled cycle means, in proposal space. Reference
+  built over the first `mcmc_drift_reference_cycles` (40), no alarm during that
+  period. Runs on provisional cycles too — a drifting system is exactly when
+  cycles stop certifying. Online trigger; **no p-value**.
+- **Hotelling T²**, two-window, over the full parameter vector → one p-value for
+  "has anything drifted". Uses **effective** counts `W/τ` with τ estimated from
+  the cycle-mean autocorrelation. F-tail validated against `scipy.stats.f.sf` to
+  ~1e-13. Degrades to the diagonal form rather than inverting a rank-deficient
+  covariance.
+- State round-trips through `posterior_latest.json` under a `drift` key.
+  `chooseSeedMode` now gets the real flag instead of hard-coded `false`.
+- Config `mcmc_drift_detection`, `mcmc_cusum_k` (1.0), `mcmc_cusum_h` (5.0),
+  `mcmc_t2_window_cycles` (33).
 
-### `OpenHydroQual/aquifolium/src/observation.cpp` — likelihood
-`fit_mse/σ²` → `fit_mse/(2σ²)` at lines 126, 137, 199 (LS normal, LS log-normal,
-WLS). `diff2`/`weighted_mse` both return *means*, so the `N`/`sum_w` multiplier
-was already correct; only the ½ was missing. Verified numerically: old argmin =
-√2 × RMS, new = RMS, and the new expression differs from the textbook Gaussian
-NLL by exactly ½N·log(2π).
+Validated offline on BASELINE: CUSUM `k=1, h=5` detects **19 days** after onset
+with **0 false alarms** in 110 pre-drift cycles — 74 days before the estimate
+itself converges. The two-window T² needs ~100 days but gives p = 4.7e-8.
 
-**This does not change θ inference.** Profiling σ out gives
-`const + (N/2)·ln MSE(θ)` under both forms — it corrects σ only. Every
-`Std_*` from runs predating the fix is inflated by exactly √2. Separate repo,
-uncommitted on `master`; affects every model using the engine, including the GA path.
+### `DTAssimilation` — likelihood autoscaling (Layer 1)
+- `updateLikelihoodScales()`: one solve per cycle at the point estimate,
+  per-observation residual τ_int via Geyer initial-positive-sequence,
+  EWMA-smoothed, applied via `Observation::SetLikelihoodScale()`.
+- Deliberately **measured, not derived from the noise config**: residual
+  correlation is dominated by *model structural error*. Measured τ_int was
+  3.6 / 23.8 / 9.5 (underdrain / soil moisture / pond depth) against a
+  theoretical 12.0 from the injected noise. A single assumed scale is indefensible.
+- C++ estimator validated against a Python reference to 1e-6.
+- Config `mcmc_likelihood_autoscale` (false), `mcmc_likelihood_scale_ewma` (0.3).
 
-### Paper instrumentation (write-only; cannot alter run behaviour)
-- `posterior_history.jsonl` += `kappa`, `prop_cov_ready`, `prop_cov_weight`,
-  `pertcoeff`, `seed_mode`, `unique_pool_size`, `chain_logp_{min,median,max}`.
-- `proposal_cov_cycle_<t>.txt` — Σ̂, marginal SDs, derived correlation matrix.
-- `chain_traces_cycle_<t>.csv` — `chain,sweep,logp,accepted,phase`. Needed a new
-  uncapped mirror of `chain.trace` in `DTChainState`, since the classifier's
-  deque is capped at `plateauWindow`=60 and destroys the climb→plateau path.
-- Both gated on `mcmc_realization_interval`.
+### Diagnostics added to `posterior_history.jsonl`
+`kappa_floor`, `seed_inflation`, `drift_detected`, `cusum_max`, `drift_t2_p`,
+`drift_tau`, `drift_parameters`.
 
-### Configs
-- `Bioretention_truth_drift`: `time_acceleration` **400 → 200**. The baseline was
-  produced at 200 — at 1296 s wall per assimilation cycle, a truth at 200
-  advances exactly the observed 3.0 sim-days/cycle (400 gives 6.0, halving the
-  cycle count and the resolution of every trajectory figure).
-- `Bioretention_assimilation_MCMC_drift`: `keep_debug_outputs` **false → true**.
-  This is the *only* thing that archives per-cycle forecasts, as
-  `outputs/<yyyyMMdd_HHmmss>_forecast_output.txt` named by forecast issue time.
-  `mcmc_realization_interval` left at 10 by request.
+## ⚠ OpenHydroQual changes (separate repo, affects every project using the engine)
 
-### Docs
-`streaming_mcmc_algorithm.tex` (likelihood ½, covariance mode, κ, analysis
-dumps, measured certification behaviour, stability-path defect) and
-`proposal_adaptation_methods.tex` (Method C persistence + κ init; the
-"persists across cycles" claim was wrong). Both compile clean — 14 and 7 pages,
-no undefined refs.
+| change | status |
+|---|---|
+| Missing ½ in the Gaussian NLL (`fit_mse/(2σ²)`, 3 sites) | **committed** (in HEAD) |
+| `likelihood_scale` member + divisor + **copy-ctor/`operator=` propagation** | **UNCOMMITTED on master** |
 
-## Build
+The copy propagation is not optional: every MCMC chain works on a `System` copy,
+so without it the chains would silently run at scale 1.0. `likelihood_scale` is a
+plain member, not a `Quan` — it's a property of the residual series, not the
+model file, so no template changes and no `.ohq` edits.
 
-Clean. `build-qmake/bin/OHTwin`. Only warnings are pre-existing (sign-compare in
-`posteriorLocal`, QDateTime deprecations, unused `mark` in DTAssimilation).
+DrywellDT has 6 modified files, also uncommitted.
 
-```bash
-cd build-qmake && make -j$(nproc)
-```
+## The run in flight
 
-## Running
+`deployments/Bioretention_assimilation_MCMC_drift_INFLATE` — see its `RUN.md`.
+Port 8185, accel **200** (deliberately not 100), `mcmc_seed_inflation: 1.05`,
+drift detection on, **autoscaling off** so inflation is the single intervention.
+Everything else identical to `..._MCMC_drift`, which is therefore a clean control.
 
-**Order matters.** nginx serves 8086 from `Bioretention_truth_drift` and
-currently returns the *complete stale* CSV (3.2 MB, last t=44565).
-`advanceEnd = tMaxDt` at `DTRunner.cpp:522` has **no clamp**, so starting the
-assimilator against a finished truth attempts a single ~730-day solve.
+`r = 1.05` is the smallest value that reverses the measured ×0.976/cycle
+contraction (net ×1.025).
 
-Truth first, then the assimilator:
+### Checking it
 
 ```bash
-cd /home/arash/Projects/DrywellDT
-./build-qmake/bin/OHTwin --deployment deployments/Bioretention_truth_drift --fresh --force
+python3 deployments/Bioretention_assimilation_MCMC_drift_INFLATE/check.py
 ```
 
-```bash
-cd /home/arash/Projects/DrywellDT
-./build-qmake/bin/OHTwin --deployment deployments/Bioretention_assimilation_MCMC_drift --fresh --force
-```
+| when | what it should show |
+|---|---|
+| cycle 2+ | `seed inflation: r=1.05 applied to 16 chains` in `debug.log` |
+| **cycle 40–60** | **pool spread stabilises** instead of falling — the test. Control was down ~100× by cycle 40 |
+| cycle 40–60 | Σ̂/pool ratio near 1–5, not 200–1000; κ off its floor |
+| cycle 66+ | detector armed: `drift_t2_p` > 0.05, `cusum_max` < 5 pre-drift |
+| cycle 111–121 | drift; compare CUSUM lag against baseline's +19 d |
+| end | **coverage** — control 10%, nominal 95% |
 
-`--fresh` erases `state/` **and** `outputs/` recursively (including
-`outputs/calibration/`), so the MCMC cold-starts rather than warm-starting from
-the stale end-of-run posterior. `--force` skips the confirmation prompt; drop it
-to be asked. Without `--fresh` both quit immediately — their resume anchors
-(`_dt_next_start_utc` = 2022-01-04) are past `stop_datetime` = 2022-01-03.
+## Next steps, in order
 
-Expect ~244 cycles at ~21.6 min each ≈ 88 h.
+1. **Read the verdict at cycle 40–60.** If pool spread is still falling
+   geometrically, r=1.05 is too weak → retry at 1.10. If it holds, proceed.
+2. **If spread holds but coverage stays under ~20%**, enable
+   `mcmc_likelihood_autoscale: true` (already implemented) and re-run. Expect
+   ~2.45× widening — helpful but not sufficient alone, by construction.
+3. **If κ is still pinned at its floor** despite the spread holding, enable
+   `mcmc_min_step_fraction` (~1e-3).
+4. **Commit the OpenHydroQual `likelihood_scale` change** — ideally on a branch,
+   since it touches the shared engine and the GA path uses the same objective.
+5. **Do not implement `seedRatioWeighted`.** It resamples (concentrates) exactly
+   when dispersion is needed, has nothing to work with on a collapsed pool, and
+   wouldn't fix the lag anyway — the 93-day recovery is set by
+   `calibration_window_days`, not by seeding. The cheaper drift response is
+   temporary window shortening plus an inflation boost, both existing knobs.
 
-## Verify in the first ~10 cycles (~4 h) before committing to the full run
+## Scope note for the paper
 
-```bash
-grep -E "proposal covariance:|adapt block:|cycle .* published" \
-  deployments/Bioretention_assimilation_MCMC_drift/outputs/debug.log | head -40
-```
+Agreed this is at the complexity limit. Suggested framing:
+- The ½ fix and the Σ̂/κ persistence are **bug fixes** — a footnote, not method.
+- Seed inflation is **EnKF covariance inflation** (Anderson & Anderson 1999;
+  Anderson 2007) — one paragraph, one equation, one citation.
+- Likelihood autoscaling is the **effective-sample-size / design-effect**
+  correction — one paragraph, and it replaces defending an arbitrary constant.
+- Drift detection (CUSUM + T²) is a **separate contribution**; bolting it on will
+  dilute both.
+- Every knob defaults to off, so **describe only what was enabled in the reported
+  runs**. If inflation alone fixes the collapse, autoscaling never appears.
 
-- `proposal covariance: READY` from **cycle 2** (cycle 1 is legacy — no Σ̂ yet;
-  one cycle's pool gives W≈25 > 2d=18)
-- `kappa=` moving off 0.793, **not** pinned at 1e-4
-- acceptance climbing off 0.01 toward 0.15
-- `plateaued_fraction` becoming non-zero
-- forward `sim_days` staying at 3.0 in `run_log.csv` — a large value means the
-  truth is not keeping pace and the frontier jump has triggered
-
-If `produceRealizationCI: BAIL reservoir empty` still dominates, stop early.
-
-## Backup
-
-`deployments/Bioretention_assimilation_MCMC_drift_BASELINE` is a verified
-byte-identical copy of the 244-cycle results (`diff -rq` clean, all key files
-md5-match). It is **writable and runnable** with the same port and name — worth
-`chmod -R a-w`. `Bioretention_assimilation_MCMC_drift (2)` is an empty stub, not
-a backup. Same-filesystem, so no protection against disk loss.
-
-## Open items
-
-1. **The ablation is confounded.** BASELINE has both the frozen proposal and the
-   old likelihood. Attributing acceptance/ESS gains to the proposal fix is
-   defensible (the likelihood fix is profile-equivalent in θ), but σ values are
-   **not** comparable across the two. A clean isolation needs a third run with
-   fixed likelihood + `"global"`.
-2. **Stability path (Path 2) still cannot fire.** `m_pointEstimateHistory` is
-   cycle-local and gets one push per cycle, so `streamStable()` always fails its
-   `size() >= stabilityWindow` (5) test. Quorum is the sole criterion regardless
-   of `mcmc_stability_enabled`. Fix is the same shape as Σ̂: persist the ring.
-3. **Accumulation weighting.** `n_k−1` over-credits thin cycles — pools average
-   26.6 draws but only 15.2 distinct. ESS weighting was considered and
-   deliberately not adopted (equal per-sample weighting was requested).
-   The `n < d+2` guard also tests raw pool size, not distinct count.
-4. **Recovery-lag vs window-length figure** needs multiple runs at different
-   `calibration_window_days` — a study-design decision, not instrumentation.
-5. Four deployments declare port 8086 (`Bioretention_truth_drift`,
-   `..._soil_std=0.01`, `Bioretention_sensitivity_analysis`,
-   `R_sensitivity_analysis`). Only the first has outputs, so it is unambiguous
-   today, but starting two would silently cross-wire the truth feed.
+There is also a genuine finding here worth stating plainly: *adaptive
+preconditioning improved every standard sampler diagnostic — acceptance, ESS,
+convergence rate — while degrading inference accuracy and destroying interval
+coverage.* The baseline is the controlled comparison.
 
 ## Gotchas
 
-- One MCMC + one truth instance per deployment directory. Duplicates race and
-  double-write history.
-- `t_now` in calibration outputs = `m_buffer.tMax()` — advances only when the
-  truth publishes.
-- `posterior_samples.csv` is the *only* cumulative record of individual draws
-  (one row per pooled draw, every cycle) and is what makes windowed posterior
-  densities possible given ~26-draw cycles. Pool only within one regime — each
-  cycle targets its own sliding-window posterior.
-- `logging.truncate: true` wipes `debug.log` at startup.
+- Both twins need `--fresh`; resume anchors sit past `stop_datetime` so they
+  otherwise quit immediately having done nothing.
+- Truth first, then the assimilator — `advanceEnd = tMaxDt` has **no clamp**, so
+  starting the assimilator against a finished truth attempts one ~730-day solve.
+- Truth and assimilator must share `time_acceleration` or the frontier runs away.
+- One truth + one assimilator per deployment directory.
+- `logging.truncate: true` wipes `debug.log` on start — copy it before restarts.
+- Port 8185 isn't nginx-served (no viewer). The run doesn't need it.
 
 ## Key files
 
-- `DTStreamingMCMC.{h,cpp}`, `DTAssimilation.cpp`, `DTRunner.cpp`
-- `OpenHydroQual/aquifolium/src/observation.cpp` (separate repo, uncommitted)
-- `streaming_mcmc_algorithm.tex`, `proposal_adaptation_methods.tex`
-- `deployments/Bioretention_{truth_drift,assimilation_MCMC_drift}/config.json`
+- `DTStreamingMCMC.{h,cpp}`, `DTAssimilation.{h,cpp}`, `DTConfig.{h,cpp}`
+- `OpenHydroQual/aquifolium/{include/observation.h,src/observation.cpp}` (uncommitted)
+- `deployments/Bioretention_assimilation_MCMC_drift_INFLATE/{RUN.md,check.py}`
+- `streaming_mcmc_algorithm.tex`, `proposal_adaptation_methods.tex` (both compile;
+  **not yet updated** with the collapse findings or the new mechanisms)

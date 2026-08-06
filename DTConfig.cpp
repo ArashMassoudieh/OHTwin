@@ -576,6 +576,37 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
         if (as.contains("mcmc_proposal_mode"))
             assimilation.mcmcProposalMode =
                 as["mcmc_proposal_mode"].toString().trimmed().toStdString();
+        if (as.contains("mcmc_seed_inflation"))
+            assimilation.mcmcSeedInflation =
+                as["mcmc_seed_inflation"].toDouble(1.0);
+        if (as.contains("mcmc_kappa_min"))
+            assimilation.mcmcKappaMin =
+                as["mcmc_kappa_min"].toDouble(1e-4);
+        if (as.contains("mcmc_min_step_fraction"))
+            assimilation.mcmcMinStepFraction =
+                as["mcmc_min_step_fraction"].toDouble(0.0);
+        if (as.contains("mcmc_drift_detection"))
+            assimilation.mcmcDriftDetection =
+                as["mcmc_drift_detection"].toBool(false);
+        if (as.contains("mcmc_cusum_k"))
+            assimilation.mcmcCusumK = as["mcmc_cusum_k"].toDouble(1.0);
+        if (as.contains("mcmc_cusum_h"))
+            assimilation.mcmcCusumH = as["mcmc_cusum_h"].toDouble(5.0);
+        if (as.contains("mcmc_drift_reference_cycles"))
+            assimilation.mcmcDriftReferenceCycles =
+                as["mcmc_drift_reference_cycles"].toInt(40);
+        if (as.contains("mcmc_t2_window_cycles"))
+            assimilation.mcmcT2WindowCycles =
+                as["mcmc_t2_window_cycles"].toInt(33);
+        if (as.contains("mcmc_drift_history_cap"))
+            assimilation.mcmcDriftHistoryCap =
+                as["mcmc_drift_history_cap"].toInt(200);
+        if (as.contains("mcmc_likelihood_autoscale"))
+            assimilation.mcmcLikelihoodAutoscale =
+                as["mcmc_likelihood_autoscale"].toBool(false);
+        if (as.contains("mcmc_likelihood_scale_ewma"))
+            assimilation.mcmcLikelihoodScaleEwma =
+                as["mcmc_likelihood_scale_ewma"].toDouble(0.3);
         if (as.contains("mcmc_stability_enabled"))
             assimilation.mcmcStabilityEnabled =
                 as["mcmc_stability_enabled"].toBool(true);

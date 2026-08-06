@@ -364,6 +364,96 @@ bool DTAssimilation::archiveGAOutput(int cycleIndex)
 
     return ok;
 }
+
+// ---------------------------------------------------------------------------
+// updateLikelihoodScales  (Layer-1 likelihood autoscaling)
+//
+// Serially correlated residuals mean N observations do not carry N independent
+// pieces of information. The deflation factor is the integrated autocorrelation
+// time of the residual series,
+//
+//     tau_int = 1 + 2 * sum_k rho_k        (initial positive sequence)
+//
+// estimated per observation from the residuals at the adopted point estimate,
+// then EWMA-smoothed across cycles. Deliberately NOT derived from the
+// configured sensor noise model: the residual correlation is dominated by model
+// structural error, and measurement on this deployment gave tau_int of 3.6 /
+// 23.8 / 9.5 for underdrain flow / soil moisture / pond depth against a
+// theoretical 12.0 from the injected noise alone. It must be measured.
+//
+// Cost is one forward solve per cycle (~0.03% of a cycle's evaluations).
+// The same estimator is used for MCMC chain ESS in DTStreamingMCMC::chainESS.
+// ---------------------------------------------------------------------------
+void DTAssimilation::updateLikelihoodScales(System &sys, int cycleIndex)
+{
+    if (!m_config.assimilation.mcmcLikelihoodAutoscale) return;
+
+    // One solve at the adopted point estimate to obtain modeled series.
+    sys.SetSilent(true);
+    sys.SetRecordResults(false);
+    if (!sys.Solve(true))
+    {
+        DTDebugLog::instance().log(DTDebugLog::Category::Assim,
+            "likelihood autoscale: point-estimate solve failed -- scales unchanged");
+        return;
+    }
+
+    const double alpha = m_config.assimilation.mcmcLikelihoodScaleEwma;
+    QStringList report;
+    for (unsigned int i = 0; i < sys.ObservationsCount(); ++i)
+    {
+        Observation *obs = sys.observation(i);
+        TimeSeries<double> *od = obs->Variable("observed_data")->GetTimeSeries();
+        TimeSeries<double> *md = obs->GetModeledTimeSeries();
+        if (!od || !md || od->size() < 50 || md->size() < 2) continue;
+
+        // Residuals on the observation's own timestamps.
+        std::vector<double> r;
+        r.reserve(od->size());
+        for (int p = 0; p < static_cast<int>(od->size()); ++p)
+        {
+            const double t = od->getTime(p);
+            if (t < md->mint() || t > md->maxt()) continue;
+            const double e = od->getValue(p) - md->interpol(t);
+            if (std::isfinite(e)) r.push_back(e);
+        }
+        const int n = static_cast<int>(r.size());
+        if (n < 50) continue;
+
+        double mean = 0.0; for (double v : r) mean += v; mean /= n;
+        double g0 = 0.0; for (double v : r) g0 += (v - mean) * (v - mean);
+        if (g0 <= 0.0) continue;
+
+        // Geyer initial positive sequence.
+        double tau = 1.0;
+        const int maxLag = std::min(n / 4, 500);
+        for (int l = 1; l < maxLag; ++l)
+        {
+            double c = 0.0;
+            for (int k = 0; k + l < n; ++k) c += (r[k] - mean) * (r[k + l] - mean);
+            const double rho = c / g0;
+            if (rho <= 0.0) break;
+            tau += 2.0 * rho;
+        }
+        tau = std::min(std::max(tau, 1.0), double(n) / 10.0);   // never below iid,
+                                                                // never below 10 eff. points
+        const std::string nm = obs->GetName();
+        auto it = m_likelihoodScales.find(nm);
+        const double smoothed = (it == m_likelihoodScales.end())
+                                    ? tau
+                                    : (1.0 - alpha) * it->second + alpha * tau;
+        m_likelihoodScales[nm] = smoothed;
+        obs->SetLikelihoodScale(smoothed);
+        report << QString("%1=%2 (raw %3, n=%4)")
+                      .arg(QString::fromStdString(nm))
+                      .arg(smoothed, 0, 'f', 1).arg(tau, 0, 'f', 1).arg(n);
+    }
+    if (!report.isEmpty())
+        DTDebugLog::instance().log(DTDebugLog::Category::Assim,
+            QString("likelihood autoscale (cycle %1): tau_int %2")
+                .arg(cycleIndex).arg(report.join("; ")));
+}
+
 // ---------------------------------------------------------------------------
 // writeParameterLog
 // Append a row to outputs/calibration/parameter_history.csv recording the
@@ -817,6 +907,11 @@ bool DTAssimilation::prepareCalibrationSystem(System &sys,
         }
         if (series.size() == 0) continue;
         obs->Variable("observed_data")->SetTimeSeries(series);
+        // Re-apply the smoothed likelihood scale: `sys` is rebuilt from the
+        // script every cycle, so the value set at the end of the previous
+        // cycle would otherwise be lost.
+        if (auto it = m_likelihoodScales.find(name); it != m_likelihoodScales.end())
+            obs->SetLikelihoodScale(it->second);
         ++matched;
     }
     if (matched == 0)
@@ -1103,6 +1198,15 @@ bool DTAssimilation::runCalibrationMCMC(System &sys,
     mcmc.streamSettings.maxSweeps           = m_config.assimilation.mcmcMaxSweeps;
     mcmc.streamSettings.quorumFraction      = m_config.assimilation.mcmcQuorumFraction;
     mcmc.streamSettings.adaptiveCovariance  = (m_config.assimilation.mcmcProposalMode == "covariance");
+    mcmc.streamSettings.seedInflation       = m_config.assimilation.mcmcSeedInflation;
+    mcmc.streamSettings.kappaMin            = m_config.assimilation.mcmcKappaMin;
+    mcmc.streamSettings.minStepFraction     = m_config.assimilation.mcmcMinStepFraction;
+    mcmc.streamSettings.driftDetectionEnabled = m_config.assimilation.mcmcDriftDetection;
+    mcmc.streamSettings.cusumK              = m_config.assimilation.mcmcCusumK;
+    mcmc.streamSettings.cusumH              = m_config.assimilation.mcmcCusumH;
+    mcmc.streamSettings.driftReferenceCycles = m_config.assimilation.mcmcDriftReferenceCycles;
+    mcmc.streamSettings.t2WindowCycles      = m_config.assimilation.mcmcT2WindowCycles;
+    mcmc.streamSettings.driftHistoryCap     = m_config.assimilation.mcmcDriftHistoryCap;
     mcmc.streamSettings.stabilityEnabled      = m_config.assimilation.mcmcStabilityEnabled;
     mcmc.streamSettings.stabilityWindow       = m_config.assimilation.mcmcStabilityWindow;
     mcmc.streamSettings.stabilityTol          = m_config.assimilation.mcmcStabilityTol;
@@ -1167,7 +1271,11 @@ bool DTAssimilation::runCalibrationMCMC(System &sys,
         }
     }
 
-    const SeedMode mode = mcmc.chooseSeedMode(/*driftDetected=*/false);
+    // Drift flag restored from the previous cycle's snapshot. seedRatioWeighted
+    // is still a stub, so chooseSeedMode falls through to WarmStart today; the
+    // flag is nonetheless recorded and available to any drift response.
+    mcmc.setCurrentTime(tEnd);
+    const SeedMode mode = mcmc.chooseSeedMode(mcmc.driftDetected());
     static const char *modeNames[] =
         { "cold start", "warm start", "ratio reseed", "provisional resume" };
     std::cout << "[Assim] MCMC seeding: "
@@ -1371,6 +1479,10 @@ bool DTAssimilation::runCalibrationMCMC(System &sys,
               << newSnapshotPath.toStdString() << "\n";
 
     writeParameterLog(sys, m_cyclesCompleted);
+
+    // Re-estimate the per-observation likelihood scales from the residuals at
+    // the adopted point estimate; applied to the NEXT cycle's target.
+    updateLikelihoodScales(sys, m_cyclesCompleted);
 
     // A provisional cycle IS a successful cycle: the ensemble moved
     // toward the target and its progress is banked in the posterior

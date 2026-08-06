@@ -109,6 +109,10 @@ bool DTStreamingMCMC::loadPosteriorSnapshot(const QString &path,
     m_prevPropCov.clear();
     m_prevPropCovWeight = 0.0;
     m_prevKappa         = 0.0;
+    m_cusumSp.clear(); m_cusumSm.clear();
+    m_driftRefMean.clear(); m_driftRefSd.clear();
+    m_driftRefCount = 0; m_cycleMeans.clear();
+    m_driftDetected = false; m_cusumMax = 0.0; m_t2PValue = -1.0;
 
     // An absent snapshot is not an error -- it is the definition of a
     // cold start (first cycle of a deployment, or after a reset).
@@ -192,6 +196,27 @@ bool DTStreamingMCMC::loadPosteriorSnapshot(const QString &path,
     if (kap > 0.0 && std::isfinite(kap))
         m_prevKappa = kap;
 
+    // Drift-detector state. Like the proposal covariance, this object is
+    // rebuilt every cycle, so the CUSUM arms and the in-control reference
+    // only accumulate by round-tripping through the snapshot.
+    if (const QJsonObject dr = root.value("drift").toObject(); !dr.isEmpty())
+    {
+        std::vector<double> sp = fromJsonArray(dr.value("cusum_sp").toArray());
+        std::vector<double> sm = fromJsonArray(dr.value("cusum_sm").toArray());
+        std::vector<double> rm = fromJsonArray(dr.value("ref_mean").toArray());
+        std::vector<double> rs = fromJsonArray(dr.value("ref_sd").toArray());
+        if (sp.size() == np && sm.size() == np && rm.size() == np && rs.size() == np)
+        {
+            m_cusumSp = std::move(sp); m_cusumSm = std::move(sm);
+            m_driftRefMean = std::move(rm); m_driftRefSd = std::move(rs);
+            m_driftRefCount = dr.value("ref_count").toInt(0);
+        }
+        m_cycleMeans   = fromJsonMatrix(dr.value("cycle_means").toArray());
+        m_driftDetected = dr.value("detected").toBool(false);
+        m_cusumMax     = dr.value("cusum_max").toDouble(0.0);
+        m_t2PValue     = dr.value("t2_p").toDouble(-1.0);
+    }
+
     // Full snapshot -> pooled posterior samples; provisional -> carried
     // chain states. Both land in m_prevSamples/m_prevLogp; SeedMode
     // decides how they are used (Sec. 3.3 / 3.9).
@@ -265,6 +290,21 @@ bool DTStreamingMCMC::writePosteriorSnapshot(const QString &path,
         root["proposal_covariance_weight"] = m_propCovWeight;
     }
     if (m_kappa > 0.0) root["kappa"] = m_kappa;
+
+    if (streamSettings.driftDetectionEnabled && !m_driftRefMean.empty())
+    {
+        QJsonObject dr;
+        dr["cusum_sp"]    = toJsonArray(m_cusumSp);
+        dr["cusum_sm"]    = toJsonArray(m_cusumSm);
+        dr["ref_mean"]    = toJsonArray(m_driftRefMean);
+        dr["ref_sd"]      = toJsonArray(m_driftRefSd);
+        dr["ref_count"]   = m_driftRefCount;
+        dr["cycle_means"] = toJsonMatrix(m_cycleMeans);
+        dr["detected"]    = m_driftDetected;
+        dr["cusum_max"]   = m_cusumMax;
+        dr["t2_p"]        = m_t2PValue;
+        root["drift"]     = dr;
+    }
 
     if (result.converged)
     {
@@ -822,6 +862,18 @@ bool DTStreamingMCMC::appendHistoryRecord(const QString &path,
     // makes the kernel's whole trajectory plottable from the history file.
     // ------------------------------------------------------------------
     rec["kappa"]           = m_kappa;
+    rec["kappa_floor"]     = proposalScaleFloor();   // kappa==floor => compensator saturated
+    if (streamSettings.driftDetectionEnabled)
+    {
+        rec["drift_detected"] = m_driftDetected;
+        rec["cusum_max"]      = m_cusumMax;          // alarm when > cusumH
+        rec["drift_t2_p"]     = m_t2PValue;          // -1 => insufficient history
+        rec["drift_tau"]      = cycleMeanAutocorrTime();
+        QJsonArray who;
+        for (int i : m_driftIdx) who.append(QString::fromStdString(parameter(i)->GetName()));
+        rec["drift_parameters"] = who;
+    }
+    rec["seed_inflation"]  = streamSettings.seedInflation;
     rec["prop_cov_ready"]  = m_propReady;
     rec["prop_cov_weight"] = m_propCovWeight;
     rec["pertcoeff"]       = toJsonArray(pertcoeff);
@@ -1321,6 +1373,11 @@ DTCycleResult DTStreamingMCMC::runCycle(const QDateTime &deadline)
     }
     // (result.pointEstimate was set above, before the stability ring push.)
 
+    // Drift detection folds in this cycle's pooled mean. Runs on every cycle,
+    // provisional included -- a drifting system is exactly when cycles stop
+    // certifying, so gating this on convergence would blind it when it matters.
+    updateDriftDetection(result, m_lastTNow);
+
     ++m_cycleIndex;
     logCycleDiagnostics(result);
 
@@ -1454,10 +1511,404 @@ bool DTStreamingMCMC::seedWarmStart(QString &errorMessage)
     for (DTChainState &chain : m_chains)
         chain.params = m_prevSamples[pick(m_seedRng)];
 
+    // Ensemble inflation. Drawing seeds from the previous pool preserves its
+    // dispersion at best; any shortfall relative to the true posterior is
+    // carried into the next pool and compounds. Inflating about the seed mean
+    // counteracts that without moving the ensemble's location.
+    inflateSeedEnsemble();
+
     // logp deliberately NOT copied from m_prevLogp: those values were
     // computed against the previous cycle's window and kernel weights.
     // initializeCycle re-evaluates every seed against the current target.
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// inflateSeedEnsemble
+//
+// Multiplicative ensemble inflation, applied about the seed mean in the
+// per-coordinate proposal space (log for log-normal priors, so the inflation
+// is multiplicative in the physical parameter and cannot cross zero):
+//
+//     phi_c  <-  phibar + r (phi_c - phibar)
+//
+// Standard covariance inflation from ensemble data assimilation, used here for
+// the same reason: repeated resample-from-own-output cycles contract the
+// ensemble, and nothing in the sampler otherwise re-widens it. Because the
+// ensemble mean is preserved, this does not move the estimate -- it only
+// restores spread, so chains still start near the mode and need no traversal.
+//
+// Applied to the seeds only; the sampler proper is untouched, so detailed
+// balance within a cycle is unaffected (this is part of the initialisation,
+// exactly like the choice of seed distribution itself).
+// ---------------------------------------------------------------------------
+void DTStreamingMCMC::inflateSeedEnsemble()
+{
+    const double r = streamSettings.seedInflation;
+    if (!(r > 1.0) || m_chains.size() < 2) return;
+
+    const unsigned int np = MCMC_Settings.number_of_parameters;
+    const size_t nc = m_chains.size();
+
+    std::vector<char> isLog(np);
+    for (unsigned int i = 0; i < np; ++i)
+        isLog[i] = (parameter(i)->GetPriorDistribution() == "log-normal") ? 1 : 0;
+
+    // Mean in proposal space.
+    std::vector<double> mean(np, 0.0);
+    for (const DTChainState &c : m_chains)
+        for (unsigned int i = 0; i < np; ++i)
+            mean[i] += isLog[i] ? std::log(std::max(c.params[i], 1e-300))
+                                : c.params[i];
+    for (unsigned int i = 0; i < np; ++i) mean[i] /= double(nc);
+
+    for (DTChainState &c : m_chains)
+        for (unsigned int i = 0; i < np; ++i)
+        {
+            const double phi = isLog[i] ? std::log(std::max(c.params[i], 1e-300))
+                                        : c.params[i];
+            const double inflated = mean[i] + r * (phi - mean[i]);
+            c.params[i] = isLog[i] ? std::exp(inflated) : inflated;
+        }
+
+    DTDebugLog &dlog = DTDebugLog::instance();
+    if (dlog.enabled(DTDebugLog::Category::MCMC))
+        dlog.log(DTDebugLog::Category::MCMC,
+                 QString("seed inflation: r=%1 applied to %2 chains "
+                         "(mean preserved)").arg(r).arg(nc));
+}
+
+// ===========================================================================
+// Drift detection
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// Pooled mean of this cycle in proposal space (log for log-normal priors).
+// Falls back to the point estimate when no pool was retained, so the detector
+// keeps running through provisional cycles rather than going blind.
+// ---------------------------------------------------------------------------
+bool DTStreamingMCMC::cycleMeanInProposalSpace(const DTCycleResult &result,
+                                               std::vector<double> &out)
+{
+    const unsigned int np = MCMC_Settings.number_of_parameters;
+    const std::vector<std::vector<double>> *src =
+        !result.pooledSamples.empty() ? &result.pooledSamples : nullptr;
+
+    out.assign(np, 0.0);
+    if (src)
+    {
+        for (const std::vector<double> &s : *src)
+            for (unsigned int i = 0; i < np && i < s.size(); ++i)
+                out[i] += (parameter(i)->GetPriorDistribution() == "log-normal")
+                              ? std::log(std::max(s[i], 1e-300)) : s[i];
+        for (unsigned int i = 0; i < np; ++i) out[i] /= double(src->size());
+        return true;
+    }
+    if (result.pointEstimate.size() != np) return false;
+    for (unsigned int i = 0; i < np; ++i)
+        out[i] = (parameter(i)->GetPriorDistribution() == "log-normal")
+                     ? std::log(std::max(result.pointEstimate[i], 1e-300))
+                     : result.pointEstimate[i];
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Integrated autocorrelation time of the stored cycle means, in cycles:
+// tau = 1 + 2 * sum_{l>0} rho_l over the initial positive sequence, averaged
+// across parameters. This is what converts a window of W cycles into W/tau
+// EFFECTIVE observations. Ignoring it is the difference between p = 5e-68 and
+// p = 5e-08 on the same data.
+// ---------------------------------------------------------------------------
+double DTStreamingMCMC::cycleMeanAutocorrTime() const
+{
+    const int n = static_cast<int>(m_cycleMeans.size());
+    if (n < 20) return 1.0;
+    const int d = static_cast<int>(m_cycleMeans[0].size()) - 1;   // col 0 is t_now
+    const int maxLag = std::min(n / 3, 60);
+
+    std::vector<double> taus;
+    for (int p = 0; p < d; ++p)
+    {
+        std::vector<double> x(n);
+        for (int i = 0; i < n; ++i) x[i] = m_cycleMeans[i][p + 1];
+        double m = 0.0; for (double v : x) m += v; m /= n;
+        double v0 = 0.0; for (double v : x) v0 += (v - m) * (v - m);
+        if (v0 <= 0.0) continue;
+        double tau = 1.0;
+        for (int l = 1; l < maxLag; ++l)
+        {
+            double c = 0.0;
+            for (int i = 0; i + l < n; ++i) c += (x[i] - m) * (x[i + l] - m);
+            const double rho = c / v0;
+            if (rho <= 0.0) break;            // initial positive sequence
+            tau += 2.0 * rho;
+        }
+        taus.push_back(tau);
+    }
+    if (taus.empty()) return 1.0;
+    std::sort(taus.begin(), taus.end());
+    return std::max(1.0, taus[taus.size() / 2]);
+}
+
+// ---------------------------------------------------------------------------
+// Two-window Hotelling T^2 on the cycle-mean vectors: the most recent
+// t2WindowCycles against the reference window, over ALL parameters jointly,
+// so one p-value answers "has anything drifted".
+//
+//   T^2 = (xbar_A - xbar_B)' [S_p (1/nA + 1/nB)]^-1 (xbar_A - xbar_B)
+//   F   = T^2 (nA + nB - d - 1) / (d (nA + nB - 2))  ~  F(d, nA+nB-d-1)
+//
+// nA, nB are EFFECTIVE counts (cycles / tau), not raw cycle counts and
+// certainly not draw counts. If the effective sample is too small to admit a
+// d-dimensional covariance, the test degrades to the diagonal (independent
+// coordinates) form rather than producing a fabricated p-value.
+// ---------------------------------------------------------------------------
+double DTStreamingMCMC::hotellingT2PValue()
+{
+    const int W = streamSettings.t2WindowCycles;
+    const int n = static_cast<int>(m_cycleMeans.size());
+    if (W < 3 || n < 2 * W) return -1.0;
+    const int d = static_cast<int>(m_cycleMeans[0].size()) - 1;
+    if (d < 1) return -1.0;
+
+    auto block = [&](int lo, int hi) {
+        std::vector<std::vector<double>> B;
+        for (int i = lo; i < hi; ++i)
+            B.push_back(std::vector<double>(m_cycleMeans[i].begin() + 1,
+                                            m_cycleMeans[i].end()));
+        return B;
+    };
+    // Reference window = oldest retained W cycles; recent window = newest W.
+    const std::vector<std::vector<double>> A = block(0, W);
+    const std::vector<std::vector<double>> Bw = block(n - W, n);
+
+    const double tau  = cycleMeanAutocorrTime();
+    const double nA   = std::max(double(W) / tau, 2.0);
+    const double nB   = std::max(double(W) / tau, 2.0);
+
+    std::vector<double> mA(d, 0.0), mB(d, 0.0);
+    for (const auto &r : A)  for (int i = 0; i < d; ++i) mA[i] += r[i] / W;
+    for (const auto &r : Bw) for (int i = 0; i < d; ++i) mB[i] += r[i] / W;
+
+    // Pooled covariance of the cycle means (each block mean-centered).
+    std::vector<std::vector<double>> S(d, std::vector<double>(d, 0.0));
+    auto accum = [&](const std::vector<std::vector<double>> &blk,
+                     const std::vector<double> &mu) {
+        for (const auto &r : blk)
+            for (int i = 0; i < d; ++i)
+                for (int j = i; j < d; ++j)
+                    S[i][j] += (r[i] - mu[i]) * (r[j] - mu[j]);
+    };
+    accum(A, mA); accum(Bw, mB);
+    const double dof = 2.0 * W - 2.0;
+    for (int i = 0; i < d; ++i)
+        for (int j = i; j < d; ++j) { S[i][j] /= dof; S[j][i] = S[i][j]; }
+
+    const double c = 1.0 / nA + 1.0 / nB;
+    std::vector<double> diff(d);
+    for (int i = 0; i < d; ++i) diff[i] = mA[i] - mB[i];
+
+    // T^2 via Cholesky solve; ridge for conditioning. Fall back to the
+    // diagonal form when the full covariance is not admissible.
+    double T2 = 0.0;
+    bool full = (nA + nB - 2.0) > d + 1;
+    if (full)
+    {
+        double tr = 0.0; for (int i = 0; i < d; ++i) tr += S[i][i];
+        const double ridge = std::max(1e-12, 1e-8 * tr / std::max(d, 1));
+        std::vector<std::vector<double>> M = S;
+        for (int i = 0; i < d; ++i) M[i][i] = (M[i][i] + ridge) * c;
+        std::vector<std::vector<double>> L(d, std::vector<double>(d, 0.0));
+        for (int i = 0; i < d && full; ++i)
+            for (int j = 0; j <= i; ++j)
+            {
+                double s = M[i][j];
+                for (int k2 = 0; k2 < j; ++k2) s -= L[i][k2] * L[j][k2];
+                if (i == j) { if (s <= 0.0) { full = false; break; } L[i][j] = std::sqrt(s); }
+                else L[i][j] = s / L[j][j];
+            }
+        if (full)
+        {
+            std::vector<double> y(d, 0.0);
+            for (int i = 0; i < d; ++i)
+            {
+                double s = diff[i];
+                for (int k2 = 0; k2 < i; ++k2) s -= L[i][k2] * y[k2];
+                y[i] = s / L[i][i];
+            }
+            for (int i = 0; i < d; ++i) T2 += y[i] * y[i];
+        }
+    }
+    int dfNum = d;
+    if (!full)
+    {
+        T2 = 0.0; dfNum = 0;
+        for (int i = 0; i < d; ++i)
+            if (S[i][i] > 0.0) { T2 += diff[i] * diff[i] / (S[i][i] * c); ++dfNum; }
+        if (dfNum == 0) return -1.0;
+    }
+
+    const double dfDen = nA + nB - dfNum - 1.0;
+    if (dfDen <= 0.0) return -1.0;
+    const double F = T2 * dfDen / (dfNum * (nA + nB - 2.0));
+    if (!std::isfinite(F) || F < 0.0) return -1.0;
+
+    // Upper tail of F(dfNum, dfDen) via the regularized incomplete beta.
+    const double x = dfDen / (dfDen + dfNum * F);
+    const double a = dfDen / 2.0, b = dfNum / 2.0;
+    // Continued-fraction betacf (Lentz), standard form.
+    auto betacf = [](double a_, double b_, double x_) {
+        const int MAXIT = 200; const double EPS = 3e-14, FPMIN = 1e-300;
+        double qab = a_ + b_, qap = a_ + 1.0, qam = a_ - 1.0;
+        double c2 = 1.0, d2 = 1.0 - qab * x_ / qap;
+        if (std::fabs(d2) < FPMIN) d2 = FPMIN;
+        d2 = 1.0 / d2; double h = d2;
+        for (int m = 1; m <= MAXIT; ++m)
+        {
+            int m2 = 2 * m;
+            double aa = m * (b_ - m) * x_ / ((qam + m2) * (a_ + m2));
+            d2 = 1.0 + aa * d2; if (std::fabs(d2) < FPMIN) d2 = FPMIN;
+            c2 = 1.0 + aa / c2; if (std::fabs(c2) < FPMIN) c2 = FPMIN;
+            d2 = 1.0 / d2; h *= d2 * c2;
+            aa = -(a_ + m) * (qab + m) * x_ / ((a_ + m2) * (qap + m2));
+            d2 = 1.0 + aa * d2; if (std::fabs(d2) < FPMIN) d2 = FPMIN;
+            c2 = 1.0 + aa / c2; if (std::fabs(c2) < FPMIN) c2 = FPMIN;
+            d2 = 1.0 / d2; double del = d2 * c2; h *= del;
+            if (std::fabs(del - 1.0) < EPS) break;
+        }
+        return h;
+    };
+    const double lbeta = std::lgamma(a + b) - std::lgamma(a) - std::lgamma(b);
+    double ib;
+    if (x < (a + 1.0) / (a + b + 2.0))
+        ib = std::exp(lbeta + a * std::log(x) + b * std::log1p(-x)) * betacf(a, b, x) / a;
+    else
+        ib = 1.0 - std::exp(lbeta + b * std::log1p(-x) + a * std::log(x)) * betacf(b, a, 1.0 - x) / b;
+    return std::min(1.0, std::max(0.0, ib));   // P(F > f)
+}
+
+// ---------------------------------------------------------------------------
+// updateDriftDetection
+//
+// Called once per cycle after the pool is assembled. Builds the in-control
+// reference over the first driftReferenceCycles cycles (during which no alarm
+// can fire), then runs the CUSUM arms and, once enough history exists, the
+// two-window T2.
+// ---------------------------------------------------------------------------
+void DTStreamingMCMC::updateDriftDetection(const DTCycleResult &result,
+                                           double tNow)
+{
+    if (!streamSettings.driftDetectionEnabled) return;
+    const unsigned int np = MCMC_Settings.number_of_parameters;
+
+    std::vector<double> mu;
+    if (!cycleMeanInProposalSpace(result, mu)) return;
+
+    // Ring of cycle means for the T2 windows.
+    std::vector<double> row; row.reserve(np + 1);
+    row.push_back(tNow);
+    row.insert(row.end(), mu.begin(), mu.end());
+    m_cycleMeans.push_back(std::move(row));
+    while (static_cast<int>(m_cycleMeans.size()) > streamSettings.driftHistoryCap)
+        m_cycleMeans.erase(m_cycleMeans.begin());
+
+    // --- in-control reference (Welford over the first N cycles) ---
+    if (m_driftRefMean.size() != np)
+    { m_driftRefMean.assign(np, 0.0); m_driftRefSd.assign(np, 0.0); m_driftRefCount = 0; }
+
+    if (m_driftRefCount < streamSettings.driftReferenceCycles)
+    {
+        ++m_driftRefCount;
+        for (unsigned int i = 0; i < np; ++i)
+        {
+            const double delta = mu[i] - m_driftRefMean[i];
+            m_driftRefMean[i] += delta / m_driftRefCount;
+            m_driftRefSd[i]   += delta * (mu[i] - m_driftRefMean[i]);   // M2
+        }
+        if (m_driftRefCount == streamSettings.driftReferenceCycles)
+            for (unsigned int i = 0; i < np; ++i)
+                m_driftRefSd[i] = std::sqrt(std::max(m_driftRefSd[i] /
+                                   std::max(m_driftRefCount - 1, 1), 1e-300));
+        m_cusumSp.assign(np, 0.0); m_cusumSm.assign(np, 0.0);
+        m_driftDetected = false; m_cusumMax = 0.0; m_driftIdx.clear();
+        return;                      // never alarm while still calibrating
+    }
+
+    // --- CUSUM ---
+    if (m_cusumSp.size() != np) { m_cusumSp.assign(np, 0.0); m_cusumSm.assign(np, 0.0); }
+    const double k = streamSettings.cusumK, h = streamSettings.cusumH;
+    m_cusumMax = 0.0; m_driftIdx.clear();
+    for (unsigned int i = 0; i < np; ++i)
+    {
+        const double sd = (m_driftRefSd[i] > 0.0) ? m_driftRefSd[i] : 1e-300;
+        const double z  = (mu[i] - m_driftRefMean[i]) / sd;
+        m_cusumSp[i] = std::max(0.0, m_cusumSp[i] + z - k);
+        m_cusumSm[i] = std::min(0.0, m_cusumSm[i] + z + k);
+        const double stat = std::max(m_cusumSp[i], -m_cusumSm[i]);
+        m_cusumMax = std::max(m_cusumMax, stat);
+        if (stat > h) m_driftIdx.push_back(int(i));
+    }
+    m_driftDetected = !m_driftIdx.empty();
+
+    // --- Hotelling T2 (reportable p-value) ---
+    m_t2PValue = hotellingT2PValue();
+
+    DTDebugLog &dlog = DTDebugLog::instance();
+    if (dlog.enabled(DTDebugLog::Category::MCMC))
+    {
+        QStringList who;
+        for (int i : m_driftIdx) who << QString::fromStdString(parameter(i)->GetName());
+        dlog.log(DTDebugLog::Category::MCMC,
+                 QString("drift: cusum_max=%1 (h=%2) %3 | T2 p=%4 tau=%5 cycles")
+                     .arg(m_cusumMax).arg(h)
+                     .arg(m_driftDetected ? ("ALARM [" + who.join(", ") + "]")
+                                          : QString("no alarm"))
+                     .arg(m_t2PValue < 0 ? QString("n/a") : QString::number(m_t2PValue, 'g', 4))
+                     .arg(cycleMeanAutocorrTime(), 0, 'f', 1));
+    }
+}
+
+// ---------------------------------------------------------------------------
+double DTStreamingMCMC::priorWidthInProposalSpace(unsigned int i)
+{
+    const double lo = parameter(i)->GetRange().low;
+    const double hi = parameter(i)->GetRange().high;
+    if (parameter(i)->GetPriorDistribution() == "log-normal")
+    {
+        if (lo <= 0.0 || hi <= 0.0) return 0.0;
+        return std::log(hi) - std::log(lo);
+    }
+    return hi - lo;
+}
+
+// ---------------------------------------------------------------------------
+// proposalScaleFloor
+//
+// kappa alone cannot express a proposal whose required scale differs per
+// coordinate, so when the accumulated Sigma goes stale kappa is driven down
+// until it saturates (observed: pinned at exactly 1e-4 for whole stretches of
+// the accel-100 run). This floors the *effective* step kappa*sd_i at
+// minStepFraction of each parameter's prior width, taking the median across
+// coordinates so one collapsed direction cannot hold the whole proposal up.
+// ---------------------------------------------------------------------------
+double DTStreamingMCMC::proposalScaleFloor()
+{
+    const double base = std::max(streamSettings.kappaMin, 0.0);
+    const double frac = streamSettings.minStepFraction;
+    if (!(frac > 0.0) || m_propCov.empty()) return base;
+
+    const unsigned int np = MCMC_Settings.number_of_parameters;
+    std::vector<double> need;
+    need.reserve(np);
+    for (unsigned int i = 0; i < np && i < m_propCov.size(); ++i)
+    {
+        const double sd = std::sqrt(std::max(m_propCov[i][i], 0.0));
+        const double w  = priorWidthInProposalSpace(i);
+        if (sd > 0.0 && w > 0.0) need.push_back(frac * w / sd);  // kappa s.t. kappa*sd = frac*w
+    }
+    if (need.empty()) return base;
+    std::sort(need.begin(), need.end());
+    return std::max(base, need[need.size() / 2]);
 }
 
 bool DTStreamingMCMC::seedRatioWeighted(QString &errorMessage)
@@ -2222,7 +2673,10 @@ void DTStreamingMCMC::adaptProposalScale()
             m_kappa /= MCMC_Settings.purt_change_scale;   // enlarge steps
         else
             m_kappa *= MCMC_Settings.purt_change_scale;   // shrink steps
-        m_kappa = std::min(std::max(m_kappa, 1e-4), 1e3); // floor/ceiling
+        // Floor is configurable and may be raised by minStepFraction so the
+        // effective step cannot shrink arbitrarily far below the prior scale.
+        const double kmin = proposalScaleFloor();
+        m_kappa = std::min(std::max(m_kappa, kmin), 1e3);
         return;
     }
 

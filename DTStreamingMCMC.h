@@ -135,6 +135,52 @@ struct DTStreamingSettings
     // false => the legacy per-coordinate global-scale random walk.
     bool   adaptiveCovariance    = false;  // config: mcmc_proposal_mode == "covariance"
 
+    // --- anti-collapse safeguards ---
+    // The warm-start pool seeds the next cycle, so any under-dispersion
+    // compounds: measured pool spread fell 377x over 244 cycles while the
+    // accumulated Sigma stayed ~250-1000x wider, and 95% CI coverage of the
+    // known truth fell to 3-10%. Doubling the per-cycle sweep budget made it
+    // strictly worse, which locates the contraction in the seeding step, not
+    // in insufficient sampling.
+    //
+    // seedInflation: multiplicative ensemble inflation applied about the seed
+    // mean in proposal space (EnKF-style). 1.0 = off (previous behaviour).
+    double seedInflation          = 1.0;   // config: mcmc_seed_inflation
+
+    // kappaMin: hard floor on the global proposal scalar. In the accel-100 run
+    // kappa saturated at exactly this floor, i.e. the compensator gave up.
+    double kappaMin               = 1e-4;  // config: mcmc_kappa_min
+
+    // minStepFraction: floor the effective step kappa*sd_i at this fraction of
+    // each parameter's prior width (median over parameters), so the proposal
+    // cannot shrink arbitrarily far below the prior scale. 0 = off.
+    double minStepFraction        = 0.0;   // config: mcmc_min_step_fraction
+
+    // --- drift detection ---
+    // Two complementary tests on the per-cycle pooled means, both operating in
+    // proposal space (log for log-normal priors) so a "20% change" means the
+    // same thing for a conductivity as for a coefficient:
+    //
+    //  * CUSUM  -- online trigger. Accumulates standardized deviations with a
+    //    slack k, alarms at h. Effect-size aware (noise below k never
+    //    accumulates), so it fires fast without false alarms. NOT a hypothesis
+    //    test: it yields a detection time, not a p-value.
+    //  * Hotelling T2 -- reportable statistic. Two-sample test of the recent
+    //    window against the reference window over the FULL parameter vector,
+    //    giving a single p-value for "has anything drifted".
+    //
+    // Both treat the CYCLE as the replicate unit, never the individual draw:
+    // with a 100-day window advancing 3 days, consecutive cycles share ~97% of
+    // their data (measured lag-1 autocorrelation of cycle means 0.47,
+    // integrated autocorrelation time ~8 cycles). Using raw draw counts gives
+    // p-values wrong by tens of orders of magnitude.
+    bool   driftDetectionEnabled  = false; // config: mcmc_drift_detection
+    double cusumK                 = 1.0;   // slack, in reference SDs (= half the shift to detect)
+    double cusumH                 = 5.0;   // alarm threshold
+    int    driftReferenceCycles   = 40;    // cycles used to fix the in-control reference
+    int    t2WindowCycles         = 33;    // cycles per T2 window (>= one calibration window)
+    int    driftHistoryCap        = 200;   // cycle-mean ring retained for T2
+
     // --- cycle driver (Sec. 3.8) ---
     int    maxSweeps              = 0;     // hard cap on sweeps per cycle (0 = deadline only)
     int    stepsPerClockCheck     = 1;     // chain-sweeps between deadline checks
@@ -568,6 +614,53 @@ private:
     // Seeding regime actually used this cycle, recorded for the history file.
     SeedMode m_lastSeedMode = SeedMode::ColdStart;
     static const char *seedModeName(SeedMode m);
+
+    // Multiplicative ensemble inflation about the seed mean, in proposal
+    // space. No-op when streamSettings.seedInflation <= 1.
+    void inflateSeedEnsemble();
+
+    // --- drift detection (persisted across cycles via the snapshot) ---
+    std::vector<double> m_cusumSp, m_cusumSm;       // per-parameter CUSUM arms
+    std::vector<double> m_driftRefMean, m_driftRefSd;
+    int    m_driftRefCount   = 0;                  // cycles folded into the reference
+    std::vector<std::vector<double>> m_cycleMeans; // ring: [t_now, mean_0..mean_{d-1}]
+    bool   m_driftDetected   = false;
+    double m_cusumMax        = 0.0;
+    double m_t2PValue        = -1.0;               // -1 => not computable yet
+    std::vector<int> m_driftIdx;                   // parameters whose CUSUM alarmed
+
+    // Fold this cycle's pooled mean into the reference / CUSUM / T2 machinery.
+    void updateDriftDetection(const DTCycleResult &result, double tNow);
+    // Pooled mean of this cycle in proposal space; false if no usable pool.
+    bool cycleMeanInProposalSpace(const DTCycleResult &result,
+                                  std::vector<double> &out);
+    // Integrated autocorrelation time (in cycles) of the stored cycle means.
+    double cycleMeanAutocorrTime() const;
+    // Two-window Hotelling T2 p-value; -1 when there is insufficient history.
+    double hotellingT2PValue();
+
+    // Scoring-window end for the current cycle (OHQ day serial). Set by the
+    // caller before runCycle; used to timestamp the drift-detector history.
+    double m_lastTNow = 0.0;
+
+public:
+    void setCurrentTime(double tNow) { m_lastTNow = tNow; }
+
+    // True when the previous cycle's detector alarmed. Gates RatioReseed and
+    // any drift-triggered response (window shortening, inflation boost).
+    bool driftDetected() const { return m_driftDetected; }
+    double cusumStatistic() const { return m_cusumMax; }
+    double driftPValue() const { return m_t2PValue; }
+
+private:
+
+    // Lower bound on kappa: max(kappaMin, the kappa at which the median of
+    // kappa*sd_i / priorWidth_i reaches minStepFraction). Returns kappaMin
+    // when the step floor is disabled or Sigma is not yet available.
+    double proposalScaleFloor();
+
+    // Prior width of parameter i in proposal space (log range for log-normal).
+    double priorWidthInProposalSpace(unsigned int i);
 
     // Inter-cycle stability ring: the last stabilityWindow point estimates,
     // oldest-first. Feeds streamStable().
