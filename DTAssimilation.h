@@ -23,6 +23,7 @@
 #include "DTObservationBuffer.h"
 
 #include <QObject>
+#include <map>
 #include <QString>
 #include <QTimer>
 #include "System.h"
@@ -153,6 +154,16 @@ private:
                                   const QString &errorMessage);
     bool archiveGAOutput(int cycleIndex);
     QString m_latestSnapshotPath;
+    // Layer-1 likelihood autoscaling. After a cycle, re-solves once at the
+    // adopted point estimate and estimates each calibration observation's
+    // residual integrated autocorrelation time tau_int (Geyer initial positive
+    // sequence). N observations carry only N/tau_int independent pieces of
+    // information, so Observation::SetLikelihoodScale(tau_int) divides that
+    // observation's log-likelihood accordingly. Values are EWMA-smoothed
+    // across cycles and persisted in m_likelihoodScales.
+    void updateLikelihoodScales(System &sys, int cycleIndex);
+    std::map<std::string,double> m_likelihoodScales;   // obs name -> smoothed tau_int
+
     bool writeParameterLog(const System &sys, int cycleIndex);
     RunLogger *m_runLogger = nullptr;   // not owned; lifetime managed by DTRunner
 };

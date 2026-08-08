@@ -160,6 +160,38 @@ struct AssimilationConfig
     // preconditioned by the accumulated posterior correlation structure).
     std::string mcmcProposalMode = "global";
 
+    // --- anti-collapse safeguards (default off = previous behaviour) ---
+    // Warm-start seeds are drawn from the previous cycle's pool, so any
+    // under-dispersion compounds cycle over cycle. Inflating the seed
+    // ensemble about its own mean restores spread without moving the
+    // estimate. 1.0 disables it; 1.05-1.2 is the useful range.
+    double mcmcSeedInflation = 1.0;
+
+    // Hard floor on the adaptive-covariance global scalar kappa.
+    double mcmcKappaMin = 1e-4;
+
+    // Floor the effective step kappa*sd_i at this fraction of each
+    // parameter's prior width (median across parameters). 0 disables it.
+    double mcmcMinStepFraction = 0.0;
+
+    // --- drift detection (default off) ---
+    // CUSUM = online trigger (fast, no p-value); Hotelling T2 = reportable
+    // p-value over the whole parameter vector. Both use the CYCLE as the
+    // replicate unit and correct for between-cycle autocorrelation.
+    bool   mcmcDriftDetection      = false;
+    double mcmcCusumK              = 1.0;   // slack in reference SDs
+    double mcmcCusumH              = 5.0;   // alarm threshold
+    int    mcmcDriftReferenceCycles = 40;   // cycles establishing the in-control reference
+    int    mcmcT2WindowCycles      = 33;    // cycles per T2 window
+    int    mcmcDriftHistoryCap     = 200;   // cycle-mean ring size
+
+    // --- likelihood autoscaling (default off) ---
+    // Divide each observation's log-likelihood by the measured integrated
+    // autocorrelation time of its residuals, so the posterior width reflects
+    // the information actually present rather than the raw sample count.
+    bool   mcmcLikelihoodAutoscale = false;
+    double mcmcLikelihoodScaleEwma = 0.3;   // EWMA weight on the new estimate
+
     // Inter-cycle stability certification (weaker fallback path, presumes an
     // approximately stationary target). Turn OFF entirely with
     // mcmc_stability_enabled=false, or relax via the tolerance/window.
