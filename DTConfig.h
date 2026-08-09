@@ -59,12 +59,32 @@ struct StateVarExport
 //   noiseCorrelationTimeMs: correlation time tau of the OU process.
 //                           0 = white-noise limit.
 // ---------------------------------------------------------------------------
+// Shape of the synthetic observation error.
+//   Multiplicative : x_obs = x_model * exp(sigma * eps)   -- sigma is RELATIVE
+//   Additive       : x_obs = x_model + sigma * eps        -- sigma has the
+//                    observation's own units
+//
+// Multiplicative error degenerates on intermittent quantities: as x_model -> 0
+// the injected noise -> 0, so dry-period observations become effectively exact
+// and the calibration reads them as infinitely precise. Measured on the
+// bioretention truth: 80% of the pond-depth record sits below 1 mm, where the
+// injected noise averages 0.011 mm, and 80% of underdrain-flow residuals are
+// exactly zero (both sides dry), dragging the fitted sigma 2.24x too low.
+// Additive error matches how level and flow instruments actually behave --
+// accuracy is quoted in engineering units, not as a fraction of reading.
+enum class NoiseMode { Multiplicative, Additive };
+
 struct ObservationConfig
 {
     qint64 saveIntervalMs         = 0;   // 0 sentinel -> fall back to runtime intervalMs
     double noiseSigma             = 0.0; // default / backward-compatible scalar
     std::map<std::string, double> noiseSigmaByPattern;
     qint64 noiseCorrelationTimeMs = 0;
+
+    // Default error shape, and optional per-series overrides keyed by the same
+    // lower-case substring patterns used by noiseSigmaByPattern.
+    NoiseMode noiseMode = NoiseMode::Multiplicative;   // back-compatible default
+    std::map<std::string, NoiseMode> noiseModeByPattern;
 };
 
 // ---------------------------------------------------------------------------

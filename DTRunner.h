@@ -222,6 +222,7 @@ private:
     // observations.noiseSigmaByPattern override it when their lower-case
     // key appears as a substring of the lower-case series name.
     double observationNoiseSigmaForSeries(const std::string &seriesName) const;
+    NoiseMode observationNoiseModeForSeries(const std::string &seriesName) const;
 
     // Write outputs/selected_output_meta.json describing the noise model
     // used to generate selected_output.csv (sigma, tau, save_interval, ts).

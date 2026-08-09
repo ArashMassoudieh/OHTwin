@@ -272,6 +272,8 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
     observations.saveIntervalMs         = intervalMs;  // fallback: model interval
     observations.noiseSigma             = 0.0;
     observations.noiseSigmaByPattern.clear();
+    observations.noiseMode = NoiseMode::Multiplicative;
+    observations.noiseModeByPattern.clear();
     observations.noiseCorrelationTimeMs = 0;
 
     if (root.contains("observations"))
@@ -392,6 +394,33 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
                 return false;
             }
             observations.noiseCorrelationTimeMs = tauMs;
+        }
+
+        // noise_mode: "additive" | "multiplicative". Either a bare string
+        // (applies to all series) or an object keyed like noise_sigma, with an
+        // optional "default" entry.
+        {
+            auto toMode = [](const QString &v, NoiseMode dflt) {
+                const QString t = v.trimmed().toLower();
+                if (t == "additive")       return NoiseMode::Additive;
+                if (t == "multiplicative") return NoiseMode::Multiplicative;
+                return dflt;
+            };
+            const QJsonValue nm = obs.value("noise_mode");
+            if (nm.isString())
+                observations.noiseMode = toMode(nm.toString(), observations.noiseMode);
+            else if (nm.isObject())
+            {
+                const QJsonObject o = nm.toObject();
+                for (auto it = o.begin(); it != o.end(); ++it)
+                {
+                    const std::string key = it.key().trimmed().toLower().toStdString();
+                    const NoiseMode m = toMode(it.value().toString(),
+                                               NoiseMode::Multiplicative);
+                    if (key == "default") observations.noiseMode = m;
+                    else observations.noiseModeByPattern[key] = m;
+                }
+            }
         }
     }
 

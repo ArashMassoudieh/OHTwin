@@ -190,7 +190,10 @@ DTRunner::DTRunner(const DTConfig &config, QObject *parent)
             static_cast<double>(config.observations.noiseCorrelationTimeMs)
             / (86400.0 * 1000.0);
         std::cout << "[Runner] obs noise default : "
-                  << config.observations.noiseSigma << "\n";
+                  << config.observations.noiseSigma
+                  << (config.observations.noiseMode == NoiseMode::Additive
+                          ? "  (ADDITIVE, sigma in observation units)"
+                          : "  (multiplicative, sigma relative)") << "\n";
         if (!config.observations.noiseSigmaByPattern.empty())
         {
             std::cout << "[Runner] obs noise by name : ";
@@ -1463,6 +1466,18 @@ double DTRunner::observationNoiseSigmaForSeries(const std::string &seriesName) c
     return m_config.observations.noiseSigma;
 }
 
+// Per-series error shape, resolved by the same substring patterns as sigma.
+NoiseMode DTRunner::observationNoiseModeForSeries(const std::string &seriesName) const
+{
+    const std::string n = dtLowerCopy(seriesName);
+    for (const auto &kv : m_config.observations.noiseModeByPattern)
+    {
+        if (!kv.first.empty() && n.find(kv.first) != std::string::npos)
+            return kv.second;
+    }
+    return m_config.observations.noiseMode;
+}
+
 void DTRunner::applyOUNoiseStateful(TimeSeriesSet<double> &set,
                                     double defaultSigma,
                                     double tauDays)
@@ -1486,6 +1501,7 @@ void DTRunner::applyOUNoiseStateful(TimeSeriesSet<double> &set,
         const std::string seriesKey = ts.name();
         const double seriesSigma = observationNoiseSigmaForSeries(seriesKey);
         if (seriesSigma <= 0.0) continue;
+        const NoiseMode seriesMode = observationNoiseModeForSeries(seriesKey);
 
         // Initialize or fetch the persisted OU state for this series.
         double eps;
@@ -1522,7 +1538,16 @@ void DTRunner::applyOUNoiseStateful(TimeSeriesSet<double> &set,
             }
 
             const double clean = ts.getValue(i);
-            const double noised = clean * std::exp(seriesSigma * eps);
+            // Additive keeps sigma in the observation's own units, so the
+            // injected error does not vanish as the quantity goes to zero.
+            // Small negative readings during dry periods are retained
+            // deliberately: an ultrasonic sensor ranging to a dry pond bottom
+            // genuinely reports 0 +/- its accuracy, and clipping at zero would
+            // reintroduce the very bias this mode exists to remove.
+            const double noised =
+                (seriesMode == NoiseMode::Additive)
+                    ? clean + seriesSigma * eps
+                    : clean * std::exp(seriesSigma * eps);
             ts.setValue(i, noised);
         }
 
@@ -1562,8 +1587,18 @@ bool DTRunner::writeMetadataSidecar() const
         static_cast<double>(m_config.observations.noiseCorrelationTimeMs)
         / (86400.0 * 1000.0);
     obsBlock["noise_model"] =
-        QStringLiteral("multiplicative_log_normal_OU "
-                       "x_obs = x_model * exp(sigma * epsilon)");
+        (m_config.observations.noiseMode == NoiseMode::Additive)
+            ? QStringLiteral("additive_gaussian_OU  x_obs = x_model + sigma * epsilon")
+            : QStringLiteral("multiplicative_log_normal_OU "
+                             "x_obs = x_model * exp(sigma * epsilon)");
+    if (!m_config.observations.noiseModeByPattern.empty())
+    {
+        QJsonObject modes;
+        for (const auto &kv : m_config.observations.noiseModeByPattern)
+            modes[QString::fromStdString(kv.first)] =
+                (kv.second == NoiseMode::Additive) ? "additive" : "multiplicative";
+        obsBlock["noise_mode_by_pattern"] = modes;
+    }
     obsBlock["ou_stationary_variance"] = 1.0;
 
     QJsonObject root;

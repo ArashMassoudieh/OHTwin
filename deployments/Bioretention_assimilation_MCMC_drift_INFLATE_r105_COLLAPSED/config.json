@@ -57,7 +57,6 @@
         "mcmc_cusum_k": 1.0,
         "mcmc_cusum_h": 5.0,
         "mcmc_drift_reference_cycles": 40,
-        "mcmc_t2_window_cycles": 33,
-        "mcmc_min_step_fraction": 0.0
+        "mcmc_t2_window_cycles": 33
     }
 }
