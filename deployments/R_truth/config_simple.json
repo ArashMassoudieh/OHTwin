@@ -1,7 +1,7 @@
 {
     "deployment": {
         "name": "R",
-        "model_file": "model/R_simple_forecast_evap.ohq",
+        "model_file": "model/R_simple.ohq",
         "viz_file": "viz_r_simple.json",
         "port": 8091
     },
