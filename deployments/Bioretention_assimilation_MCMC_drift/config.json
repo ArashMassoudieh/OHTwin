@@ -13,7 +13,7 @@
         "forecast_horizon": "6day",
         "start_datetime": "2020-01-03T00:00:00",
         "stop_datetime": "2022-01-03T00:00:00",
-        "time_acceleration": 200,
+        "time_acceleration": 100,
         "advance_to_observations": true,
         "state_variables": [],
         "keep_debug_outputs": true
