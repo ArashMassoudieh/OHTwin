@@ -35,6 +35,37 @@
 // OHQ epoch: day-serial 0 = 1899-12-30 (Excel convention)
 static const QDate kNOAAOHQEpoch(1899, 12, 30);
 
+// ---------------------------------------------------------------------------
+// warnIfWindowUncovered
+// ---------------------------------------------------------------------------
+// Open-Meteo's forecast_days counts whole CALENDAR days from today 00:00 UTC,
+// not days from "now". forecast_days=7 therefore reaches only 6.96 days ahead
+// of a cycle starting at 00:00, and 6.00 days ahead of one starting at 23:00 —
+// while a forecast stage simulates [t, t+interval+horizon], eight days for the
+// JM deployment. The tail then has no data behind it: the series simply stops,
+// and downstream interpolation holds the final sample, so invented weather is
+// silently presented as forecast. forecast_days is now 10 (about 9.0-9.96 days
+// of coverage) to keep an 8-day window comfortably inside real data.
+//
+// This warns if that margin is ever exhausted anyway — a longer horizon, a
+// longer interval, or an Open-Meteo change would all erode it quietly.
+static void warnIfWindowUncovered(const std::string &what,
+                                  const QDateTime &dataEnd,
+                                  const QDateTime &intervalEnd)
+{
+    if (!dataEnd.isValid() || !intervalEnd.isValid() || dataEnd >= intervalEnd)
+        return;
+
+    const double shortHours = dataEnd.msecsTo(intervalEnd) / 3600000.0;
+    std::cerr << "[OpenMeteo] WARNING: '" << what << "' data ends "
+              << dataEnd.toUTC().toString(Qt::ISODate).toStdString()
+              << " but the simulated window runs to "
+              << intervalEnd.toUTC().toString(Qt::ISODate).toStdString()
+              << " (short by " << shortHours << " h). Values past the data end "
+                 "are held at the last sample, not forecast — raise "
+                 "forecast_days or shorten forecast_horizon.\n";
+}
+
 NOAAWeatherFetcher::NOAAWeatherFetcher(QObject *parent)
     : QObject(parent)
     , manager(new QNetworkAccessManager(this))
@@ -180,7 +211,7 @@ CPrecipitation NOAAWeatherFetcher::getOpenMeteoPrecipitation(
     query.addQueryItem("latitude",      QString::number(latitude,  'f', 5));
     query.addQueryItem("longitude",     QString::number(longitude, 'f', 5));
     query.addQueryItem("hourly",        "precipitation");
-    query.addQueryItem("forecast_days", "7");
+    query.addQueryItem("forecast_days", "10");   // see coverage note above warnIfWindowUncovered()
     query.addQueryItem("timezone",      "GMT");
     url.setQuery(query);
 
@@ -226,6 +257,7 @@ CPrecipitation NOAAWeatherFetcher::getOpenMeteoPrecipitation(
 
     int loaded  = 0;
     int skipped = 0;
+    QDateTime dataEnd;   // latest bin the API actually returned
 
     for (int i = 0; i < times.size(); ++i)
     {
@@ -236,6 +268,10 @@ CPrecipitation NOAAWeatherFetcher::getOpenMeteoPrecipitation(
             continue;
 
         const QDateTime binEnd = binStart.addSecs(3600); // 1-hour bins
+
+        // Track coverage over every returned bin, not just the kept ones.
+        if (!dataEnd.isValid() || binEnd > dataEnd)
+            dataEnd = binEnd;
 
         // Skip bins entirely outside the interval window
         if (binEnd <= intervalStart || binStart >= intervalEnd) {
@@ -258,6 +294,7 @@ CPrecipitation NOAAWeatherFetcher::getOpenMeteoPrecipitation(
 
     std::cout << "[OpenMeteo] Precipitation bins loaded: " << loaded
               << " (skipped " << skipped << " outside window)\n";
+    warnIfWindowUncovered("precipitation", dataEnd, intervalEnd);
 
     return precip;
 }
@@ -391,7 +428,7 @@ TimeSeries<double> NOAAWeatherFetcher::getOpenMeteoTimeSeries(
     query.addQueryItem("latitude",      QString::number(latitude,  'f', 5));
     query.addQueryItem("longitude",     QString::number(longitude, 'f', 5));
     query.addQueryItem("hourly",        quantity);
-    query.addQueryItem("forecast_days", "7");
+    query.addQueryItem("forecast_days", "10");   // see coverage note above warnIfWindowUncovered()
     query.addQueryItem("timezone",      "GMT");
     url.setQuery(query);
 
@@ -440,12 +477,17 @@ TimeSeries<double> NOAAWeatherFetcher::getOpenMeteoTimeSeries(
 
     int loaded  = 0;
     int skipped = 0;
+    QDateTime dataEnd;   // latest sample the API actually returned
 
     for (int i = 0; i < times.size(); ++i)
     {
         QDateTime t = QDateTime::fromString(times[i].toString() + "Z", Qt::ISODate);
         if (!t.isValid())
             continue;
+
+        // Track coverage over every returned sample, not just the kept ones.
+        if (!dataEnd.isValid() || t > dataEnd)
+            dataEnd = t;
 
         if (t < intervalStart || t > intervalEnd) {
             ++skipped;
@@ -462,6 +504,7 @@ TimeSeries<double> NOAAWeatherFetcher::getOpenMeteoTimeSeries(
     std::cout << "[OpenMeteo] '" << quantity.toStdString()
               << "' samples loaded: " << loaded
               << " (skipped " << skipped << " outside window)\n";
+    warnIfWindowUncovered(quantity.toStdString(), dataEnd, intervalEnd);
 
     return ts;
 }
