@@ -6,14 +6,12 @@
         "port": 8093
     },
     "runtime": {
-        "weather_source": "openmeteo_historical",
+        "weather_source": "openmeteo",
         "latitude": 38.91088,
         "longitude": -76.98569,
         "interval": "1day",
-        "forecast_horizon": "",
-        "start_datetime": "2020-01-03T00:00:00",
-        "stop_datetime": "2022-01-03T00:00:00",
-        "time_acceleration": 1000,
+        "forecast_horizon": "7day",
+        "time_acceleration": 1,
         "state_variables": [],
         "keep_debug_outputs": false
     },
@@ -43,7 +41,11 @@
             "Underdrain outlet flow": 0.1,
             "Groundwater recharge": 0.1,
             "Catch basin depth": 0.02,
-            "Catch basin outlet flow": 0.1
+            "Catch basin outlet flow": 0.1,
+            "Soil 1 evaporation": 0.0,
+            "Soil 2 evaporation": 0.0,
+            "Soil 3 evaporation": 0.0,
+            "Soil 4 evaporation": 0.0
         },
         "noise_correlation_time": "6hr"
     }

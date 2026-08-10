@@ -6,7 +6,7 @@
   "components": [
     {
       "id": "rain",
-      "label": "Rain",
+      "label": "Rain / OpenMeteo",
       "x": 20,
       "y": 10,
       "width": 1100,
@@ -1443,6 +1443,142 @@
           "font_size": 8,
           "font_weight": 600,
           "fill": "#FFFFFF"
+        }
+      ]
+    },
+    {
+      "id": "evap1",
+      "block": "JM Engineered Soil 1",
+      "label": "Penman ET 1",
+      "x": 125,
+      "y": 200,
+      "width": 130,
+      "height": 22,
+      "draw": [
+        {
+          "shape": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "rx": 5,
+          "fill": "#ECFDF5",
+          "stroke": "#059669",
+          "stroke_width": 1.0
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.62,
+          "anchor": "middle",
+          "value": {
+            "bind": "label"
+          },
+          "font_size": 8,
+          "font_weight": 600,
+          "fill": "#065F46"
+        }
+      ]
+    },
+    {
+      "id": "evap2",
+      "block": "JM Engineered Soil 2",
+      "label": "Penman ET 2",
+      "x": 365,
+      "y": 200,
+      "width": 130,
+      "height": 22,
+      "draw": [
+        {
+          "shape": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "rx": 5,
+          "fill": "#ECFDF5",
+          "stroke": "#059669",
+          "stroke_width": 1.0
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.62,
+          "anchor": "middle",
+          "value": {
+            "bind": "label"
+          },
+          "font_size": 8,
+          "font_weight": 600,
+          "fill": "#065F46"
+        }
+      ]
+    },
+    {
+      "id": "evap3",
+      "block": "JM Engineered Soil 3",
+      "label": "Penman ET 3",
+      "x": 605,
+      "y": 200,
+      "width": 130,
+      "height": 22,
+      "draw": [
+        {
+          "shape": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "rx": 5,
+          "fill": "#ECFDF5",
+          "stroke": "#059669",
+          "stroke_width": 1.0
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.62,
+          "anchor": "middle",
+          "value": {
+            "bind": "label"
+          },
+          "font_size": 8,
+          "font_weight": 600,
+          "fill": "#065F46"
+        }
+      ]
+    },
+    {
+      "id": "evap4",
+      "block": "JM Engineered Soil 4",
+      "label": "Penman ET 4",
+      "x": 845,
+      "y": 200,
+      "width": 130,
+      "height": 22,
+      "draw": [
+        {
+          "shape": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "rx": 5,
+          "fill": "#ECFDF5",
+          "stroke": "#059669",
+          "stroke_width": 1.0
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.62,
+          "anchor": "middle",
+          "value": {
+            "bind": "label"
+          },
+          "font_size": 8,
+          "font_weight": 600,
+          "fill": "#065F46"
         }
       ]
     }
