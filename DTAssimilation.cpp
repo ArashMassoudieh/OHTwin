@@ -1365,6 +1365,16 @@ bool DTAssimilation::runCalibrationMCMC(System &sys,
         }
     }
 
+    // Proposal-kernel history: kappa, the running proposal covariance and its
+    // correlation matrix, and the pooled posterior correlation — EVERY cycle.
+    // Read-only diagnostic; does not touch the sampler's trajectory.
+    {
+        const QString propPath = calibDir + "/proposal_history.jsonl";
+        QString propErr;
+        if (!mcmc.appendProposalRecord(propPath, result, tEnd, propErr))
+            std::cerr << "[Assim] WARNING: " << propErr.toStdString() << "\n";
+    }
+
     // Parameter CI history: EVERY cycle (dense record, not interval-gated).
     {
         const QString ciPath = calibDir + "/parameter_ci_history.csv";
