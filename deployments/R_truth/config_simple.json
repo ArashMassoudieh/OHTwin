@@ -11,7 +11,7 @@
         "longitude": -76.98569,
         "interval": "1day",
         "forecast_horizon": "7day",
-        "time_acceleration": 200,
+        "time_acceleration": 1,
         "state_variables": [],
         "keep_debug_outputs": false
     },
