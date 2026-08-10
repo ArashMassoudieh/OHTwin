@@ -1,18 +1,16 @@
 {
     "deployment": {
         "name": "R",
-        "model_file": "model/R_simple.ohq",
+        "model_file": "model/R_simple_forecast_evap.ohq",
         "viz_file": "viz_r_simple.json",
         "port": 8091
     },
     "runtime": {
-        "weather_source": "openmeteo_historical",
+        "weather_source": "openmeteo",
         "latitude": 38.91088,
         "longitude": -76.98569,
         "interval": "1day",
-        "forecast_horizon": "",
-        "start_datetime": "2020-01-03T00:00:00",
-        "stop_datetime": "2022-01-03T00:00:00",
+        "forecast_horizon": "7day",
         "time_acceleration": 200,
         "state_variables": [],
         "keep_debug_outputs": false
@@ -21,14 +19,14 @@
         "save_interval": "1hr",
         "noise_sigma": {
             "default": 0.0,
-	    "Precipitation (mm/day)": 0.0,
-	    "Catchment Water Depth (m)": 0.1,
-	    "Soil Moisture M1": 0.05,
-	    "Soil Moisture M2": 0.05,
-	    "Soil Moisture M3": 0.05,
-	    "Overflow (m3/day)": 0.1
+            "Precipitation (mm/day)": 0.0,
+            "Catchment Water Depth (m)": 0.1,
+            "Soil Moisture M1": 0.05,
+            "Soil Moisture M2": 0.05,
+            "Soil Moisture M3": 0.05,
+            "Overflow (m3/day)": 0.1,
+            "Evaporation": 0.0
         },
         "noise_correlation_time": "6hr"
     }
 }
-
