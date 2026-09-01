@@ -1,2253 +1,2431 @@
 {
-  "canvas": {
-    "width": 1280,
-    "height": 720
+ "canvas": {
+  "width": 1280,
+  "height": 720
+ },
+ "components": [
+  {
+   "id": "rain",
+   "label": "Rain / OpenMeteo",
+   "x": 20,
+   "y": 10,
+   "width": 1100,
+   "height": 45,
+   "bind": {
+    "intensity": {
+     "source": "Rain",
+     "property": "Intensity"
+    }
+   },
+   "draw": [
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1,
+     "fill": "#E0F2FE",
+     "stroke": "#0284C7",
+     "stroke_width": 1.5
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.6,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 13,
+     "font_weight": 600,
+     "fill": "#0C4A6E"
+    }
+   ]
   },
-  "components": [
+  {
+   "id": "da1",
+   "block": "JM DA-01",
+   "label": "DA-01 (316.1 m\u00b2)",
+   "x": 20,
+   "y": 75,
+   "width": 125,
+   "height": 55,
+   "draw": [
     {
-      "id": "rain",
-      "label": "Rain / OpenMeteo",
-      "x": 20,
-      "y": 10,
-      "width": 1100,
-      "height": 45,
-      "bind": {
-        "intensity": {
-          "source": "Rain",
-          "property": "Intensity"
-        }
-      },
-      "draw": [
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 1,
-          "fill": "#E0F2FE",
-          "stroke": "#0284C7",
-          "stroke_width": 1.5
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.6,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 13,
-          "font_weight": 600,
-          "fill": "#0C4A6E"
-        }
+     "shape": "polygon",
+     "points": [
+      [
+       0,
+       1
+      ],
+      [
+       1,
+       1
+      ],
+      [
+       1,
+       0.55
+      ],
+      [
+       0,
+       0.25
       ]
+     ],
+     "fill": "#94A3B8",
+     "stroke": "#475569",
+     "stroke_width": 1.3
     },
     {
-      "id": "da1",
-      "block": "JM DA-01",
-      "label": "DA-01 (316.1 m\u00b2)",
-      "x": 20,
-      "y": 75,
-      "width": 125,
-      "height": 55,
-      "draw": [
-        {
-          "shape": "polygon",
-          "points": [
-            [
-              0,
-              1
-            ],
-            [
-              1,
-              1
-            ],
-            [
-              1,
-              0.55
-            ],
-            [
-              0,
-              0.25
-            ]
-          ],
-          "fill": "#94A3B8",
-          "stroke": "#475569",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.82,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 9,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "da2",
-      "block": "JM DA-02",
-      "label": "DA-02 (57.0 m\u00b2)",
-      "x": 165,
-      "y": 75,
-      "width": 125,
-      "height": 55,
-      "draw": [
-        {
-          "shape": "polygon",
-          "points": [
-            [
-              0,
-              1
-            ],
-            [
-              1,
-              1
-            ],
-            [
-              1,
-              0.55
-            ],
-            [
-              0,
-              0.25
-            ]
-          ],
-          "fill": "#94A3B8",
-          "stroke": "#475569",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.82,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 9,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "da3",
-      "block": "JM DA-03",
-      "label": "DA-03 (44.4 m\u00b2)",
-      "x": 310,
-      "y": 75,
-      "width": 125,
-      "height": 55,
-      "draw": [
-        {
-          "shape": "polygon",
-          "points": [
-            [
-              0,
-              1
-            ],
-            [
-              1,
-              1
-            ],
-            [
-              1,
-              0.55
-            ],
-            [
-              0,
-              0.25
-            ]
-          ],
-          "fill": "#94A3B8",
-          "stroke": "#475569",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.82,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 9,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "da4",
-      "block": "JM DA-04",
-      "label": "DA-04 (45.2 m\u00b2)",
-      "x": 455,
-      "y": 75,
-      "width": 125,
-      "height": 55,
-      "draw": [
-        {
-          "shape": "polygon",
-          "points": [
-            [
-              0,
-              1
-            ],
-            [
-              1,
-              1
-            ],
-            [
-              1,
-              0.55
-            ],
-            [
-              0,
-              0.25
-            ]
-          ],
-          "fill": "#94A3B8",
-          "stroke": "#475569",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.82,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 9,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "da5",
-      "block": "JM DA-05",
-      "label": "DA-05 (37.5 m\u00b2)",
-      "x": 600,
-      "y": 75,
-      "width": 125,
-      "height": 55,
-      "draw": [
-        {
-          "shape": "polygon",
-          "points": [
-            [
-              0,
-              1
-            ],
-            [
-              1,
-              1
-            ],
-            [
-              1,
-              0.55
-            ],
-            [
-              0,
-              0.25
-            ]
-          ],
-          "fill": "#94A3B8",
-          "stroke": "#475569",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.82,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 9,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "gutter1",
-      "block": "JM Street Gutter 1",
-      "label": "Gutter 1",
-      "fill_max": 0.15,
-      "x": 100,
-      "y": 155,
-      "width": 180,
-      "height": 40,
-      "bind": {
-        "fill_value": {
-          "block": "JM Street Gutter 1",
-          "property": "depth"
-        }
-      },
-      "draw": [
-        {
-          "shape": "polygon",
-          "points": [
-            [
-              0,
-              0.15
-            ],
-            [
-              1,
-              0.15
-            ],
-            [
-              0.75,
-              1
-            ],
-            [
-              0.25,
-              1
-            ]
-          ],
-          "fill": "#CBD5E1",
-          "stroke": "#475569",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "rect",
-          "x": 0.25,
-          "y": {
-            "expr": "1-0.75*fill_fraction"
-          },
-          "w": 0.5,
-          "h": {
-            "expr": "0.75*fill_fraction"
-          },
-          "fill": {
-            "bind": "water_color"
-          },
-          "clip": true
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.7,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 9,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "pond1",
-      "block": "JM Pond 1",
-      "label": "Pond 1",
-      "fill_max": 3.5,
-      "x": 100,
-      "y": 225,
-      "width": 180,
-      "height": 70,
-      "bind": {
-        "fill_value": {
-          "block": "JM Pond 1",
-          "property": "Storage"
-        }
-      },
-      "draw": [
-        {
-          "shape": "polygon",
-          "points": [
-            [
-              0,
-              0.18
-            ],
-            [
-              1,
-              0.18
-            ],
-            [
-              0.9,
-              1
-            ],
-            [
-              0.1,
-              1
-            ]
-          ],
-          "fill": "#A78A5E",
-          "stroke": "#6B5B3A",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "rect",
-          "x": 0.1,
-          "y": {
-            "expr": "1-0.8*fill_fraction"
-          },
-          "w": 0.8,
-          "h": {
-            "expr": "0.8*fill_fraction"
-          },
-          "fill": {
-            "bind": "water_color"
-          },
-          "clip": true
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.13,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 10,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "soil1",
-      "block": "JM Engineered Soil 1",
-      "label": "Engineered Soil 1",
-      "fill_max": 0.4,
-      "x": 100,
-      "y": 315,
-      "width": 180,
-      "height": 75,
-      "bind": {
-        "fill_value": {
-          "block": "JM Engineered Soil 1",
-          "property": "theta"
-        }
-      },
-      "draw": [
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 1,
-          "fill": {
-            "bind": "water_color"
-          },
-          "stroke": "#4A3520",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.48,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 9,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.75,
-          "anchor": "middle",
-          "value": {
-            "expr": "fill_value",
-            "format": "\u03b8 = %.3f"
-          },
-          "font_size": 8,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "agg1",
-      "block": "JM Aggregate 1",
-      "label": "Aggregate 1",
-      "fill_max": 0.99,
-      "x": 100,
-      "y": 410,
-      "width": 180,
-      "height": 60,
-      "bind": {
-        "fill_value": {
-          "block": "JM Aggregate 1",
-          "property": "depth"
-        }
-      },
-      "draw": [
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 1,
-          "fill": "#D6D3CB",
-          "stroke": "#6B6B6B",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": {
-            "expr": "1-fill_fraction"
-          },
-          "w": 1,
-          "h": {
-            "bind": "fill_fraction"
-          },
-          "fill": {
-            "bind": "water_color"
-          },
-          "clip": true
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.55,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 9,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "gutter2",
-      "block": "JM Street Gutter 2",
-      "label": "Gutter 2",
-      "fill_max": 0.15,
-      "x": 340,
-      "y": 155,
-      "width": 180,
-      "height": 40,
-      "bind": {
-        "fill_value": {
-          "block": "JM Street Gutter 2",
-          "property": "depth"
-        }
-      },
-      "draw": [
-        {
-          "shape": "polygon",
-          "points": [
-            [
-              0,
-              0.15
-            ],
-            [
-              1,
-              0.15
-            ],
-            [
-              0.75,
-              1
-            ],
-            [
-              0.25,
-              1
-            ]
-          ],
-          "fill": "#CBD5E1",
-          "stroke": "#475569",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "rect",
-          "x": 0.25,
-          "y": {
-            "expr": "1-0.75*fill_fraction"
-          },
-          "w": 0.5,
-          "h": {
-            "expr": "0.75*fill_fraction"
-          },
-          "fill": {
-            "bind": "water_color"
-          },
-          "clip": true
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.7,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 9,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "pond2",
-      "block": "JM Pond 2",
-      "label": "Pond 2",
-      "fill_max": 3.5,
-      "x": 340,
-      "y": 225,
-      "width": 180,
-      "height": 70,
-      "bind": {
-        "fill_value": {
-          "block": "JM Pond 2",
-          "property": "Storage"
-        }
-      },
-      "draw": [
-        {
-          "shape": "polygon",
-          "points": [
-            [
-              0,
-              0.18
-            ],
-            [
-              1,
-              0.18
-            ],
-            [
-              0.9,
-              1
-            ],
-            [
-              0.1,
-              1
-            ]
-          ],
-          "fill": "#A78A5E",
-          "stroke": "#6B5B3A",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "rect",
-          "x": 0.1,
-          "y": {
-            "expr": "1-0.8*fill_fraction"
-          },
-          "w": 0.8,
-          "h": {
-            "expr": "0.8*fill_fraction"
-          },
-          "fill": {
-            "bind": "water_color"
-          },
-          "clip": true
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.13,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 10,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "soil2",
-      "block": "JM Engineered Soil 2",
-      "label": "Engineered Soil 2",
-      "fill_max": 0.4,
-      "x": 340,
-      "y": 315,
-      "width": 180,
-      "height": 75,
-      "bind": {
-        "fill_value": {
-          "block": "JM Engineered Soil 2",
-          "property": "theta"
-        }
-      },
-      "draw": [
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 1,
-          "fill": {
-            "bind": "water_color"
-          },
-          "stroke": "#4A3520",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.48,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 9,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.75,
-          "anchor": "middle",
-          "value": {
-            "expr": "fill_value",
-            "format": "\u03b8 = %.3f"
-          },
-          "font_size": 8,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "agg2",
-      "block": "JM Aggregate 2",
-      "label": "Aggregate 2",
-      "fill_max": 0.99,
-      "x": 340,
-      "y": 410,
-      "width": 180,
-      "height": 60,
-      "bind": {
-        "fill_value": {
-          "block": "JM Aggregate 2",
-          "property": "depth"
-        }
-      },
-      "draw": [
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 1,
-          "fill": "#D6D3CB",
-          "stroke": "#6B6B6B",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": {
-            "expr": "1-fill_fraction"
-          },
-          "w": 1,
-          "h": {
-            "bind": "fill_fraction"
-          },
-          "fill": {
-            "bind": "water_color"
-          },
-          "clip": true
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.55,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 9,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "gutter3",
-      "block": "JM Street Gutter 3",
-      "label": "Gutter 3",
-      "fill_max": 0.15,
-      "x": 580,
-      "y": 155,
-      "width": 180,
-      "height": 40,
-      "bind": {
-        "fill_value": {
-          "block": "JM Street Gutter 3",
-          "property": "depth"
-        }
-      },
-      "draw": [
-        {
-          "shape": "polygon",
-          "points": [
-            [
-              0,
-              0.15
-            ],
-            [
-              1,
-              0.15
-            ],
-            [
-              0.75,
-              1
-            ],
-            [
-              0.25,
-              1
-            ]
-          ],
-          "fill": "#CBD5E1",
-          "stroke": "#475569",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "rect",
-          "x": 0.25,
-          "y": {
-            "expr": "1-0.75*fill_fraction"
-          },
-          "w": 0.5,
-          "h": {
-            "expr": "0.75*fill_fraction"
-          },
-          "fill": {
-            "bind": "water_color"
-          },
-          "clip": true
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.7,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 9,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "pond3",
-      "block": "JM Pond 3",
-      "label": "Pond 3",
-      "fill_max": 3.5,
-      "x": 580,
-      "y": 225,
-      "width": 180,
-      "height": 70,
-      "bind": {
-        "fill_value": {
-          "block": "JM Pond 3",
-          "property": "Storage"
-        }
-      },
-      "draw": [
-        {
-          "shape": "polygon",
-          "points": [
-            [
-              0,
-              0.18
-            ],
-            [
-              1,
-              0.18
-            ],
-            [
-              0.9,
-              1
-            ],
-            [
-              0.1,
-              1
-            ]
-          ],
-          "fill": "#A78A5E",
-          "stroke": "#6B5B3A",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "rect",
-          "x": 0.1,
-          "y": {
-            "expr": "1-0.8*fill_fraction"
-          },
-          "w": 0.8,
-          "h": {
-            "expr": "0.8*fill_fraction"
-          },
-          "fill": {
-            "bind": "water_color"
-          },
-          "clip": true
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.13,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 10,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "soil3",
-      "block": "JM Engineered Soil 3",
-      "label": "Engineered Soil 3",
-      "fill_max": 0.4,
-      "x": 580,
-      "y": 315,
-      "width": 180,
-      "height": 75,
-      "bind": {
-        "fill_value": {
-          "block": "JM Engineered Soil 3",
-          "property": "theta"
-        }
-      },
-      "draw": [
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 1,
-          "fill": {
-            "bind": "water_color"
-          },
-          "stroke": "#4A3520",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.48,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 9,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.75,
-          "anchor": "middle",
-          "value": {
-            "expr": "fill_value",
-            "format": "\u03b8 = %.3f"
-          },
-          "font_size": 8,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "agg3",
-      "block": "JM Aggregate 3",
-      "label": "Aggregate 3",
-      "fill_max": 0.99,
-      "x": 580,
-      "y": 410,
-      "width": 180,
-      "height": 60,
-      "bind": {
-        "fill_value": {
-          "block": "JM Aggregate 3",
-          "property": "depth"
-        }
-      },
-      "draw": [
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 1,
-          "fill": "#D6D3CB",
-          "stroke": "#6B6B6B",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": {
-            "expr": "1-fill_fraction"
-          },
-          "w": 1,
-          "h": {
-            "bind": "fill_fraction"
-          },
-          "fill": {
-            "bind": "water_color"
-          },
-          "clip": true
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.55,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 9,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "gutter4",
-      "block": "JM Street Gutter 4",
-      "label": "Gutter 4",
-      "fill_max": 0.15,
-      "x": 820,
-      "y": 155,
-      "width": 180,
-      "height": 40,
-      "bind": {
-        "fill_value": {
-          "block": "JM Street Gutter 4",
-          "property": "depth"
-        }
-      },
-      "draw": [
-        {
-          "shape": "polygon",
-          "points": [
-            [
-              0,
-              0.15
-            ],
-            [
-              1,
-              0.15
-            ],
-            [
-              0.75,
-              1
-            ],
-            [
-              0.25,
-              1
-            ]
-          ],
-          "fill": "#CBD5E1",
-          "stroke": "#475569",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "rect",
-          "x": 0.25,
-          "y": {
-            "expr": "1-0.75*fill_fraction"
-          },
-          "w": 0.5,
-          "h": {
-            "expr": "0.75*fill_fraction"
-          },
-          "fill": {
-            "bind": "water_color"
-          },
-          "clip": true
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.7,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 9,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "pond4",
-      "block": "JM Pond 4",
-      "label": "Pond 4",
-      "fill_max": 3.5,
-      "x": 820,
-      "y": 225,
-      "width": 180,
-      "height": 70,
-      "bind": {
-        "fill_value": {
-          "block": "JM Pond 4",
-          "property": "Storage"
-        }
-      },
-      "draw": [
-        {
-          "shape": "polygon",
-          "points": [
-            [
-              0,
-              0.18
-            ],
-            [
-              1,
-              0.18
-            ],
-            [
-              0.9,
-              1
-            ],
-            [
-              0.1,
-              1
-            ]
-          ],
-          "fill": "#A78A5E",
-          "stroke": "#6B5B3A",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "rect",
-          "x": 0.1,
-          "y": {
-            "expr": "1-0.8*fill_fraction"
-          },
-          "w": 0.8,
-          "h": {
-            "expr": "0.8*fill_fraction"
-          },
-          "fill": {
-            "bind": "water_color"
-          },
-          "clip": true
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.13,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 10,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "soil4",
-      "block": "JM Engineered Soil 4",
-      "label": "Engineered Soil 4",
-      "fill_max": 0.4,
-      "x": 820,
-      "y": 315,
-      "width": 180,
-      "height": 75,
-      "bind": {
-        "fill_value": {
-          "block": "JM Engineered Soil 4",
-          "property": "theta"
-        }
-      },
-      "draw": [
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 1,
-          "fill": {
-            "bind": "water_color"
-          },
-          "stroke": "#4A3520",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.48,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 9,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.75,
-          "anchor": "middle",
-          "value": {
-            "expr": "fill_value",
-            "format": "\u03b8 = %.3f"
-          },
-          "font_size": 8,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "agg4",
-      "block": "JM Aggregate 4",
-      "label": "Aggregate 4",
-      "fill_max": 0.99,
-      "x": 820,
-      "y": 410,
-      "width": 180,
-      "height": 60,
-      "bind": {
-        "fill_value": {
-          "block": "JM Aggregate 4",
-          "property": "depth"
-        }
-      },
-      "draw": [
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 1,
-          "fill": "#D6D3CB",
-          "stroke": "#6B6B6B",
-          "stroke_width": 1.3
-        },
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": {
-            "expr": "1-fill_fraction"
-          },
-          "w": 1,
-          "h": {
-            "bind": "fill_fraction"
-          },
-          "fill": {
-            "bind": "water_color"
-          },
-          "clip": true
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.55,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 9,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "native",
-      "block": "JM Native Soil 1-1",
-      "label": "Shared Native Soil",
-      "fill_max": 0.4,
-      "x": 260,
-      "y": 505,
-      "width": 660,
-      "height": 80,
-      "bind": {
-        "fill_value": {
-          "block": "JM Native Soil 1-1",
-          "property": "theta"
-        }
-      },
-      "draw": [
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 1,
-          "fill": {
-            "bind": "water_color"
-          },
-          "stroke": "#4A3520",
-          "stroke_width": 1.5
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.48,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 11,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.73,
-          "anchor": "middle",
-          "value": {
-            "expr": "fill_value",
-            "format": "\u03b8 = %.3f"
-          },
-          "font_size": 9,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "gw",
-      "block": "JM Groundwater",
-      "label": "Groundwater",
-      "x": 160,
-      "y": 620,
-      "width": 860,
-      "height": 65,
-      "draw": [
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 0.35,
-          "fill": "#2563EB"
-        },
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": 0.35,
-          "w": 1,
-          "h": 0.65,
-          "fill": "#5C4524"
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.75,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 11,
-          "font_weight": 600,
-          "fill": "#FEF3C7"
-        }
-      ]
-    },
-    {
-      "id": "cb",
-      "block": "JM Catch Basin",
-      "label": "Catch Basin",
-      "fill_max": 1.0,
-      "x": 1040,
-      "y": 300,
-      "width": 90,
-      "height": 190,
-      "bind": {
-        "fill_value": {
-          "block": "JM Catch Basin",
-          "property": "depth"
-        }
-      },
-      "draw": [
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 1,
-          "fill": "#E5E7EB",
-          "stroke": "#475569",
-          "stroke_width": 1.5
-        },
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": {
-            "expr": "1-fill_fraction"
-          },
-          "w": 1,
-          "h": {
-            "bind": "fill_fraction"
-          },
-          "fill": {
-            "bind": "water_color"
-          },
-          "clip": true
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.48,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 9,
-          "font_weight": 600,
-          "fill": "#1E293B"
-        }
-      ]
-    },
-    {
-      "id": "rw",
-      "block": "JM Receiving Water",
-      "label": "Receiving Water",
-      "x": 1160,
-      "y": 350,
-      "width": 100,
-      "height": 90,
-      "draw": [
-        {
-          "shape": "ellipse",
-          "cx": 0.5,
-          "cy": 0.5,
-          "rx": 0.45,
-          "ry": 0.45,
-          "fill": "#2563EB",
-          "stroke": "#1E40AF",
-          "stroke_width": 2
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.55,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 8,
-          "font_weight": 600,
-          "fill": "#FFFFFF"
-        }
-      ]
-    },
-    {
-      "id": "evap1",
-      "block": "JM Engineered Soil 1",
-      "label": "Penman ET 1",
-      "x": 125,
-      "y": 200,
-      "width": 130,
-      "height": 22,
-      "draw": [
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 1,
-          "rx": 5,
-          "fill": "#ECFDF5",
-          "stroke": "#059669",
-          "stroke_width": 1.0
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.62,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 8,
-          "font_weight": 600,
-          "fill": "#065F46"
-        }
-      ]
-    },
-    {
-      "id": "evap2",
-      "block": "JM Engineered Soil 2",
-      "label": "Penman ET 2",
-      "x": 365,
-      "y": 200,
-      "width": 130,
-      "height": 22,
-      "draw": [
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 1,
-          "rx": 5,
-          "fill": "#ECFDF5",
-          "stroke": "#059669",
-          "stroke_width": 1.0
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.62,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 8,
-          "font_weight": 600,
-          "fill": "#065F46"
-        }
-      ]
-    },
-    {
-      "id": "evap3",
-      "block": "JM Engineered Soil 3",
-      "label": "Penman ET 3",
-      "x": 605,
-      "y": 200,
-      "width": 130,
-      "height": 22,
-      "draw": [
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 1,
-          "rx": 5,
-          "fill": "#ECFDF5",
-          "stroke": "#059669",
-          "stroke_width": 1.0
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.62,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 8,
-          "font_weight": 600,
-          "fill": "#065F46"
-        }
-      ]
-    },
-    {
-      "id": "evap4",
-      "block": "JM Engineered Soil 4",
-      "label": "Penman ET 4",
-      "x": 845,
-      "y": 200,
-      "width": 130,
-      "height": 22,
-      "draw": [
-        {
-          "shape": "rect",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 1,
-          "rx": 5,
-          "fill": "#ECFDF5",
-          "stroke": "#059669",
-          "stroke_width": 1.0
-        },
-        {
-          "shape": "text",
-          "x": 0.5,
-          "y": 0.62,
-          "anchor": "middle",
-          "value": {
-            "bind": "label"
-          },
-          "font_size": 8,
-          "font_weight": 600,
-          "fill": "#065F46"
-        }
-      ]
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.82,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 9,
+     "font_weight": 600,
+     "fill": "#1E293B"
     }
-  ],
-  "connectors": [
+   ]
+  },
+  {
+   "id": "da2",
+   "block": "JM DA-02",
+   "label": "DA-02 (57.0 m\u00b2)",
+   "x": 165,
+   "y": 75,
+   "width": 125,
+   "height": 55,
+   "draw": [
     {
-      "link": "JM DA-01 to Street Gutter 1",
-      "from": "JM DA-01",
-      "to": "JM Street Gutter 1",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM DA-01 to Street Gutter 1",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
+     "shape": "polygon",
+     "points": [
+      [
+       0,
+       1
+      ],
+      [
+       1,
+       1
+      ],
+      [
+       1,
+       0.55
+      ],
+      [
+       0,
+       0.25
       ]
+     ],
+     "fill": "#94A3B8",
+     "stroke": "#475569",
+     "stroke_width": 1.3
     },
     {
-      "link": "JM DA-02 to Street Gutter 2",
-      "from": "JM DA-02",
-      "to": "JM Street Gutter 2",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM DA-02 to Street Gutter 2",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM DA-03 to Street Gutter 2",
-      "from": "JM DA-03",
-      "to": "JM Street Gutter 2",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM DA-03 to Street Gutter 2",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM DA-04 to Street Gutter 3",
-      "from": "JM DA-04",
-      "to": "JM Street Gutter 3",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM DA-04 to Street Gutter 3",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM DA-05 to Street Gutter 4",
-      "from": "JM DA-05",
-      "to": "JM Street Gutter 4",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM DA-05 to Street Gutter 4",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Street Gutter 1 to 2",
-      "from": "JM Street Gutter 1",
-      "to": "JM Street Gutter 2",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Street Gutter 1 to 2",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Street Gutter 2 to 3",
-      "from": "JM Street Gutter 2",
-      "to": "JM Street Gutter 3",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Street Gutter 2 to 3",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Street Gutter 3 to 4",
-      "from": "JM Street Gutter 3",
-      "to": "JM Street Gutter 4",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Street Gutter 3 to 4",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Street Gutter 1 to Pond 1",
-      "from": "JM Street Gutter 1",
-      "to": "JM Pond 1",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Street Gutter 1 to Pond 1",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Pond 1 to Engineered Soil 1",
-      "from": "JM Pond 1",
-      "to": "JM Engineered Soil 1",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Pond 1 to Engineered Soil 1",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Engineered Soil 1 to Aggregate 1",
-      "from": "JM Engineered Soil 1",
-      "to": "JM Aggregate 1",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Engineered Soil 1 to Aggregate 1",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Aggregate 1 to JM Native Soil 1-1",
-      "from": "JM Aggregate 1",
-      "to": "JM Native Soil 1-1",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Aggregate 1 to JM Native Soil 1-1",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Overflow Weir 1",
-      "from": "JM Pond 1",
-      "to": "JM Catch Basin",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Overflow Weir 1",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#EF4444",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Street Gutter 2 to Pond 2",
-      "from": "JM Street Gutter 2",
-      "to": "JM Pond 2",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Street Gutter 2 to Pond 2",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Pond 2 to Engineered Soil 2",
-      "from": "JM Pond 2",
-      "to": "JM Engineered Soil 2",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Pond 2 to Engineered Soil 2",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Engineered Soil 2 to Aggregate 2",
-      "from": "JM Engineered Soil 2",
-      "to": "JM Aggregate 2",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Engineered Soil 2 to Aggregate 2",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Aggregate 2 to JM Native Soil 1-1",
-      "from": "JM Aggregate 2",
-      "to": "JM Native Soil 1-1",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Aggregate 2 to JM Native Soil 1-1",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Overflow Weir 2",
-      "from": "JM Pond 2",
-      "to": "JM Catch Basin",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Overflow Weir 2",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#EF4444",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Street Gutter 3 to Pond 3",
-      "from": "JM Street Gutter 3",
-      "to": "JM Pond 3",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Street Gutter 3 to Pond 3",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Pond 3 to Engineered Soil 3",
-      "from": "JM Pond 3",
-      "to": "JM Engineered Soil 3",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Pond 3 to Engineered Soil 3",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Engineered Soil 3 to Aggregate 3",
-      "from": "JM Engineered Soil 3",
-      "to": "JM Aggregate 3",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Engineered Soil 3 to Aggregate 3",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Aggregate 3 to JM Native Soil 1-1",
-      "from": "JM Aggregate 3",
-      "to": "JM Native Soil 1-1",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Aggregate 3 to JM Native Soil 1-1",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Overflow Weir 3",
-      "from": "JM Pond 3",
-      "to": "JM Catch Basin",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Overflow Weir 3",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#EF4444",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Street Gutter 4 to Pond 4",
-      "from": "JM Street Gutter 4",
-      "to": "JM Pond 4",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Street Gutter 4 to Pond 4",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Pond 4 to Engineered Soil 4",
-      "from": "JM Pond 4",
-      "to": "JM Engineered Soil 4",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Pond 4 to Engineered Soil 4",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Engineered Soil 4 to Aggregate 4",
-      "from": "JM Engineered Soil 4",
-      "to": "JM Aggregate 4",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Engineered Soil 4 to Aggregate 4",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Aggregate 4 to JM Native Soil 1-1",
-      "from": "JM Aggregate 4",
-      "to": "JM Native Soil 1-1",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Aggregate 4 to JM Native Soil 1-1",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Overflow Weir 4",
-      "from": "JM Pond 4",
-      "to": "JM Catch Basin",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Overflow Weir 4",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#EF4444",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Aggregate 1 - JM Aggregate 2",
-      "from": "JM Aggregate 1",
-      "to": "JM Aggregate 2",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Aggregate 1 - JM Aggregate 2",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Aggregate 2 - JM Aggregate 3",
-      "from": "JM Aggregate 2",
-      "to": "JM Aggregate 3",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Aggregate 2 - JM Aggregate 3",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Aggregate 3 - JM Aggregate 4",
-      "from": "JM Aggregate 3",
-      "to": "JM Aggregate 4",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Aggregate 3 - JM Aggregate 4",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Street Gutter 4 to Catch Basin",
-      "from": "JM Street Gutter 4",
-      "to": "JM Catch Basin",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Street Gutter 4 to Catch Basin",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Underdrain 4",
-      "from": "JM Aggregate 4",
-      "to": "JM Catch Basin",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Underdrain 4",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Native Soil 1 to Groundwater",
-      "from": "JM Native Soil 1-1",
-      "to": "JM Groundwater",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Native Soil 1 to Groundwater",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
-    },
-    {
-      "link": "JM Catch Basin Outlet",
-      "from": "JM Catch Basin",
-      "to": "JM Receiving Water",
-      "attach": "auto",
-      "bind": {
-        "flow_value": {
-          "link": "JM Catch Basin Outlet",
-          "property": "flow"
-        }
-      },
-      "draw": [
-        {
-          "shape": "line",
-          "stroke": "#3B82F6",
-          "stroke_width": 2
-        }
-      ]
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.82,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 9,
+     "font_weight": 600,
+     "fill": "#1E293B"
     }
-  ]
+   ]
+  },
+  {
+   "id": "da3",
+   "block": "JM DA-03",
+   "label": "DA-03 (44.4 m\u00b2)",
+   "x": 310,
+   "y": 75,
+   "width": 125,
+   "height": 55,
+   "draw": [
+    {
+     "shape": "polygon",
+     "points": [
+      [
+       0,
+       1
+      ],
+      [
+       1,
+       1
+      ],
+      [
+       1,
+       0.55
+      ],
+      [
+       0,
+       0.25
+      ]
+     ],
+     "fill": "#94A3B8",
+     "stroke": "#475569",
+     "stroke_width": 1.3
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.82,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 9,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    }
+   ]
+  },
+  {
+   "id": "da4",
+   "block": "JM DA-04",
+   "label": "DA-04 (45.2 m\u00b2)",
+   "x": 455,
+   "y": 75,
+   "width": 125,
+   "height": 55,
+   "draw": [
+    {
+     "shape": "polygon",
+     "points": [
+      [
+       0,
+       1
+      ],
+      [
+       1,
+       1
+      ],
+      [
+       1,
+       0.55
+      ],
+      [
+       0,
+       0.25
+      ]
+     ],
+     "fill": "#94A3B8",
+     "stroke": "#475569",
+     "stroke_width": 1.3
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.82,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 9,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    }
+   ]
+  },
+  {
+   "id": "da5",
+   "block": "JM DA-05",
+   "label": "DA-05 (37.5 m\u00b2)",
+   "x": 600,
+   "y": 75,
+   "width": 125,
+   "height": 55,
+   "draw": [
+    {
+     "shape": "polygon",
+     "points": [
+      [
+       0,
+       1
+      ],
+      [
+       1,
+       1
+      ],
+      [
+       1,
+       0.55
+      ],
+      [
+       0,
+       0.25
+      ]
+     ],
+     "fill": "#94A3B8",
+     "stroke": "#475569",
+     "stroke_width": 1.3
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.82,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 9,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    }
+   ]
+  },
+  {
+   "id": "gutter1",
+   "block": "JM Street Gutter 1",
+   "label": "Gutter 1",
+   "fill_max": 0.15,
+   "x": 100,
+   "y": 155,
+   "width": 180,
+   "height": 40,
+   "bind": {
+    "fill_value": {
+     "block": "JM Street Gutter 1",
+     "property": "depth"
+    }
+   },
+   "draw": [
+    {
+     "shape": "polygon",
+     "points": [
+      [
+       0,
+       0.15
+      ],
+      [
+       1,
+       0.15
+      ],
+      [
+       0.75,
+       1
+      ],
+      [
+       0.25,
+       1
+      ]
+     ],
+     "fill": "#CBD5E1",
+     "stroke": "#475569",
+     "stroke_width": 1.3
+    },
+    {
+     "shape": "rect",
+     "x": 0.25,
+     "y": {
+      "expr": "1-0.75*fill_fraction"
+     },
+     "w": 0.5,
+     "h": {
+      "expr": "0.75*fill_fraction"
+     },
+     "fill": {
+      "bind": "water_color"
+     },
+     "clip": true
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.7,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 9,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    }
+   ]
+  },
+  {
+   "id": "pond1",
+   "block": "JM Pond 1",
+   "label": "Pond 1",
+   "fill_max": 3.5,
+   "x": 100,
+   "y": 225,
+   "width": 180,
+   "height": 70,
+   "bind": {
+    "fill_value": {
+     "block": "JM Pond 1",
+     "property": "Storage"
+    }
+   },
+   "draw": [
+    {
+     "shape": "polygon",
+     "points": [
+      [
+       0,
+       0.18
+      ],
+      [
+       1,
+       0.18
+      ],
+      [
+       0.9,
+       1
+      ],
+      [
+       0.1,
+       1
+      ]
+     ],
+     "fill": "#CFFAFE",
+     "stroke": "#0E7490",
+     "stroke_width": 1.3
+    },
+    {
+     "shape": "rect",
+     "x": 0.1,
+     "y": {
+      "expr": "1-0.8*fill_fraction"
+     },
+     "w": 0.8,
+     "h": {
+      "expr": "0.8*fill_fraction"
+     },
+     "fill": {
+      "bind": "water_color"
+     },
+     "clip": true
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.13,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 10,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    }
+   ],
+   "thresholds": [
+    {
+     "below": 0.2,
+     "color": "#A5F3FC"
+    },
+    {
+     "below": 0.45,
+     "color": "#67E8F9"
+    },
+    {
+     "below": 0.7,
+     "color": "#22D3EE"
+    },
+    {
+     "below": 1.01,
+     "color": "#0891B2"
+    }
+   ]
+  },
+  {
+   "id": "soil1",
+   "block": "JM Engineered Soil 1",
+   "label": "Engineered Soil 1",
+   "fill_max": 0.4,
+   "x": 100,
+   "y": 315,
+   "width": 180,
+   "height": 75,
+   "bind": {
+    "fill_value": {
+     "block": "JM Engineered Soil 1",
+     "property": "theta"
+    }
+   },
+   "draw": [
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1,
+     "fill": {
+      "bind": "water_color"
+     },
+     "stroke": "#4A3520",
+     "stroke_width": 1.3
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.48,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 9,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.75,
+     "anchor": "middle",
+     "value": {
+      "expr": "fill_value",
+      "format": "\u03b8 = %.3f"
+     },
+     "font_size": 8,
+     "fill": "#1E293B"
+    }
+   ],
+   "thresholds": [
+    {
+     "below": 0.45,
+     "color": "#E8DCC0"
+    },
+    {
+     "below": 0.6,
+     "color": "#D9C48F"
+    },
+    {
+     "below": 0.72,
+     "color": "#C0A163"
+    },
+    {
+     "below": 0.85,
+     "color": "#9C7C45"
+    },
+    {
+     "below": 1.01,
+     "color": "#7A5C30"
+    }
+   ]
+  },
+  {
+   "id": "agg1",
+   "block": "JM Aggregate 1",
+   "label": "Aggregate 1",
+   "fill_max": 0.99,
+   "x": 100,
+   "y": 410,
+   "width": 180,
+   "height": 60,
+   "bind": {
+    "fill_value": {
+     "block": "JM Aggregate 1",
+     "property": "depth"
+    }
+   },
+   "draw": [
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1,
+     "fill": "#D6D3CB",
+     "stroke": "#6B6B6B",
+     "stroke_width": 1.3
+    },
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": {
+      "expr": "1-fill_fraction"
+     },
+     "w": 1,
+     "h": {
+      "bind": "fill_fraction"
+     },
+     "fill": {
+      "bind": "water_color"
+     },
+     "clip": true
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.55,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 9,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    }
+   ]
+  },
+  {
+   "id": "gutter2",
+   "block": "JM Street Gutter 2",
+   "label": "Gutter 2",
+   "fill_max": 0.15,
+   "x": 340,
+   "y": 155,
+   "width": 180,
+   "height": 40,
+   "bind": {
+    "fill_value": {
+     "block": "JM Street Gutter 2",
+     "property": "depth"
+    }
+   },
+   "draw": [
+    {
+     "shape": "polygon",
+     "points": [
+      [
+       0,
+       0.15
+      ],
+      [
+       1,
+       0.15
+      ],
+      [
+       0.75,
+       1
+      ],
+      [
+       0.25,
+       1
+      ]
+     ],
+     "fill": "#CBD5E1",
+     "stroke": "#475569",
+     "stroke_width": 1.3
+    },
+    {
+     "shape": "rect",
+     "x": 0.25,
+     "y": {
+      "expr": "1-0.75*fill_fraction"
+     },
+     "w": 0.5,
+     "h": {
+      "expr": "0.75*fill_fraction"
+     },
+     "fill": {
+      "bind": "water_color"
+     },
+     "clip": true
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.7,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 9,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    }
+   ]
+  },
+  {
+   "id": "pond2",
+   "block": "JM Pond 2",
+   "label": "Pond 2",
+   "fill_max": 3.5,
+   "x": 340,
+   "y": 225,
+   "width": 180,
+   "height": 70,
+   "bind": {
+    "fill_value": {
+     "block": "JM Pond 2",
+     "property": "Storage"
+    }
+   },
+   "draw": [
+    {
+     "shape": "polygon",
+     "points": [
+      [
+       0,
+       0.18
+      ],
+      [
+       1,
+       0.18
+      ],
+      [
+       0.9,
+       1
+      ],
+      [
+       0.1,
+       1
+      ]
+     ],
+     "fill": "#CFFAFE",
+     "stroke": "#0E7490",
+     "stroke_width": 1.3
+    },
+    {
+     "shape": "rect",
+     "x": 0.1,
+     "y": {
+      "expr": "1-0.8*fill_fraction"
+     },
+     "w": 0.8,
+     "h": {
+      "expr": "0.8*fill_fraction"
+     },
+     "fill": {
+      "bind": "water_color"
+     },
+     "clip": true
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.13,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 10,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    }
+   ],
+   "thresholds": [
+    {
+     "below": 0.2,
+     "color": "#A5F3FC"
+    },
+    {
+     "below": 0.45,
+     "color": "#67E8F9"
+    },
+    {
+     "below": 0.7,
+     "color": "#22D3EE"
+    },
+    {
+     "below": 1.01,
+     "color": "#0891B2"
+    }
+   ]
+  },
+  {
+   "id": "soil2",
+   "block": "JM Engineered Soil 2",
+   "label": "Engineered Soil 2",
+   "fill_max": 0.4,
+   "x": 340,
+   "y": 315,
+   "width": 180,
+   "height": 75,
+   "bind": {
+    "fill_value": {
+     "block": "JM Engineered Soil 2",
+     "property": "theta"
+    }
+   },
+   "draw": [
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1,
+     "fill": {
+      "bind": "water_color"
+     },
+     "stroke": "#4A3520",
+     "stroke_width": 1.3
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.48,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 9,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.75,
+     "anchor": "middle",
+     "value": {
+      "expr": "fill_value",
+      "format": "\u03b8 = %.3f"
+     },
+     "font_size": 8,
+     "fill": "#1E293B"
+    }
+   ],
+   "thresholds": [
+    {
+     "below": 0.45,
+     "color": "#E8DCC0"
+    },
+    {
+     "below": 0.6,
+     "color": "#D9C48F"
+    },
+    {
+     "below": 0.72,
+     "color": "#C0A163"
+    },
+    {
+     "below": 0.85,
+     "color": "#9C7C45"
+    },
+    {
+     "below": 1.01,
+     "color": "#7A5C30"
+    }
+   ]
+  },
+  {
+   "id": "agg2",
+   "block": "JM Aggregate 2",
+   "label": "Aggregate 2",
+   "fill_max": 0.99,
+   "x": 340,
+   "y": 410,
+   "width": 180,
+   "height": 60,
+   "bind": {
+    "fill_value": {
+     "block": "JM Aggregate 2",
+     "property": "depth"
+    }
+   },
+   "draw": [
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1,
+     "fill": "#D6D3CB",
+     "stroke": "#6B6B6B",
+     "stroke_width": 1.3
+    },
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": {
+      "expr": "1-fill_fraction"
+     },
+     "w": 1,
+     "h": {
+      "bind": "fill_fraction"
+     },
+     "fill": {
+      "bind": "water_color"
+     },
+     "clip": true
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.55,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 9,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    }
+   ]
+  },
+  {
+   "id": "gutter3",
+   "block": "JM Street Gutter 3",
+   "label": "Gutter 3",
+   "fill_max": 0.15,
+   "x": 580,
+   "y": 155,
+   "width": 180,
+   "height": 40,
+   "bind": {
+    "fill_value": {
+     "block": "JM Street Gutter 3",
+     "property": "depth"
+    }
+   },
+   "draw": [
+    {
+     "shape": "polygon",
+     "points": [
+      [
+       0,
+       0.15
+      ],
+      [
+       1,
+       0.15
+      ],
+      [
+       0.75,
+       1
+      ],
+      [
+       0.25,
+       1
+      ]
+     ],
+     "fill": "#CBD5E1",
+     "stroke": "#475569",
+     "stroke_width": 1.3
+    },
+    {
+     "shape": "rect",
+     "x": 0.25,
+     "y": {
+      "expr": "1-0.75*fill_fraction"
+     },
+     "w": 0.5,
+     "h": {
+      "expr": "0.75*fill_fraction"
+     },
+     "fill": {
+      "bind": "water_color"
+     },
+     "clip": true
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.7,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 9,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    }
+   ]
+  },
+  {
+   "id": "pond3",
+   "block": "JM Pond 3",
+   "label": "Pond 3",
+   "fill_max": 3.5,
+   "x": 580,
+   "y": 225,
+   "width": 180,
+   "height": 70,
+   "bind": {
+    "fill_value": {
+     "block": "JM Pond 3",
+     "property": "Storage"
+    }
+   },
+   "draw": [
+    {
+     "shape": "polygon",
+     "points": [
+      [
+       0,
+       0.18
+      ],
+      [
+       1,
+       0.18
+      ],
+      [
+       0.9,
+       1
+      ],
+      [
+       0.1,
+       1
+      ]
+     ],
+     "fill": "#CFFAFE",
+     "stroke": "#0E7490",
+     "stroke_width": 1.3
+    },
+    {
+     "shape": "rect",
+     "x": 0.1,
+     "y": {
+      "expr": "1-0.8*fill_fraction"
+     },
+     "w": 0.8,
+     "h": {
+      "expr": "0.8*fill_fraction"
+     },
+     "fill": {
+      "bind": "water_color"
+     },
+     "clip": true
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.13,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 10,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    }
+   ],
+   "thresholds": [
+    {
+     "below": 0.2,
+     "color": "#A5F3FC"
+    },
+    {
+     "below": 0.45,
+     "color": "#67E8F9"
+    },
+    {
+     "below": 0.7,
+     "color": "#22D3EE"
+    },
+    {
+     "below": 1.01,
+     "color": "#0891B2"
+    }
+   ]
+  },
+  {
+   "id": "soil3",
+   "block": "JM Engineered Soil 3",
+   "label": "Engineered Soil 3",
+   "fill_max": 0.4,
+   "x": 580,
+   "y": 315,
+   "width": 180,
+   "height": 75,
+   "bind": {
+    "fill_value": {
+     "block": "JM Engineered Soil 3",
+     "property": "theta"
+    }
+   },
+   "draw": [
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1,
+     "fill": {
+      "bind": "water_color"
+     },
+     "stroke": "#4A3520",
+     "stroke_width": 1.3
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.48,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 9,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.75,
+     "anchor": "middle",
+     "value": {
+      "expr": "fill_value",
+      "format": "\u03b8 = %.3f"
+     },
+     "font_size": 8,
+     "fill": "#1E293B"
+    }
+   ],
+   "thresholds": [
+    {
+     "below": 0.45,
+     "color": "#E8DCC0"
+    },
+    {
+     "below": 0.6,
+     "color": "#D9C48F"
+    },
+    {
+     "below": 0.72,
+     "color": "#C0A163"
+    },
+    {
+     "below": 0.85,
+     "color": "#9C7C45"
+    },
+    {
+     "below": 1.01,
+     "color": "#7A5C30"
+    }
+   ]
+  },
+  {
+   "id": "agg3",
+   "block": "JM Aggregate 3",
+   "label": "Aggregate 3",
+   "fill_max": 0.99,
+   "x": 580,
+   "y": 410,
+   "width": 180,
+   "height": 60,
+   "bind": {
+    "fill_value": {
+     "block": "JM Aggregate 3",
+     "property": "depth"
+    }
+   },
+   "draw": [
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1,
+     "fill": "#D6D3CB",
+     "stroke": "#6B6B6B",
+     "stroke_width": 1.3
+    },
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": {
+      "expr": "1-fill_fraction"
+     },
+     "w": 1,
+     "h": {
+      "bind": "fill_fraction"
+     },
+     "fill": {
+      "bind": "water_color"
+     },
+     "clip": true
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.55,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 9,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    }
+   ]
+  },
+  {
+   "id": "gutter4",
+   "block": "JM Street Gutter 4",
+   "label": "Gutter 4",
+   "fill_max": 0.15,
+   "x": 820,
+   "y": 155,
+   "width": 180,
+   "height": 40,
+   "bind": {
+    "fill_value": {
+     "block": "JM Street Gutter 4",
+     "property": "depth"
+    }
+   },
+   "draw": [
+    {
+     "shape": "polygon",
+     "points": [
+      [
+       0,
+       0.15
+      ],
+      [
+       1,
+       0.15
+      ],
+      [
+       0.75,
+       1
+      ],
+      [
+       0.25,
+       1
+      ]
+     ],
+     "fill": "#CBD5E1",
+     "stroke": "#475569",
+     "stroke_width": 1.3
+    },
+    {
+     "shape": "rect",
+     "x": 0.25,
+     "y": {
+      "expr": "1-0.75*fill_fraction"
+     },
+     "w": 0.5,
+     "h": {
+      "expr": "0.75*fill_fraction"
+     },
+     "fill": {
+      "bind": "water_color"
+     },
+     "clip": true
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.7,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 9,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    }
+   ]
+  },
+  {
+   "id": "pond4",
+   "block": "JM Pond 4",
+   "label": "Pond 4",
+   "fill_max": 3.5,
+   "x": 820,
+   "y": 225,
+   "width": 180,
+   "height": 70,
+   "bind": {
+    "fill_value": {
+     "block": "JM Pond 4",
+     "property": "Storage"
+    }
+   },
+   "draw": [
+    {
+     "shape": "polygon",
+     "points": [
+      [
+       0,
+       0.18
+      ],
+      [
+       1,
+       0.18
+      ],
+      [
+       0.9,
+       1
+      ],
+      [
+       0.1,
+       1
+      ]
+     ],
+     "fill": "#CFFAFE",
+     "stroke": "#0E7490",
+     "stroke_width": 1.3
+    },
+    {
+     "shape": "rect",
+     "x": 0.1,
+     "y": {
+      "expr": "1-0.8*fill_fraction"
+     },
+     "w": 0.8,
+     "h": {
+      "expr": "0.8*fill_fraction"
+     },
+     "fill": {
+      "bind": "water_color"
+     },
+     "clip": true
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.13,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 10,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    }
+   ],
+   "thresholds": [
+    {
+     "below": 0.2,
+     "color": "#A5F3FC"
+    },
+    {
+     "below": 0.45,
+     "color": "#67E8F9"
+    },
+    {
+     "below": 0.7,
+     "color": "#22D3EE"
+    },
+    {
+     "below": 1.01,
+     "color": "#0891B2"
+    }
+   ]
+  },
+  {
+   "id": "soil4",
+   "block": "JM Engineered Soil 4",
+   "label": "Engineered Soil 4",
+   "fill_max": 0.4,
+   "x": 820,
+   "y": 315,
+   "width": 180,
+   "height": 75,
+   "bind": {
+    "fill_value": {
+     "block": "JM Engineered Soil 4",
+     "property": "theta"
+    }
+   },
+   "draw": [
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1,
+     "fill": {
+      "bind": "water_color"
+     },
+     "stroke": "#4A3520",
+     "stroke_width": 1.3
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.48,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 9,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.75,
+     "anchor": "middle",
+     "value": {
+      "expr": "fill_value",
+      "format": "\u03b8 = %.3f"
+     },
+     "font_size": 8,
+     "fill": "#1E293B"
+    }
+   ],
+   "thresholds": [
+    {
+     "below": 0.45,
+     "color": "#E8DCC0"
+    },
+    {
+     "below": 0.6,
+     "color": "#D9C48F"
+    },
+    {
+     "below": 0.72,
+     "color": "#C0A163"
+    },
+    {
+     "below": 0.85,
+     "color": "#9C7C45"
+    },
+    {
+     "below": 1.01,
+     "color": "#7A5C30"
+    }
+   ]
+  },
+  {
+   "id": "agg4",
+   "block": "JM Aggregate 4",
+   "label": "Aggregate 4",
+   "fill_max": 0.99,
+   "x": 820,
+   "y": 410,
+   "width": 180,
+   "height": 60,
+   "bind": {
+    "fill_value": {
+     "block": "JM Aggregate 4",
+     "property": "depth"
+    }
+   },
+   "draw": [
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1,
+     "fill": "#D6D3CB",
+     "stroke": "#6B6B6B",
+     "stroke_width": 1.3
+    },
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": {
+      "expr": "1-fill_fraction"
+     },
+     "w": 1,
+     "h": {
+      "bind": "fill_fraction"
+     },
+     "fill": {
+      "bind": "water_color"
+     },
+     "clip": true
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.55,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 9,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    }
+   ]
+  },
+  {
+   "id": "native",
+   "block": "JM Native Soil 1-1",
+   "label": "Shared Native Soil",
+   "fill_max": 0.4,
+   "x": 260,
+   "y": 505,
+   "width": 660,
+   "height": 80,
+   "bind": {
+    "fill_value": {
+     "block": "JM Native Soil 1-1",
+     "property": "theta"
+    }
+   },
+   "draw": [
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1,
+     "fill": {
+      "bind": "water_color"
+     },
+     "stroke": "#4A3520",
+     "stroke_width": 1.5
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.48,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 11,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.73,
+     "anchor": "middle",
+     "value": {
+      "expr": "fill_value",
+      "format": "\u03b8 = %.3f"
+     },
+     "font_size": 9,
+     "fill": "#1E293B"
+    }
+   ],
+   "thresholds": [
+    {
+     "below": 0.45,
+     "color": "#E8DCC0"
+    },
+    {
+     "below": 0.6,
+     "color": "#D9C48F"
+    },
+    {
+     "below": 0.72,
+     "color": "#C0A163"
+    },
+    {
+     "below": 0.85,
+     "color": "#9C7C45"
+    },
+    {
+     "below": 1.01,
+     "color": "#7A5C30"
+    }
+   ]
+  },
+  {
+   "id": "gw",
+   "block": "JM Groundwater",
+   "label": "Groundwater",
+   "x": 160,
+   "y": 620,
+   "width": 860,
+   "height": 65,
+   "draw": [
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 0.35,
+     "fill": "#2563EB"
+    },
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": 0.35,
+     "w": 1,
+     "h": 0.65,
+     "fill": "#5C4524"
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.75,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 11,
+     "font_weight": 600,
+     "fill": "#FEF3C7"
+    }
+   ]
+  },
+  {
+   "id": "cb",
+   "block": "JM Catch Basin",
+   "label": "Catch Basin",
+   "fill_max": 1.0,
+   "x": 1040,
+   "y": 300,
+   "width": 90,
+   "height": 190,
+   "bind": {
+    "fill_value": {
+     "block": "JM Catch Basin",
+     "property": "depth"
+    }
+   },
+   "draw": [
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1,
+     "fill": "#E5E7EB",
+     "stroke": "#475569",
+     "stroke_width": 1.5
+    },
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": {
+      "expr": "1-fill_fraction"
+     },
+     "w": 1,
+     "h": {
+      "bind": "fill_fraction"
+     },
+     "fill": {
+      "bind": "water_color"
+     },
+     "clip": true
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.48,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 9,
+     "font_weight": 600,
+     "fill": "#1E293B"
+    }
+   ]
+  },
+  {
+   "id": "rw",
+   "block": "JM Receiving Water",
+   "label": "Receiving Water",
+   "x": 1160,
+   "y": 350,
+   "width": 100,
+   "height": 90,
+   "draw": [
+    {
+     "shape": "ellipse",
+     "cx": 0.5,
+     "cy": 0.5,
+     "rx": 0.45,
+     "ry": 0.45,
+     "fill": "#2563EB",
+     "stroke": "#1E40AF",
+     "stroke_width": 2
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.55,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 8,
+     "font_weight": 600,
+     "fill": "#FFFFFF"
+    }
+   ]
+  },
+  {
+   "id": "evap1",
+   "label": "Penman ET 1",
+   "x": 125,
+   "y": 200,
+   "width": 130,
+   "height": 22,
+   "draw": [
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1,
+     "rx": 5,
+     "fill": "#ECFDF5",
+     "stroke": "#059669",
+     "stroke_width": 1.0
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.62,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 8,
+     "font_weight": 600,
+     "fill": "#065F46"
+    }
+   ]
+  },
+  {
+   "id": "evap2",
+   "label": "Penman ET 2",
+   "x": 365,
+   "y": 200,
+   "width": 130,
+   "height": 22,
+   "draw": [
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1,
+     "rx": 5,
+     "fill": "#ECFDF5",
+     "stroke": "#059669",
+     "stroke_width": 1.0
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.62,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 8,
+     "font_weight": 600,
+     "fill": "#065F46"
+    }
+   ]
+  },
+  {
+   "id": "evap3",
+   "label": "Penman ET 3",
+   "x": 605,
+   "y": 200,
+   "width": 130,
+   "height": 22,
+   "draw": [
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1,
+     "rx": 5,
+     "fill": "#ECFDF5",
+     "stroke": "#059669",
+     "stroke_width": 1.0
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.62,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 8,
+     "font_weight": 600,
+     "fill": "#065F46"
+    }
+   ]
+  },
+  {
+   "id": "evap4",
+   "label": "Penman ET 4",
+   "x": 845,
+   "y": 200,
+   "width": 130,
+   "height": 22,
+   "draw": [
+    {
+     "shape": "rect",
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1,
+     "rx": 5,
+     "fill": "#ECFDF5",
+     "stroke": "#059669",
+     "stroke_width": 1.0
+    },
+    {
+     "shape": "text",
+     "x": 0.5,
+     "y": 0.62,
+     "anchor": "middle",
+     "value": {
+      "bind": "label"
+     },
+     "font_size": 8,
+     "font_weight": 600,
+     "fill": "#065F46"
+    }
+   ]
+  }
+ ],
+ "connectors": [
+  {
+   "link": "JM DA-01 to Street Gutter 1",
+   "from": "JM DA-01",
+   "to": "JM Street Gutter 1",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM DA-01 to Street Gutter 1",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM DA-02 to Street Gutter 2",
+   "from": "JM DA-02",
+   "to": "JM Street Gutter 2",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM DA-02 to Street Gutter 2",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM DA-03 to Street Gutter 2",
+   "from": "JM DA-03",
+   "to": "JM Street Gutter 2",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM DA-03 to Street Gutter 2",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM DA-04 to Street Gutter 3",
+   "from": "JM DA-04",
+   "to": "JM Street Gutter 3",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM DA-04 to Street Gutter 3",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM DA-05 to Street Gutter 4",
+   "from": "JM DA-05",
+   "to": "JM Street Gutter 4",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM DA-05 to Street Gutter 4",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Street Gutter 1 to 2",
+   "from": "JM Street Gutter 1",
+   "to": "JM Street Gutter 2",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Street Gutter 1 to 2",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Street Gutter 2 to 3",
+   "from": "JM Street Gutter 2",
+   "to": "JM Street Gutter 3",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Street Gutter 2 to 3",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Street Gutter 3 to 4",
+   "from": "JM Street Gutter 3",
+   "to": "JM Street Gutter 4",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Street Gutter 3 to 4",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Street Gutter 1 to Pond 1",
+   "from": "JM Street Gutter 1",
+   "to": "JM Pond 1",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Street Gutter 1 to Pond 1",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Pond 1 to Engineered Soil 1",
+   "from": "JM Pond 1",
+   "to": "JM Engineered Soil 1",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Pond 1 to Engineered Soil 1",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Engineered Soil 1 to Aggregate 1",
+   "from": "JM Engineered Soil 1",
+   "to": "JM Aggregate 1",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Engineered Soil 1 to Aggregate 1",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Aggregate 1 to JM Native Soil 1-1",
+   "from": "JM Aggregate 1",
+   "to": "JM Native Soil 1-1",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Aggregate 1 to JM Native Soil 1-1",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Overflow Weir 1",
+   "from": "JM Pond 1",
+   "to": "JM Catch Basin",
+   "attach": "bottom-top",
+   "bind": {
+    "flow_value": {
+     "link": "JM Overflow Weir 1",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#EF4444",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Street Gutter 2 to Pond 2",
+   "from": "JM Street Gutter 2",
+   "to": "JM Pond 2",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Street Gutter 2 to Pond 2",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Pond 2 to Engineered Soil 2",
+   "from": "JM Pond 2",
+   "to": "JM Engineered Soil 2",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Pond 2 to Engineered Soil 2",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Engineered Soil 2 to Aggregate 2",
+   "from": "JM Engineered Soil 2",
+   "to": "JM Aggregate 2",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Engineered Soil 2 to Aggregate 2",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Aggregate 2 to JM Native Soil 1-1",
+   "from": "JM Aggregate 2",
+   "to": "JM Native Soil 1-1",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Aggregate 2 to JM Native Soil 1-1",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Overflow Weir 2",
+   "from": "JM Pond 2",
+   "to": "JM Catch Basin",
+   "attach": "bottom-top",
+   "bind": {
+    "flow_value": {
+     "link": "JM Overflow Weir 2",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#EF4444",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Street Gutter 3 to Pond 3",
+   "from": "JM Street Gutter 3",
+   "to": "JM Pond 3",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Street Gutter 3 to Pond 3",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Pond 3 to Engineered Soil 3",
+   "from": "JM Pond 3",
+   "to": "JM Engineered Soil 3",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Pond 3 to Engineered Soil 3",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Engineered Soil 3 to Aggregate 3",
+   "from": "JM Engineered Soil 3",
+   "to": "JM Aggregate 3",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Engineered Soil 3 to Aggregate 3",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Aggregate 3 to JM Native Soil 1-1",
+   "from": "JM Aggregate 3",
+   "to": "JM Native Soil 1-1",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Aggregate 3 to JM Native Soil 1-1",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Overflow Weir 3",
+   "from": "JM Pond 3",
+   "to": "JM Catch Basin",
+   "attach": "bottom-top",
+   "bind": {
+    "flow_value": {
+     "link": "JM Overflow Weir 3",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#EF4444",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Street Gutter 4 to Pond 4",
+   "from": "JM Street Gutter 4",
+   "to": "JM Pond 4",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Street Gutter 4 to Pond 4",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Pond 4 to Engineered Soil 4",
+   "from": "JM Pond 4",
+   "to": "JM Engineered Soil 4",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Pond 4 to Engineered Soil 4",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Engineered Soil 4 to Aggregate 4",
+   "from": "JM Engineered Soil 4",
+   "to": "JM Aggregate 4",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Engineered Soil 4 to Aggregate 4",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Aggregate 4 to JM Native Soil 1-1",
+   "from": "JM Aggregate 4",
+   "to": "JM Native Soil 1-1",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Aggregate 4 to JM Native Soil 1-1",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Overflow Weir 4",
+   "from": "JM Pond 4",
+   "to": "JM Catch Basin",
+   "attach": "bottom-top",
+   "bind": {
+    "flow_value": {
+     "link": "JM Overflow Weir 4",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#EF4444",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Aggregate 1 - JM Aggregate 2",
+   "from": "JM Aggregate 1",
+   "to": "JM Aggregate 2",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Aggregate 1 - JM Aggregate 2",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Aggregate 2 - JM Aggregate 3",
+   "from": "JM Aggregate 2",
+   "to": "JM Aggregate 3",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Aggregate 2 - JM Aggregate 3",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Aggregate 3 - JM Aggregate 4",
+   "from": "JM Aggregate 3",
+   "to": "JM Aggregate 4",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Aggregate 3 - JM Aggregate 4",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Street Gutter 4 to Catch Basin",
+   "from": "JM Street Gutter 4",
+   "to": "JM Catch Basin",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Street Gutter 4 to Catch Basin",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Underdrain 4",
+   "from": "JM Aggregate 4",
+   "to": "JM Catch Basin",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Underdrain 4",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Native Soil 1 to Groundwater",
+   "from": "JM Native Soil 1-1",
+   "to": "JM Groundwater",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Native Soil 1 to Groundwater",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  },
+  {
+   "link": "JM Catch Basin Outlet",
+   "from": "JM Catch Basin",
+   "to": "JM Receiving Water",
+   "attach": "auto",
+   "bind": {
+    "flow_value": {
+     "link": "JM Catch Basin Outlet",
+     "property": "flow"
+    }
+   },
+   "draw": [
+    {
+     "shape": "line",
+     "stroke": "#3B82F6",
+     "stroke_width": 2
+    }
+   ]
+  }
+ ]
 }
