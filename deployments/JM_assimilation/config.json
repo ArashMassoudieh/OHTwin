@@ -1,9 +1,9 @@
 {
     "deployment": {
-        "name": "JM_truth",
+        "name": "JM_assimilation",
         "model_file": "model/JM.ohq",
         "viz_file": "viz_jm.json",
-        "port": 8093
+        "port": 8094
     },
     "runtime": {
         "weather_source": "openmeteo",
@@ -13,7 +13,8 @@
         "forecast_horizon": "7day",
         "time_acceleration": 1,
         "state_variables": [],
-        "keep_debug_outputs": false
+        "keep_debug_outputs": false,
+        "advance_to_observations": true
     },
     "observations": {
         "save_interval": "1hr",
@@ -48,5 +49,39 @@
             "Soil 4 evaporation": 0.0
         },
         "noise_correlation_time": "6hr"
+    },
+    "assimilation": {
+        "truth_csv_url": "http://localhost:8093/outputs/selected_output.csv",
+        "calibration_observations": [
+            "DA-01 runoff",
+            "Gutter 4 depth",
+            "Pond 1 water depth",
+            "Pond 2 water depth",
+            "Pond 3 water depth",
+            "Pond 4 water depth",
+            "Soil 1 moisture",
+            "Soil 2 moisture",
+            "Soil 3 moisture",
+            "Soil 4 moisture",
+            "Pond 1 infiltration",
+            "Pond 2 infiltration",
+            "Pond 3 infiltration",
+            "Pond 4 infiltration",
+            "Pond 1 overflow",
+            "Pond 2 overflow",
+            "Pond 3 overflow",
+            "Pond 4 overflow",
+            "Underdrain outlet flow",
+            "Groundwater recharge",
+            "Catch basin depth",
+            "Catch basin outlet flow",
+            "Soil 1 evaporation",
+            "Soil 2 evaporation",
+            "Soil 3 evaporation",
+            "Soil 4 evaporation"
+        ],
+        "truth_meta_url": "http://localhost:8093/outputs/selected_output_meta.json",
+        "poll_interval": "3day",
+        "calibration_output_dir": "outputs/calibration"
     }
 }

@@ -926,6 +926,124 @@ bool DTStreamingMCMC::appendHistoryRecord(const QString &path,
     return true;
 }
 
+// ---------------------------------------------------------------------------
+std::vector<std::vector<double>> DTStreamingMCMC::correlationFromCovariance(
+    const std::vector<std::vector<double>> &cov)
+{
+    const int d = static_cast<int>(cov.size());
+    std::vector<std::vector<double>> corr(d, std::vector<double>(d, 0.0));
+    std::vector<double> sd(d, 0.0);
+    for (int i = 0; i < d; ++i)
+        sd[i] = std::sqrt(std::max(0.0, cov[i][i]));
+
+    for (int i = 0; i < d; ++i)
+    {
+        corr[i][i] = 1.0;
+        for (int j = i + 1; j < d; ++j)
+        {
+            const double den = sd[i] * sd[j];
+            const double r   = (den > 0.0) ? cov[i][j] / den : 0.0;
+            corr[i][j] = r;
+            corr[j][i] = r;
+        }
+    }
+    return corr;
+}
+
+// ---------------------------------------------------------------------------
+bool DTStreamingMCMC::appendProposalRecord(const QString &path,
+                                           const DTCycleResult &result,
+                                           double tNow,
+                                           QString &errorMessage)
+{
+    QJsonObject rec;
+    rec["cycle"]     = m_cycleIndex;
+    rec["timestamp"] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    rec["t_now"]     = tNow;
+
+    const unsigned int np = MCMC_Settings.number_of_parameters;
+    QJsonArray names;
+    for (unsigned int i = 0; i < np; ++i)
+        names.append(QString::fromStdString(parameter(i)->GetName()));
+    rec["parameter_names"] = names;
+
+    // --- proposal kernel state -------------------------------------------
+    // proposal_mode is what was CONFIGURED. covariance_active is whether the
+    // covariance branch of proposeFrom was actually reachable DURING this
+    // cycle's sampling -- it requires m_propReady, which is set only by
+    // refactorProposalCholesky in the cycle-finalization block. The two can
+    // disagree, and the disagreement is the point of this record.
+    //
+    // The *_at_cycle_start fields are the kernel this cycle SAMPLED with; the
+    // *_end_of_cycle fields are what finalization left behind for the next
+    // cycle. Read the former when attributing an acceptance rate to a kernel.
+    rec["proposal_mode"] =
+        streamSettings.adaptiveCovariance ? "covariance" : "per_coordinate";
+    rec["covariance_active"] =
+        streamSettings.adaptiveCovariance && m_propReadyAtCycleStart;
+
+    rec["kappa"]                   = m_kappaAtCycleStart;   // as sampled
+    rec["prop_ready"]              = m_propReadyAtCycleStart;
+    rec["kappa_end_of_cycle"]      = m_kappa;
+    rec["prop_ready_end_of_cycle"] = m_propReady;
+    rec["prop_cov_weight"]         = m_propCovWeight;
+
+    // Per-coordinate scales: the step sizes the legacy branch samples with.
+    rec["pertcoeff"] = toJsonArray(pertcoeff);
+
+    // Accepted/proposed for this cycle, so kappa can be read against the
+    // acceptance it produced without joining to posterior_history.jsonl.
+    rec["acceptance_rate"] = result.acceptanceRate;
+
+    // --- proposal covariance / correlation --------------------------------
+    // Empty until accumulateProposalCovariance has folded in at least one
+    // pool; emitted as null rather than [] so a missing kernel is distinct
+    // from a degenerate one.
+    if (!m_propCov.empty())
+    {
+        rec["proposal_cov"]  = toJsonMatrix(m_propCov);
+        rec["proposal_corr"] = toJsonMatrix(correlationFromCovariance(m_propCov));
+    }
+
+    // --- pooled posterior correlation --------------------------------------
+    // Defined for any cycle that produced a pool, in either proposal mode.
+    if (!result.summary.covariance.empty())
+    {
+        rec["posterior_cov"]  = toJsonMatrix(result.summary.covariance);
+        rec["posterior_corr"] =
+            toJsonMatrix(correlationFromCovariance(result.summary.covariance));
+    }
+
+    QFile file(path);
+    const QIODevice::OpenMode mode =
+        QIODevice::WriteOnly |
+        (m_cycleIndex <= 1 ? QIODevice::Truncate : QIODevice::Append);
+    if (!file.open(mode))
+    {
+        errorMessage = "cannot open proposal history for writing: " + path;
+        return false;
+    }
+    file.write(QJsonDocument(rec).toJson(QJsonDocument::Compact));
+    file.write("\n");
+    file.close();
+
+    {
+        DTDebugLog &dlog = DTDebugLog::instance();
+        if (dlog.enabled(DTDebugLog::Category::MCMC))
+            dlog.log(DTDebugLog::Category::MCMC,
+                     QString("proposal record appended: cycle=%1 "
+                             "kappa(as-sampled)=%2 prop_ready(as-sampled)=%3 "
+                             "kappa(eoc)=%4 prop_cov_weight=%5 accept=%6")
+                         .arg(m_cycleIndex)
+                         .arg(m_kappaAtCycleStart)
+                         .arg(m_propReadyAtCycleStart ? "true" : "false")
+                         .arg(m_kappa)
+                         .arg(m_propCovWeight)
+                         .arg(result.acceptanceRate));
+    }
+    return true;
+}
+
 SeedMode DTStreamingMCMC::chooseSeedMode(bool driftDetected) const
 {
     // Alg. 1 lines 3-11:
@@ -1005,6 +1123,16 @@ bool DTStreamingMCMC::initializeCycle(SeedMode mode, QString &errorMessage)
 
     // Reset the predictive-band output reservoir for this cycle.
     m_outputReservoir.reset(streamSettings.realizationCount);
+
+    // Snapshot the proposal kernel AS THIS CYCLE WILL SAMPLE WITH IT, before
+    // any end-of-cycle accumulation mutates it. proposeFrom() consults
+    // m_propReady on every draw, and m_propReady is only ever set by
+    // refactorProposalCholesky() -- which runs in the cycle-finalization
+    // block, after sampling is over. So the end-of-cycle values of
+    // m_propReady/m_kappa describe the NEXT cycle's kernel, not this one's;
+    // recording only those would misattribute the kernel. Diagnostic only.
+    m_kappaAtCycleStart     = m_kappa;
+    m_propReadyAtCycleStart = m_propReady;
 
     // Proposal scales: restore from the previous cycle's snapshot when
     // compatible, so adaptation accumulates across cycles (short cycles

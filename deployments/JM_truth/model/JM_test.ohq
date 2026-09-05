@@ -1,0 +1,102 @@
+# starter_metadata:model_type=JM_Bioretention
+# starter_metadata:build_mode=JMTest
+# starter_metadata:soil_param_strategy=JM_ProceduralReference
+
+# JM_Bioretention: four-column model based on BP-01
+# Columns: CC-101-1, CC-102-1, CC-103-1, CC-104-1
+# Native grid: nx=1, nz=1
+# Mode: DT Simple with street gutters; side native soils omitted, runoff is routed through gutters and curb cuts, and underdrain is routed serially.
+# BP-01 surface hydraulics: gutter invert = curb-cut crest - 4 in; curb-cut crest = pond bottom + labeled ponding depth.
+loadtemplate; filename=/mnt/3rd900/Projects/OpenHydroQual/resources/main_components.json
+addtemplate; filename=/mnt/3rd900/Projects/OpenHydroQual/resources/Pond_Plugin.json
+addtemplate; filename=/mnt/3rd900/Projects/OpenHydroQual/resources/unsaturated_soil.json
+addtemplate; filename=/mnt/3rd900/Projects/OpenHydroQual/resources/Well.json
+addtemplate; filename=/mnt/3rd900/Projects/OpenHydroQual/resources/Sewer_system.json
+addtemplate; filename=/mnt/3rd900/Projects/OpenHydroQual/resources/soil_evapotranspiration_models.json
+addtemplate; filename=/mnt/3rd900/Projects/OpenHydroQual/resources/evapotranspiration_models.json
+addtemplate; filename=/mnt/3rd900/Projects/OpenHydroQual/resources/pipe_pump_tank.json
+# Preset: JM_test / 2010 measured meteorological forcing
+create source;type=Precipitation,name=Rain,timeseries=Rain_2010.txt
+create source;type=Evapotranspiration_Penman (Soil),R_h=Humidity_2010.csv,Temperature=Temp_2010.csv,gamma=66.8,name=Evapotranspiration_Penman (Soil),solar_radiation=Solar_2010.csv,solar_scale_fact=0.8,wind_scale_fact=0.8,wind_speed=Wind_2010.csv,z0=0.0003,z2=2
+create parameter;type=Parameter,high=20,low=1,name=JM_EngineeredSoilKsat,prior_distribution=log-normal,value=5
+create parameter;type=Parameter,high=0.1,low=0.001,name=JM_NativeSoilKsat,prior_distribution=log-normal,value=0.01
+create parameter;type=Parameter,high=5,low=0.5,name=JM_EngineeredSoilAlpha,prior_distribution=log-normal,value=3
+create parameter;type=Parameter,high=1.8,low=1.2,name=JM_EngineeredSoilN,prior_distribution=normal,value=1.41
+create block;type=Catchment,Evapotranspiration=,ManningCoeff=0.011,Precipitation=Rain,Runoff_coeff=0.95,Slope=0.01,Width=10,_height=120,_width=180,area=316.14904512[m~^2],depression_storage=0,depth=0,elevation=0,inflow=0,loss_coefficient=0,name=JM DA-01,x=-650,y=-250
+create block;type=Catchment,Evapotranspiration=,ManningCoeff=0.011,Precipitation=Rain,Runoff_coeff=0.95,Slope=0.01,Width=10,_height=120,_width=180,area=56.94956352[m~^2],depression_storage=0,depth=0,elevation=0,inflow=0,loss_coefficient=0,name=JM DA-02,x=-460,y=-250
+create block;type=Catchment,Evapotranspiration=,ManningCoeff=0.011,Precipitation=Rain,Runoff_coeff=0.95,Slope=0.01,Width=10,_height=120,_width=180,area=44.40765312[m~^2],depression_storage=0,depth=0,elevation=0,inflow=0,loss_coefficient=0,name=JM DA-03,x=-270,y=-250
+create block;type=Catchment,Evapotranspiration=,ManningCoeff=0.011,Precipitation=Rain,Runoff_coeff=0.95,Slope=0.01,Width=10,_height=120,_width=180,area=45.24378048[m~^2],depression_storage=0,depth=0,elevation=0,inflow=0,loss_coefficient=0,name=JM DA-04,x=-80,y=-250
+create block;type=Catchment,Evapotranspiration=,ManningCoeff=0.011,Precipitation=Rain,Runoff_coeff=0.95,Slope=0.01,Width=10,_height=120,_width=180,area=37.53282816[m~^2],depression_storage=0,depth=0,elevation=0,inflow=0,loss_coefficient=0,name=JM DA-05,x=110,y=-250
+create block;type=Catchment,Evapotranspiration=,ManningCoeff=0.03,Precipitation=Rain,Runoff_coeff=1,Slope=0.01,Width=1,_height=180,_width=220,area=1[m~^2],depression_storage=0,depth=0,elevation=0,inflow=0,loss_coefficient=0,name=JM Dummy Catchment,x=-1050,y=-250
+create block;type=Street Gutter Segment,ManningCoeff=0.016,base_width=0,side_slope=40,bottom_elevation=0.678434,depth=0,inflow=0,length=3.048[m],_height=100,_width=180,name=JM Street Gutter 1,x=0,y=-140
+create block;type=Street Gutter Segment,ManningCoeff=0.016,base_width=0,side_slope=40,bottom_elevation=0.485902,depth=0,inflow=0,length=3.048[m],_height=100,_width=180,name=JM Street Gutter 2,x=230,y=-140
+create block;type=Street Gutter Segment,ManningCoeff=0.016,base_width=0,side_slope=40,bottom_elevation=0.253492,depth=0,inflow=0,length=3.048[m],_height=100,_width=180,name=JM Street Gutter 3,x=460,y=-140
+create block;type=Street Gutter Segment,ManningCoeff=0.016,base_width=0,side_slope=40,bottom_elevation=0.062738,depth=0,inflow=0,length=3.048[m],_height=100,_width=180,name=JM Street Gutter 4,x=690,y=-140
+create block;type=Pond,Evapotranspiration=0,Precipitation=Rain,Storage=0,_height=130,_width=170,act_X=1.524,act_Y=0.569976,alpha=11.3032032,alpha_multiplier=1,beta=1,bottom_elevation=0.569976,inflow=0,name=JM Pond 1,x=0,y=0
+create block;type=Soil,Evapotranspiration=Evapotranspiration_Penman (Soil),K_sat_original=5,K_sat_scale_factor=1,MC_to_EC_Threshold_Moisture=0,MC_to_EC_coefficient=0,MC_to_EC_exponent=0,_height=150,_width=170,act_X=1.524,act_Y=0.036576,alpha=1,aniso_ratio=1,area=11.3032032,bottom_elevation=-0.420624,depth=0.9144,n=1.41,name=JM Engineered Soil 1,specific_storage=0.01,theta=0.25,theta_res=0.05,theta_sat=0.4,x=0,y=210
+create block;type=Aggregate_storage_layer,K_sat=5000,_height=150,_width=170,act_X=1.524,act_Y=-0.85344,area=11.3032032,bottom_elevation=-1.286256,depth=0.865632,inflow=0,name=JM Aggregate 1,porosity=0.4,x=0,y=420
+create block;type=Pond,Evapotranspiration=0,Precipitation=Rain,Storage=0,_height=130,_width=170,act_X=4.572,act_Y=0.423672,alpha=11.3032032,alpha_multiplier=1,beta=1,bottom_elevation=0.423672,inflow=0,name=JM Pond 2,x=230,y=0
+create block;type=Soil,Evapotranspiration=Evapotranspiration_Penman (Soil),K_sat_original=5,K_sat_scale_factor=1,MC_to_EC_Threshold_Moisture=0,MC_to_EC_coefficient=0,MC_to_EC_exponent=0,_height=150,_width=170,act_X=4.572,act_Y=-0.109728,alpha=1,aniso_ratio=1,area=11.3032032,bottom_elevation=-0.566928,depth=0.9144,n=1.41,name=JM Engineered Soil 2,specific_storage=0.01,theta=0.25,theta_res=0.05,theta_sat=0.4,x=230,y=210
+create block;type=Aggregate_storage_layer,K_sat=5000,_height=150,_width=170,act_X=4.572,act_Y=-0.992124,area=11.3032032,bottom_elevation=-1.41732,depth=0.850392,inflow=0,name=JM Aggregate 2,porosity=0.4,x=230,y=420
+create block;type=Pond,Evapotranspiration=0,Precipitation=Rain,Storage=0,_height=130,_width=170,act_X=7.62,act_Y=0.231648,alpha=11.3032032,alpha_multiplier=1,beta=1,bottom_elevation=0.231648,inflow=0,name=JM Pond 3,x=460,y=0
+create block;type=Soil,Evapotranspiration=Evapotranspiration_Penman (Soil),K_sat_original=5,K_sat_scale_factor=1,MC_to_EC_Threshold_Moisture=0,MC_to_EC_coefficient=0,MC_to_EC_exponent=0,_height=150,_width=170,act_X=7.62,act_Y=-0.301752,alpha=1,aniso_ratio=1,area=11.3032032,bottom_elevation=-0.758952,depth=0.9144,n=1.41,name=JM Engineered Soil 3,specific_storage=0.01,theta=0.25,theta_res=0.05,theta_sat=0.4,x=460,y=210
+create block;type=Aggregate_storage_layer,K_sat=5000,_height=150,_width=170,act_X=7.62,act_Y=-1.185672,area=11.3032032,bottom_elevation=-1.612392,depth=0.85344,inflow=0,name=JM Aggregate 3,porosity=0.4,x=460,y=420
+create block;type=Pond,Evapotranspiration=0,Precipitation=Rain,Storage=0,_height=130,_width=170,act_X=10.668,act_Y=0,alpha=11.3032032,alpha_multiplier=1,beta=1,bottom_elevation=0,inflow=0,name=JM Pond 4,x=690,y=0
+create block;type=Soil,Evapotranspiration=Evapotranspiration_Penman (Soil),K_sat_original=5,K_sat_scale_factor=1,MC_to_EC_Threshold_Moisture=0,MC_to_EC_coefficient=0,MC_to_EC_exponent=0,_height=150,_width=170,act_X=10.668,act_Y=-0.5334,alpha=1,aniso_ratio=1,area=11.3032032,bottom_elevation=-0.9906,depth=0.9144,n=1.41,name=JM Engineered Soil 4,specific_storage=0.01,theta=0.25,theta_res=0.05,theta_sat=0.4,x=690,y=210
+create block;type=Aggregate_storage_layer,K_sat=5000,_height=150,_width=170,act_X=10.668,act_Y=-1.421892,area=11.3032032,bottom_elevation=-1.853184,depth=0.862584,inflow=0,name=JM Aggregate 4,porosity=0.4,x=690,y=420
+create block;type=Soil,Evapotranspiration=,K_sat_original=0.01,K_sat_scale_factor=1,MC_to_EC_Threshold_Moisture=0,MC_to_EC_coefficient=0,MC_to_EC_exponent=0,_height=150,_width=170,act_X=6.096,act_Y=-3.1362,alpha=1,aniso_ratio=1,area=45.2128128,bottom_elevation=-4.3362,depth=2.4,n=1.41,name=JM Native Soil 1-1,specific_storage=0.01,theta=0.25,theta_res=0.05,theta_sat=0.4,x=345,y=610
+# JM Catch Basin is downstream of the detailed BP-01 profile; its elevation below is a modeling reference, not a surveyed BP-01 elevation.
+create block;type=Catch basin,_height=150,_width=190,area=1,bottom_elevation=-1.648384,inflow=0,name=JM Catch Basin,x=1150,y=200
+create block;type=fixed_head,Storage=100000,_height=150,_width=220,head=-1.748384,name=JM Receiving Water,x=1400,y=200
+create block;type=fixed_head,Storage=100000,_height=150,_width=900,head=-4.3812,name=JM Groundwater,x=0,y=1200
+setasparameter; object=JM Engineered Soil 1, parametername=JM_EngineeredSoilKsat, quantity=K_sat_original
+setasparameter; object=JM Engineered Soil 1, parametername=JM_EngineeredSoilAlpha, quantity=alpha
+setasparameter; object=JM Engineered Soil 1, parametername=JM_EngineeredSoilN, quantity=n
+setasparameter; object=JM Engineered Soil 2, parametername=JM_EngineeredSoilKsat, quantity=K_sat_original
+setasparameter; object=JM Engineered Soil 2, parametername=JM_EngineeredSoilAlpha, quantity=alpha
+setasparameter; object=JM Engineered Soil 2, parametername=JM_EngineeredSoilN, quantity=n
+setasparameter; object=JM Engineered Soil 3, parametername=JM_EngineeredSoilKsat, quantity=K_sat_original
+setasparameter; object=JM Engineered Soil 3, parametername=JM_EngineeredSoilAlpha, quantity=alpha
+setasparameter; object=JM Engineered Soil 3, parametername=JM_EngineeredSoilN, quantity=n
+setasparameter; object=JM Engineered Soil 4, parametername=JM_EngineeredSoilKsat, quantity=K_sat_original
+setasparameter; object=JM Engineered Soil 4, parametername=JM_EngineeredSoilAlpha, quantity=alpha
+setasparameter; object=JM Engineered Soil 4, parametername=JM_EngineeredSoilN, quantity=n
+setasparameter; object=JM Native Soil 1-1, parametername=JM_NativeSoilKsat, quantity=K_sat_original
+create link;from=JM DA-01,to=JM Street Gutter 1,type=Catchment_link,name=JM DA-01 to Street Gutter 1
+create link;from=JM DA-02,to=JM Street Gutter 2,type=Catchment_link,name=JM DA-02 to Street Gutter 2
+create link;from=JM DA-03,to=JM Street Gutter 2,type=Catchment_link,name=JM DA-03 to Street Gutter 2
+create link;from=JM DA-04,to=JM Street Gutter 3,type=Catchment_link,name=JM DA-04 to Street Gutter 3
+create link;from=JM DA-05,to=JM Street Gutter 4,type=Catchment_link,name=JM DA-05 to Street Gutter 4
+create link;from=JM Street Gutter 1,to=JM Street Gutter 2,type=Gutter2Gutter_link,name=JM Street Gutter 1 to 2
+create link;from=JM Street Gutter 2,to=JM Street Gutter 3,type=Gutter2Gutter_link,name=JM Street Gutter 2 to 3
+create link;from=JM Street Gutter 3,to=JM Street Gutter 4,type=Gutter2Gutter_link,name=JM Street Gutter 3 to 4
+create link;from=JM Street Gutter 1,to=JM Pond 1,type=Curb_cut,crest_offset=0[m],discharge_coefficient=0.6,width=0.2[m],name=JM Street Gutter 1 to Pond 1
+create link;from=JM Street Gutter 2,to=JM Pond 2,type=Curb_cut,crest_offset=0[m],discharge_coefficient=0.6,width=0.2[m],name=JM Street Gutter 2 to Pond 2
+create link;from=JM Street Gutter 3,to=JM Pond 3,type=Curb_cut,crest_offset=0[m],discharge_coefficient=0.6,width=0.2[m],name=JM Street Gutter 3 to Pond 3
+create link;from=JM Street Gutter 4,to=JM Pond 4,type=Curb_cut,crest_offset=0[m],discharge_coefficient=0.6,width=0.2[m],name=JM Street Gutter 4 to Pond 4
+create link;from=JM Street Gutter 4,to=JM Catch Basin,type=Curb_cut,crest_offset=0,discharge_coefficient=0.6,width=0.2[m],name=JM Street Gutter 4 to Catch Basin
+create link;from=JM Pond 1,to=JM Engineered Soil 1,type=surfacewater_to_soil_link,name=JM Pond 1 to Engineered Soil 1
+create link;from=JM Engineered Soil 1,to=JM Aggregate 1,type=soil_to_aggregate_link,name=JM Engineered Soil 1 to Aggregate 1
+create link;from=JM Aggregate 1,to=JM Native Soil 1-1,type=aggregate_to_soil_link,name=JM Aggregate 1 to JM Native Soil 1-1
+create link;from=JM Pond 2,to=JM Engineered Soil 2,type=surfacewater_to_soil_link,name=JM Pond 2 to Engineered Soil 2
+create link;from=JM Engineered Soil 2,to=JM Aggregate 2,type=soil_to_aggregate_link,name=JM Engineered Soil 2 to Aggregate 2
+create link;from=JM Aggregate 2,to=JM Native Soil 1-1,type=aggregate_to_soil_link,name=JM Aggregate 2 to JM Native Soil 1-1
+create link;from=JM Pond 3,to=JM Engineered Soil 3,type=surfacewater_to_soil_link,name=JM Pond 3 to Engineered Soil 3
+create link;from=JM Engineered Soil 3,to=JM Aggregate 3,type=soil_to_aggregate_link,name=JM Engineered Soil 3 to Aggregate 3
+create link;from=JM Aggregate 3,to=JM Native Soil 1-1,type=aggregate_to_soil_link,name=JM Aggregate 3 to JM Native Soil 1-1
+create link;from=JM Pond 4,to=JM Engineered Soil 4,type=surfacewater_to_soil_link,name=JM Pond 4 to Engineered Soil 4
+create link;from=JM Engineered Soil 4,to=JM Aggregate 4,type=soil_to_aggregate_link,name=JM Engineered Soil 4 to Aggregate 4
+create link;from=JM Aggregate 4,to=JM Native Soil 1-1,type=aggregate_to_soil_link,name=JM Aggregate 4 to JM Native Soil 1-1
+create link;from=JM Engineered Soil 1,to=JM Engineered Soil 2,type=soil_to_soil_H_link,length=3.048[m],area=3.39096096[m~^2],name=JM Engineered Horizontal 1
+create link;from=JM Engineered Soil 2,to=JM Engineered Soil 3,type=soil_to_soil_H_link,length=3.048[m],area=3.39096096[m~^2],name=JM Engineered Horizontal 2
+create link;from=JM Engineered Soil 3,to=JM Engineered Soil 4,type=soil_to_soil_H_link,length=3.048[m],area=3.39096096[m~^2],name=JM Engineered Horizontal 3
+create link;from=JM Aggregate 1,to=JM Aggregate 2,type=Sewer_pipe,ManningCoeff=0.011,diameter=0.1016[m],end_elevation=-1.11252[m],length=3.048[m],name=JM Aggregate 1 - JM Aggregate 2,start_elevation=-0.981456[m]
+create link;from=JM Aggregate 2,to=JM Aggregate 3,type=Sewer_pipe,ManningCoeff=0.011,diameter=0.1016[m],end_elevation=-1.307592[m],length=3.048[m],name=JM Aggregate 2 - JM Aggregate 3,start_elevation=-1.11252[m]
+create link;from=JM Aggregate 3,to=JM Aggregate 4,type=Sewer_pipe,ManningCoeff=0.011,diameter=0.1016[m],end_elevation=-1.548384[m],length=3.048[m],name=JM Aggregate 3 - JM Aggregate 4,start_elevation=-1.307592[m]
+create link;from=JM Aggregate 4,to=JM Catch Basin,type=Sewer_pipe,ManningCoeff=0.011,diameter=0.1016[m],end_elevation=-1.598384[m],length=3.048[m],name=JM Underdrain 4,start_elevation=-1.548384[m]
+create link;from=JM Native Soil 1-1,to=JM Groundwater,type=soil_to_fixedhead_link,name=JM Native Soil 1 to Groundwater
+create link;from=JM Catch Basin,to=JM Receiving Water,type=Sewer_pipe,ManningCoeff=0.011,diameter=0.2[m],end_elevation=-1.748384[m],length=2[m],name=JM Catch Basin Outlet,start_elevation=-1.598384[m]
+setvalue; object=system, quantity=simulation_start_time, value=40178.8
+setvalue; object=system, quantity=simulation_end_time, value=40541.8
+setvalue; object=system, quantity=outputfile, value=output.txt
+setvalue; object=system, quantity=outputfile, value=/mnt/3rd900/Projects/DryWellScriptGenerator/Models/OHQ_output.txt

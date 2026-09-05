@@ -425,6 +425,22 @@ public:
                              double tNow,
                              QString &errorMessage);
 
+    // Append one compact JSON line per cycle recording the PROPOSAL kernel
+    // this cycle actually sampled with: the global scale kappa, the running
+    // proposal covariance and its correlation matrix, the readiness flag and
+    // accumulated weight that gate the covariance branch of proposeFrom, and
+    // the per-coordinate scales (pertcoeff) used by the legacy branch. Also
+    // records the pooled POSTERIOR correlation matrix, which is defined for
+    // every cycle that produced a pool regardless of proposal mode.
+    //
+    // Diagnostic only: this writer reads state, never mutates it, so enabling
+    // it cannot change the sampler's numerical trajectory. Truncates on the
+    // deployment's first cycle and appends thereafter (as appendHistoryRecord).
+    bool appendProposalRecord(const QString &path,
+                              const DTCycleResult &result,
+                              double tNow,
+                              QString &errorMessage);
+
     // Chooses among ColdStart / ProvisionalResume / RatioReseed / WarmStart
     // from what loadPosteriorSnapshot() found plus the drift flag
     // (Alg. 1 lines 3-11). Drift detection itself is Phase 3; until then
@@ -525,6 +541,11 @@ private:
     // proposeFrom. The accumulator persists across cycles (never reset).
     void   accumulateProposalCovariance(const DTCycleResult &result);
     void   refactorProposalCholesky();
+
+    // Correlation matrix from a covariance matrix: R_ij = C_ij / sqrt(C_ii C_jj).
+    // Rows/cols with zero variance yield 0 off-diagonal, 1 on the diagonal.
+    static std::vector<std::vector<double>> correlationFromCovariance(
+        const std::vector<std::vector<double>> &cov);
 
     // Inter-cycle stability test: true iff the ring is full and every
     // parameter's spread across the ring is below stabilityTol relative to
@@ -689,6 +710,12 @@ private:
     double m_propCovWeight = 0.0;
     bool   m_propReady     = false;
     double m_kappa         = 0.0;   // lazily set to 2.38/sqrt(d)
+
+    // The kernel this cycle ACTUALLY sampled with, latched in initializeCycle
+    // before the end-of-cycle accumulation mutates m_kappa/m_propReady.
+    // Diagnostic only (appendProposalRecord); never read by proposeFrom.
+    double m_kappaAtCycleStart     = 0.0;
+    bool   m_propReadyAtCycleStart = false;
 
     // Per-cycle bookkeeping
     qint64 m_sweepIndex        = 0;

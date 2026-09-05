@@ -512,6 +512,48 @@ bool DTRunner::renderOnly()
 // ---------------------------------------------------------------------------
 bool DTRunner::runOnce()
 {
+    // ------------------------------------------------------------------
+    // Wall-clock reconciliation (live forecast deployments only)
+    // ------------------------------------------------------------------
+    // Simulated time is a pure counter: each cycle adds exactly one interval
+    // (advanceEnd = advanceStart + intervalMs, then m_nextIntervalStart =
+    // advanceEnd) and nothing ever compares it to the real clock. Because
+    // main.cpp fires a cycle immediately on every process start, each restart
+    // consumes a simulated day no matter how little real time has passed —
+    // three redeploys in one afternoon put the twin three days into the
+    // future, and the drift is permanent because it is carried in the state
+    // snapshot.
+    //
+    // When we are already ahead of the wall clock there is nothing to
+    // simulate, so skip the cycle and let real time catch up. Returning true
+    // is deliberate: main.cpp treats false as fatal and exits(3), and a
+    // skipped cycle is not a failure.
+    //
+    // Historical replays are exempt. Their dates are deliberately not "now"
+    // (a 2020-2022 window is years behind it), so reconciling against the
+    // wall clock is meaningless there — and for any replay that ran past the
+    // present it would stall the run completely.
+    if (m_config.isLiveForecastMode())
+    {
+        const QDateTime nowUtc     = QDateTime::currentDateTimeUtc();
+        const qint64    aheadMs    = nowUtc.msecsTo(m_nextIntervalStart);
+        // Absorb timer jitter: a tick can arrive a few ms before its nominal
+        // time, which must not be mistaken for running ahead.
+        const qint64    toleranceMs =
+            std::max<qint64>(1000, m_config.intervalMs / 100);
+
+        if (aheadMs > toleranceMs)
+        {
+            std::cout << "[Runner] Skipping cycle: simulated time ("
+                      << m_nextIntervalStart.toString(Qt::ISODate).toStdString()
+                      << ") is " << (aheadMs / 3600000.0)
+                      << " h ahead of the wall clock ("
+                      << nowUtc.toString(Qt::ISODate).toStdString()
+                      << "). Waiting for real time to catch up.\n";
+            return true;
+        }
+    }
+
     const QDateTime advanceStart = m_nextIntervalStart;
     QDateTime       advanceEnd;
 

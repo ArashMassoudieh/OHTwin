@@ -56,6 +56,7 @@ equals(OHQ_FROM_SOURCE, 1) {
         ../OpenHydroQual/aquifolium/src/Command.cpp \
         ../OpenHydroQual/aquifolium/src/Composite.cpp \
         ../OpenHydroQual/aquifolium/src/Condition.cpp \
+        ../OpenHydroQual/aquifolium/src/Composite.cpp \
         ../OpenHydroQual/aquifolium/src/ErrorHandler.cpp \
         ../OpenHydroQual/aquifolium/src/Expression.cpp \
         ../OpenHydroQual/aquifolium/src/Link.cpp \
@@ -148,6 +149,7 @@ HEADERS += \
     ../OpenHydroQual/aquifolium/include/Precipitation.h \
     ../OpenHydroQual/aquifolium/include/RxnParameter.h \
     ../OpenHydroQual/aquifolium/include/constituent.h \
+    ../OpenHydroQual/aquifolium/include/Composite.h \
     ../OpenHydroQual/aquifolium/include/observation.h \
     ../OpenHydroQual/aquifolium/include/precalculatedfunction.h \
     ../OpenHydroQual/aquifolium/include/solutionlogger.h \

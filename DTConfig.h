@@ -298,6 +298,32 @@ public:
     // Useful for historical / Truth-Twin runs.
     double      timeAcceleration = 1.0;
 
+    // True when this deployment tracks the real world in real time — a live
+    // forecast twin — as opposed to replaying a fixed historical window.
+    //
+    // There is no explicit mode flag in config.json, so the distinction is
+    // read off the timing fields, all three of which must hold:
+    //
+    //   start_datetime empty   the run is anchored to "now" (or to the
+    //                          resumed snapshot), not to a historical date.
+    //                          Every replay deployment pins this; every live
+    //                          one leaves it out.
+    //   stop_datetime empty    "run forever (real-time / continuously-updated
+    //                          forecast mode)" — see stopDatetime above.
+    //   time_acceleration == 1 simulated time advances at wall-clock rate.
+    //
+    // Used to decide whether simulated time may be reconciled against the wall
+    // clock. Doing that to a historical replay would be meaningless (its dates
+    // are deliberately not "now") and would stall it outright, so the check
+    // must be conservative: anything that looks like a replay is treated as
+    // one.
+    bool isLiveForecastMode() const
+    {
+        return startDatetime.empty()
+            && stopDatetime.empty()
+            && timeAcceleration == 1.0;
+    }
+
     // When true (and assimilation is enabled), runOnce advances simulated
     // time from m_nextIntervalStart all the way to the most recent
     // observation timestamp in the buffer (m_assimilation->buffer().tMax())
