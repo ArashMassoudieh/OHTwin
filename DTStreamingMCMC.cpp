@@ -1082,9 +1082,7 @@ bool DTStreamingMCMC::initializeCycle(SeedMode mode, QString &errorMessage)
     // Position the chains per the seeding regime (Sec. 3.3 / 3.9).
     // Seeding routines only fill chain.params; the posterior evaluation
     // of every seed is centralized below so all regimes share one
-    // parallel pass. (seedRatioWeighted, once implemented, is the
-    // exception: it computes pi_t per candidate as a side effect and
-    // will pre-fill logp to avoid a second solve.)
+    // parallel pass.
     {
         DTDebugLog &dlog = DTDebugLog::instance();
         if (dlog.enabled(DTDebugLog::Category::MCMC))
@@ -1488,6 +1486,12 @@ bool DTStreamingMCMC::seedWarmStart(QString &errorMessage)
     // value would apply the density twice, concentrate seeds toward the
     // mode, and under-disperse the ensemble -- a bias that compounds
     // across cycles because each cycle's pool seeds the next.
+    return seedFromPreviousPool(streamSettings.seedInflation, errorMessage);
+}
+
+bool DTStreamingMCMC::seedFromPreviousPool(double inflationRate,
+                                           QString &errorMessage)
+{
     if (!m_havePrevSnapshot || m_prevSamples.empty())
     {
         errorMessage = "warm start requested but no previous pool is "
@@ -1515,7 +1519,7 @@ bool DTStreamingMCMC::seedWarmStart(QString &errorMessage)
     // dispersion at best; any shortfall relative to the true posterior is
     // carried into the next pool and compounds. Inflating about the seed mean
     // counteracts that without moving the ensemble's location.
-    inflateSeedEnsemble();
+    inflateSeedEnsemble(inflationRate);
 
     // logp deliberately NOT copied from m_prevLogp: those values were
     // computed against the previous cycle's window and kernel weights.
@@ -1542,9 +1546,9 @@ bool DTStreamingMCMC::seedWarmStart(QString &errorMessage)
 // balance within a cycle is unaffected (this is part of the initialisation,
 // exactly like the choice of seed distribution itself).
 // ---------------------------------------------------------------------------
-void DTStreamingMCMC::inflateSeedEnsemble()
+void DTStreamingMCMC::inflateSeedEnsemble(double rate)
 {
-    const double r = streamSettings.seedInflation;
+    const double r = rate;
     if (!(r > 1.0) || m_chains.size() < 2) return;
 
     const unsigned int np = MCMC_Settings.number_of_parameters;
@@ -1913,15 +1917,24 @@ double DTStreamingMCMC::proposalScaleFloor()
 
 bool DTStreamingMCMC::seedRatioWeighted(QString &errorMessage)
 {
-    // TODO (Phase 3):
-    //   - evaluate pi_t at every sample of m_prevSamples (one forward solve
-    //     each); importance weight w_k = exp(logpi_t(k) - m_prevLogp[k]),
-    //     normalized via log-sum-exp
-    //   - resample Nc seeds proportional to w_k (SMC reweighting step)
-    //   - reuse the freshly computed logpi_t as each seeded chain's logp
-    //     (no second evaluation needed)
-    errorMessage = "DTStreamingMCMC::seedRatioWeighted not implemented";
-    return false;
+    // Post-drift reseeding. The textbook form is an SMC reweighting step:
+    // evaluate pi_t at every sample of m_prevSamples, weight each by
+    // pi_t/pi_{t-1}, and resample proportionally. That costs one forward
+    // solve per pool member per cycle -- with pools of ~1500 and a solve
+    // budget of a few hundred sweeps it is more expensive than the sampling
+    // it is meant to initialise, and after a drift the weights are dominated
+    // by a handful of members anyway (the old pool sits in a region the new
+    // target has largely vacated), so the effective seed count collapses.
+    //
+    // Instead: draw uniformly from the previous pool, as in a warm start, but
+    // inflate the seed ensemble harder. This keeps the ensemble centred where
+    // the data last placed it while re-widening it enough to reach a target
+    // that has moved -- the same job the reweighting would do, without the
+    // per-member solves or the weight degeneracy.
+    const double r = (streamSettings.driftSeedInflation > 1.0)
+                         ? streamSettings.driftSeedInflation
+                         : streamSettings.seedInflation;
+    return seedFromPreviousPool(r, errorMessage);
 }
 
 bool DTStreamingMCMC::seedFromCarriedStates(QString &errorMessage)

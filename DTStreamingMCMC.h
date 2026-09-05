@@ -156,6 +156,15 @@ struct DTStreamingSettings
     // cannot shrink arbitrarily far below the prior scale. 0 = off.
     double minStepFraction        = 0.0;   // config: mcmc_min_step_fraction
 
+    // driftSeedInflation: ensemble inflation used by RatioReseed (the seeding
+    // regime selected once drift is detected). After a drift the previous
+    // pool is centred on a target that has moved, so the seeds need more
+    // spread than the stationary seedInflation provides -- otherwise the
+    // ensemble has to traverse to the relocated mode using a proposal whose
+    // scale was tuned for the old one. Must be >= 1; values <= 1 fall back to
+    // seedInflation.
+    double driftSeedInflation     = 1.5;   // config: mcmc_drift_seed_inflation
+
     // --- drift detection ---
     // Two complementary tests on the per-cycle pooled means, both operating in
     // proposal space (log for log-normal priors) so a "20% change" means the
@@ -451,8 +460,13 @@ private:
     // -----------------------------------------------------------------------
     bool seedColdStart(QString &errorMessage);          // importance resampling from prior
     bool seedWarmStart(QString &errorMessage);          // uniform draw from previous pool
-    bool seedRatioWeighted(QString &errorMessage);      // prop. to pi_t/pi_{t-1}
+    bool seedRatioWeighted(QString &errorMessage);      // post-drift reseed
     bool seedFromCarriedStates(QString &errorMessage);  // provisional resume
+
+    // Shared body of seedWarmStart/seedRatioWeighted: validate the previous
+    // pool, draw one seed per chain uniformly with replacement, then inflate
+    // about the seed mean at the given rate.
+    bool seedFromPreviousPool(double inflationRate, QString &errorMessage);
 
     // Draw one overdispersed parameter vector: uniform over the range
     // (uniform in log space for log-normal priors) -- NOT the prior
@@ -616,8 +630,8 @@ private:
     static const char *seedModeName(SeedMode m);
 
     // Multiplicative ensemble inflation about the seed mean, in proposal
-    // space. No-op when streamSettings.seedInflation <= 1.
-    void inflateSeedEnsemble();
+    // space. No-op when the rate is <= 1.
+    void inflateSeedEnsemble(double rate);
 
     // --- drift detection (persisted across cycles via the snapshot) ---
     std::vector<double> m_cusumSp, m_cusumSm;       // per-parameter CUSUM arms

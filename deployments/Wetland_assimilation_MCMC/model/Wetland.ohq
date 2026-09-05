@@ -50,7 +50,7 @@ create source;type=Evapotranspiration_Penmam (S),R_h=,Temperature=,gamma=66.8,na
 create parameter;type=Parameter,high=0.95,low=0.2,name=CatchmentRunoffCoeff,prior_distribution=log-normal,value=0.75
 create parameter;type=Parameter,high=500000,low=20000,name=WetlandOutletAlpha,prior_distribution=log-normal,value=100000
 create parameter;type=Parameter,high=2,low=0.5,name=PondAlphaMultiplier,prior_distribution=log-normal,value=1
-create parameter;type=Parameter,high=2,low=0.3,name=Evap_Coefficient,prior_distribution=normal,value=1
+create parameter;type=Parameter,high=2,low=0.3,name=Evap_Coefficient,prior_distribution=log-normal,value=1
 create parameter;type=Parameter,high=0.1,low=0.0005,name=Soil_Hydraulic_Conductivity,prior_distribution=log-normal,value=0.01
 create parameter;type=Parameter,high=0.3,low=0.001,name=Stage_Std,prior_distribution=log-normal,value=0.01
 create parameter;type=Parameter,high=1000,low=0.1,name=Outflow_Std,prior_distribution=log-normal,value=100

@@ -1,0 +1,18 @@
+{
+  "canvas": { "x": 0, "y": 0, "width": 420, "height": 200 },
+  "components": [
+    {
+      "id": "reservoir", "label": "Reservoir", "block": "Reservoir",
+      "x": 60, "y": 50, "width": 160, "height": 100,
+      "fill_max": 0.3,
+      "bind": { "fill_value": { "block": "Reservoir", "property": "depth" } },
+      "thresholds": [ { "below": 0.05, "color": "#CBD5E1" }, { "above": 0.05, "color": "#2563EB" } ],
+      "draw": [
+        { "shape": "rect", "x": 0.05, "y": 0.05, "w": 0.9, "h": 0.9,
+          "fill": { "bind": "water_color" }, "stroke": "#334155", "stroke_width": 1 },
+        { "shape": "text", "x": 0.5, "y": 0.55, "anchor": "middle",
+          "value": { "bind": "label" }, "font_size": 11 }
+      ]
+    }
+  ]
+}

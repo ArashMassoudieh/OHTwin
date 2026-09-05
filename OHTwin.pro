@@ -54,6 +54,7 @@ equals(OHQ_FROM_SOURCE, 1) {
     SOURCES += \
         ../OpenHydroQual/aquifolium/src/Block.cpp \
         ../OpenHydroQual/aquifolium/src/Command.cpp \
+        ../OpenHydroQual/aquifolium/src/Composite.cpp \
         ../OpenHydroQual/aquifolium/src/Condition.cpp \
         ../OpenHydroQual/aquifolium/src/ErrorHandler.cpp \
         ../OpenHydroQual/aquifolium/src/Expression.cpp \

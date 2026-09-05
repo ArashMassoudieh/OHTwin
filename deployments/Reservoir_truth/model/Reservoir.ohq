@@ -1,0 +1,45 @@
+loadtemplate; filename = /home/arash/Projects/DrywellDT/resources/main_components.json
+addtemplate; filename = /home/arash/Projects/DrywellDT/resources/main_components.json
+addtemplate; filename = /home/arash/Projects/DrywellDT/resources/Pond_Plugin.json
+setvalue; object=system, quantity=acceptance_rate, value=0.44
+setvalue; object=system, quantity=add_noise_to_realizations, value=No
+setvalue; object=system, quantity=initial_purturbation, value=No
+setvalue; object=system, quantity=initual_purturbation_factor, value=0.05
+setvalue; object=system, quantity=number_of_burnout_samples, value=0
+setvalue; object=system, quantity=number_of_chains, value=8
+setvalue; object=system, quantity=number_of_post_estimate_realizations, value=0
+setvalue; object=system, quantity=number_of_samples, value=1000
+setvalue; object=system, quantity=number_of_threads, value=8
+setvalue; object=system, quantity=numthreads, value=8
+setvalue; object=system, quantity=n_threads, value=8
+setvalue; object=system, quantity=perform_global_sensitivity, value=No
+setvalue; object=system, quantity=purturbation_change_scale, value=0.75
+setvalue; object=system, quantity=record_interval, value=1
+setvalue; object=system, quantity=samples_filename, value=mcmc.txt
+setvalue; object=system, quantity=alloutputfile, value=output.txt
+setvalue; object=system, quantity=observed_outputfile, value=observedoutput.txt
+setvalue; object=system, quantity=maxpop, value=20
+setvalue; object=system, quantity=ngen, value=4
+setvalue; object=system, quantity=outputfile, value=GA_output.txt
+setvalue; object=system, quantity=pcross, value=1
+setvalue; object=system, quantity=pmute, value=0.02
+setvalue; object=system, quantity=shakescale, value=0.05
+setvalue; object=system, quantity=shakescalered, value=0.75
+setvalue; object=system, quantity=c_n_weight, value=1
+setvalue; object=system, quantity=initial_time_step, value=0.01
+setvalue; object=system, quantity=jacobian_method, value=Inverse Jacobian
+setvalue; object=system, quantity=max_timestep_decrease_factor, value=100000
+setvalue; object=system, quantity=max_timestep_increase_factor, value=50
+setvalue; object=system, quantity=maximum_number_of_matrix_inverstions, value=200000
+setvalue; object=system, quantity=maximum_time_allowed, value=86400
+setvalue; object=system, quantity=minimum_timestep, value=1e-06
+setvalue; object=system, quantity=nr_timestep_reduction_factor, value=0.75
+setvalue; object=system, quantity=nr_timestep_reduction_factor_fail, value=0.2
+setvalue; object=system, quantity=nr_tolerance, value=0.001
+setvalue; object=system, quantity=write_interval, value=100
+setvalue; object=system, quantity=write_solution_details, value=No
+create source;type=Precipitation,name=Rain,timeseries=
+create block;type=Pond,Precipitation=Rain,Evapotranspiration=,inflow=,Storage=1,alpha=100,alpha_multiplier=1,beta=1,bottom_elevation=0,name=Reservoir,_height=200,_width=200,x=500,y=400
+create block;type=fixed_head,head=0,Storage=1000,name=Outlet,_height=200,_width=200,x=900,y=400
+create link;from=Reservoir,to=Outlet,type=darcy_connector,name=Outflow,Transmissivity=5
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Weighted Least Squared,error_standard_deviation=0.005,error_structure=normal,expression=depth,kernel_Delta0=30,kernel_alpha=1,kernel_tau=1,name=Reservoir depth (m),object=Reservoir,observed_data=
