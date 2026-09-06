@@ -42,6 +42,7 @@ setvalue; object=system, quantity=shakescale, value=0.05
 setvalue; object=system, quantity=shakescalered, value=0.75
 setvalue; object=system, quantity=c_n_weight, value=1
 setvalue; object=system, quantity=initial_time_step, value=0.01
+setvalue; object=system, quantity=jacobian_assembly, value=Dependency
 setvalue; object=system, quantity=jacobian_method, value=Inverse Jacobian
 setvalue; object=system, quantity=max_timestep_decrease_factor, value=100000
 setvalue; object=system, quantity=max_timestep_increase_factor, value=50

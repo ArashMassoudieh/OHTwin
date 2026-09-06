@@ -98,10 +98,26 @@
     "jacobian_method": {
       "type": "string",
       "default": "Inverse Jacobian",
-      "description": "Equation system solution method",
+      "description": "Linear solver for the Newton step",
       "ask_user": "true",
-      "delegate": "ComboBox, items: Inverse Jacobian, Direct",
-      "code": "write_solution_details"
+      "delegate": "ComboBox, items: Direct, Inverse Jacobian, Sparse",
+      "code": "jacobian_method"
+    },
+    "jacobian_assembly": {
+      "type": "string",
+      "default": "Dependency",
+      "description": "Transport Jacobian assembly: Full re-evaluates the whole residual per perturbation; Dependency re-evaluates only the rows the perturbed variable can reach (exact, much faster for models made of weakly coupled sub-systems)",
+      "ask_user": "true",
+      "delegate": "ComboBox, items: Dependency, Full",
+      "code": "jacobian_assembly"
+    },
+    "verify_jacobian": {
+      "type": "bool",
+      "default": "0",
+      "description": "Assemble the transport Jacobian both ways and log the maximum difference. Diagnostic only - roughly doubles assembly cost",
+      "ask_user": "true",
+      "delegate": "CheckBox",
+      "code": "verify_jacobian"
     },
     "write_intermittently": {
       "type": "string",
