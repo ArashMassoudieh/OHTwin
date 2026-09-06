@@ -187,6 +187,12 @@ struct AssimilationConfig
     // estimate. 1.0 disables it; 1.05-1.2 is the useful range.
     double mcmcSeedInflation = 1.0;
 
+    // Seed inflation used once drift is detected (SeedMode::RatioReseed).
+    // Larger than mcmcSeedInflation: after a drift the previous pool is
+    // centred on a target that has moved, so the seeds need extra spread to
+    // reach it. Values <= 1 fall back to mcmcSeedInflation.
+    double mcmcDriftSeedInflation = 1.5;
+
     // Hard floor on the adaptive-covariance global scalar kappa.
     double mcmcKappaMin = 1e-4;
 

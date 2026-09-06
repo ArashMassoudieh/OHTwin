@@ -37,6 +37,7 @@
 #include "DTWeather.h"
 #include <QDateTime>
 #include <iostream>
+#include <map>
 #include <QThread>
 #include "RunLogger.h"
 #include "DTStreamingMCMC.h"
@@ -688,9 +689,20 @@ bool DTAssimilation::buildSpinupSnapshot(double t0, double tStart,
         errorMessage = "spin-up: no parameters in MAP snapshot";
         return false;
     }
-    std::vector<double> mapVals(np);
+    // Key the MAP values by NAME, not by position. mapSrc is loaded from a JSON
+    // snapshot and `spin` below is built from the .ohq script; the two order
+    // their parameter sets differently (snapshot order is alphabetical, script
+    // order is declaration order). A positional copy silently lands each value
+    // on a different parameter wherever the two orders diverge -- which for a
+    // typical model is most of them, and is invisible until some quantity with
+    // a sign or range criterion rejects the value it was handed.
+    std::map<std::string, double> mapVals;
     for (unsigned int i = 0; i < np; ++i)
-        mapVals[i] = mapSrc.Parameters()[i]->GetValue();
+    {
+        Parameter *p = mapSrc.Parameters()[static_cast<int>(i)];
+        if (!p) continue;
+        mapVals[p->GetName()] = p->GetValue();
+    }
 
     // 2. Cold-start a fresh model from the script (state at t0 = script ICs).
     System spin;
@@ -704,9 +716,30 @@ bool DTAssimilation::buildSpinupSnapshot(double t0, double tStart,
         return false;
     }
 
-    // 3. Apply the MAP parameters.
+    // 3. Apply the MAP parameters by name. A count match is not enough to
+    //    guarantee the two parameter sets agree, so treat any missing name as
+    //    a hard error rather than silently spinning up a mis-parameterized
+    //    model.
     for (unsigned int i = 0; i < np; ++i)
-        spin.SetParameterValue(static_cast<int>(i), mapVals[i]);
+    {
+        Parameter *p = spin.Parameters()[static_cast<int>(i)];
+        if (!p) continue;
+        const std::string pname = p->GetName();
+        const std::map<std::string, double>::const_iterator it = mapVals.find(pname);
+        if (it == mapVals.end())
+        {
+            errorMessage = QString("spin-up: script parameter '%1' has no match "
+                                   "in the MAP snapshot -- parameter sets disagree")
+                               .arg(QString::fromStdString(pname));
+            return false;
+        }
+        if (!spin.SetParameterValue(pname, it->second))
+        {
+            errorMessage = QString("spin-up: cannot set parameter '%1'")
+                               .arg(QString::fromStdString(pname));
+            return false;
+        }
+    }
     spin.ApplyParameters();
 
     // 4. Window [t0, tStart] + weather forcing over it.
@@ -1199,6 +1232,7 @@ bool DTAssimilation::runCalibrationMCMC(System &sys,
     mcmc.streamSettings.quorumFraction      = m_config.assimilation.mcmcQuorumFraction;
     mcmc.streamSettings.adaptiveCovariance  = (m_config.assimilation.mcmcProposalMode == "covariance");
     mcmc.streamSettings.seedInflation       = m_config.assimilation.mcmcSeedInflation;
+    mcmc.streamSettings.driftSeedInflation  = m_config.assimilation.mcmcDriftSeedInflation;
     mcmc.streamSettings.kappaMin            = m_config.assimilation.mcmcKappaMin;
     mcmc.streamSettings.minStepFraction     = m_config.assimilation.mcmcMinStepFraction;
     mcmc.streamSettings.driftDetectionEnabled = m_config.assimilation.mcmcDriftDetection;
@@ -1271,9 +1305,9 @@ bool DTAssimilation::runCalibrationMCMC(System &sys,
         }
     }
 
-    // Drift flag restored from the previous cycle's snapshot. seedRatioWeighted
-    // is still a stub, so chooseSeedMode falls through to WarmStart today; the
-    // flag is nonetheless recorded and available to any drift response.
+    // Drift flag restored from the previous cycle's snapshot. Once set it
+    // routes seeding to RatioReseed, which draws from the previous pool like a
+    // warm start but inflates the seed ensemble at mcmc_drift_seed_inflation.
     mcmc.setCurrentTime(tEnd);
     const SeedMode mode = mcmc.chooseSeedMode(mcmc.driftDetected());
     static const char *modeNames[] =

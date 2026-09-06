@@ -1,0 +1,18 @@
+{
+    "mode": "assimilation",
+    "refresh_seconds": 60,
+
+    "assimilation": {
+        "posterior_history_url": "http://localhost:8185/outputs/calibration/posterior_history.jsonl",
+        "observed_csv_url":      "http://localhost:8086/outputs/selected_output.csv",
+        "modeled_csv_url":       "http://localhost:8185/outputs/selected_output.csv",
+        "realization_ci_url":    "http://localhost:8185/outputs/realization_ci_latest.txt",
+        "posterior_dist_url":    "http://localhost:8185/outputs/posterior_dist_latest.txt",
+
+        "x_axis": "t_now",
+
+        "parameter_panel": {
+            "show_population_band": true
+        }
+    }
+}

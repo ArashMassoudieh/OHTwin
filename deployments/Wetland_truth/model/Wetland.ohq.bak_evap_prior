@@ -1,0 +1,105 @@
+loadtemplate; filename = resources/main_components.json
+addtemplate; filename = main_components.json
+addtemplate; filename = Pond_Plugin.json
+addtemplate; filename = Sewer_system.json
+addtemplate; filename = evapotranspiration_models.json
+addtemplate; filename = mass_transfer.json
+addtemplate; filename = groundwater.json
+setvalue; object=system, quantity=acceptance_rate, value=0.15
+setvalue; object=system, quantity=add_noise_to_realizations, value=No
+setvalue; object=system, quantity=continue_based_on_file_name, value=
+setvalue; object=system, quantity=initial_purturbation, value=No
+setvalue; object=system, quantity=initual_purturbation_factor, value=0.05
+setvalue; object=system, quantity=number_of_burnout_samples, value=0
+setvalue; object=system, quantity=number_of_chains, value=8
+setvalue; object=system, quantity=number_of_post_estimate_realizations, value=0
+setvalue; object=system, quantity=number_of_samples, value=1000
+setvalue; object=system, quantity=number_of_threads, value=1
+setvalue; object=system, quantity=perform_global_sensitivity, value=No
+setvalue; object=system, quantity=purturbation_change_scale, value=0.75
+setvalue; object=system, quantity=record_interval, value=1
+setvalue; object=system, quantity=samples_filename, value=mcmc.txt
+setvalue; object=system, quantity=alloutputfile, value=output.txt
+setvalue; object=system, quantity=observed_outputfile, value=observedoutput.txt
+setvalue; object=system, quantity=simulation_end_time, value=40542.8
+setvalue; object=system, quantity=simulation_start_time, value=40178.8
+setvalue; object=system, quantity=maxpop, value=30
+setvalue; object=system, quantity=ngen, value=10
+setvalue; object=system, quantity=numthreads, value=2
+setvalue; object=system, quantity=outputfile, value=GA_output.txt
+setvalue; object=system, quantity=pcross, value=1
+setvalue; object=system, quantity=pmute, value=0.02
+setvalue; object=system, quantity=shakescale, value=0.05
+setvalue; object=system, quantity=shakescalered, value=0.75
+setvalue; object=system, quantity=c_n_weight, value=1
+setvalue; object=system, quantity=initial_time_step, value=0.01
+setvalue; object=system, quantity=jacobian_method, value=Inverse Jacobian
+setvalue; object=system, quantity=max_timestep_decrease_factor, value=100000
+setvalue; object=system, quantity=max_timestep_increase_factor, value=50
+setvalue; object=system, quantity=maximum_number_of_matrix_inverstions, value=200000
+setvalue; object=system, quantity=maximum_time_allowed, value=86400
+setvalue; object=system, quantity=minimum_timestep, value=1e-06
+setvalue; object=system, quantity=n_threads, value=8
+setvalue; object=system, quantity=nr_timestep_reduction_factor, value=0.75
+setvalue; object=system, quantity=nr_timestep_reduction_factor_fail, value=0.2
+setvalue; object=system, quantity=nr_tolerance, value=0.001
+setvalue; object=system, quantity=write_interval, value=100
+setvalue; object=system, quantity=write_solution_details, value=Yes
+create source;type=Precipitation,name=Rain,timeseries=
+create source;type=Evapotranspiration_Penmam (S),R_h=,Temperature=,gamma=66.8,name=Evapotranspiration_Penman (Soil),solar_radiation=,solar_scale_fact=1,wind_scale_fact=1,wind_speed=,z0=0.0003,z2=2
+create parameter;type=Parameter,high=0.95,low=0.2,name=CatchmentRunoffCoeff,prior_distribution=log-normal,value=0.75
+create parameter;type=Parameter,high=500000,low=20000,name=WetlandOutletAlpha,prior_distribution=log-normal,value=100000
+create parameter;type=Parameter,high=2,low=0.5,name=PondAlphaMultiplier,prior_distribution=log-normal,value=1
+create parameter;type=Parameter,high=2,low=0.3,name=Evap_Coefficient,prior_distribution=normal,value=1
+create parameter;type=Parameter,high=0.1,low=0.0005,name=Soil_Hydraulic_Conductivity,prior_distribution=log-normal,value=0.01
+create constituent;type=AgeTracker,concentration=0,decay_parameter=0,diffusion_coefficient=0,external_mass_flow_timeseries=,external_source=,inflow_concentration=0,name=AgeTracker_1,stoichiometric_constant=0
+create reaction;type=Reaction,AgeTracker_1:stoichiometric_constant=1,name=aging,rate_expression=1
+create block;type=Catchment,AgeTracker_1:concentration=0,AgeTracker_1:external_mass_flow_timeseries=,AgeTracker_1:external_source=,AgeTracker_1:inflow_concentration=0,Evapotranspiration=,ManningCoeff=0.011,Precipitation=Rain,Runoff_coeff=1,Slope=0,Width=0,_height=200,_width=350,area=1,depression_storage=0,depth=0,elevation=0,inflow=,loss_coefficient=0,name=Rain Gauge,x=2635,y=139
+create block;type=Catchment,AgeTracker_1:concentration=0,AgeTracker_1:external_mass_flow_timeseries=,AgeTracker_1:external_source=,AgeTracker_1:inflow_concentration=0,Evapotranspiration=,ManningCoeff=0.011,Precipitation=Rain,Runoff_coeff=0.75,Slope=0.01,Width=240,_height=200,_width=460,area=60000,depression_storage=0.002,depth=0,elevation=0,inflow=,loss_coefficient=0,name=Contributing Catchment,x=2441,y=714
+create block;type=Pond,AgeTracker_1:concentration=0,AgeTracker_1:external_mass_flow_timeseries=,AgeTracker_1:external_source=,AgeTracker_1:inflow_concentration=0,Evapotranspiration=Evapotranspiration_Penman (Soil),Precipitation=Rain,Storage=357.6,_height=700,_width=600,alpha=558.75,alpha_multiplier=1,beta=2,bottom_elevation=-0.8,inflow=,name=Wetland Cell 1,x=1650,y=306
+create block;type=Pond,AgeTracker_1:concentration=0,AgeTracker_1:external_mass_flow_timeseries=,AgeTracker_1:external_source=,AgeTracker_1:inflow_concentration=0,Evapotranspiration=Evapotranspiration_Penman (Soil),Precipitation=Rain,Storage=251.9,_height=400,_width=450,alpha=362.11,alpha_multiplier=1,beta=2,bottom_elevation=-0.834,inflow=,name=Wetland Cell 2,x=831,y=630
+create block;type=Pond,AgeTracker_1:concentration=0,AgeTracker_1:external_mass_flow_timeseries=,AgeTracker_1:external_source=,AgeTracker_1:inflow_concentration=0,Evapotranspiration=Evapotranspiration_Penman (Soil),Precipitation=Rain,Storage=214.8,_height=340,_width=400,alpha=289.77,alpha_multiplier=1,beta=2,bottom_elevation=-0.861,inflow=,name=Wetland Cell 3,x=248,y=668
+create block;type=Pond,AgeTracker_1:concentration=0,AgeTracker_1:external_mass_flow_timeseries=,AgeTracker_1:external_source=,AgeTracker_1:inflow_concentration=0,Evapotranspiration=Evapotranspiration_Penman (Soil),Precipitation=Rain,Storage=103.7,_height=260,_width=360,alpha=134.24,alpha_multiplier=1,beta=2,bottom_elevation=-0.879,inflow=,name=Wetland Cell 4,x=260,y=240
+create block;type=Pond,AgeTracker_1:concentration=0,AgeTracker_1:external_mass_flow_timeseries=,AgeTracker_1:external_source=,AgeTracker_1:inflow_concentration=0,Evapotranspiration=Evapotranspiration_Penman (Soil),Precipitation=Rain,Storage=153.9,_height=300,_width=400,alpha=190,alpha_multiplier=1,beta=2,bottom_elevation=-0.9,inflow=,name=Wetland Cell 5,x=735,y=222
+create block;type=Pond,AgeTracker_1:concentration=0,AgeTracker_1:external_mass_flow_timeseries=,AgeTracker_1:external_source=,AgeTracker_1:inflow_concentration=0,Evapotranspiration=Evapotranspiration_Penman (Soil),Precipitation=Rain,Storage=22.4,_height=260,_width=360,alpha=26.8,alpha_multiplier=1,beta=2,bottom_elevation=-0.914,inflow=,name=Wetland Cell 6,x=1227,y=264
+create block;type=fixed_head,AgeTracker_1:concentration=0,AgeTracker_1:external_mass_flow_timeseries=,AgeTracker_1:external_source=,AgeTracker_1:inflow_concentration=0,Storage=100000,_height=200,_width=300,head=-1,name=Receiving Water,x=1663,y=-46
+create block;type=fixed_head,AgeTracker_1:concentration=0,AgeTracker_1:external_mass_flow_timeseries=,AgeTracker_1:external_source=,AgeTracker_1:inflow_concentration=0,Storage=100000,_height=200,_width=200,head=-1,name=fixed_head (1),x=959,y=1263
+create link;from=Contributing Catchment,to=Wetland Cell 1,type=Catchment_link,AgeTracker_1:decay_parameter=0,name=Catchment runoff to wetland inlet
+create link;from=Wetland Cell 1,to=Wetland Cell 2,type=wide_channel,AgeTracker_1:decay_parameter=0,ManningCoeff=0.035,length=27.23,name=Wetland Cell 1 to Wetland Cell 2,width=2
+create link;from=Wetland Cell 2,to=Wetland Cell 3,type=wide_channel,AgeTracker_1:decay_parameter=0,ManningCoeff=0.035,length=23.45,name=Wetland Cell 2 to Wetland Cell 3,width=2
+create link;from=Wetland Cell 3,to=Wetland Cell 4,type=wide_channel,AgeTracker_1:decay_parameter=0,ManningCoeff=0.035,length=18.85,name=Wetland Cell 3 to Wetland Cell 4,width=1.5
+create link;from=Wetland Cell 4,to=Wetland Cell 5,type=wide_channel,AgeTracker_1:decay_parameter=0,ManningCoeff=0.035,length=16.92,name=Wetland Cell 4 to Wetland Cell 5,width=1.5
+create link;from=Wetland Cell 5,to=Wetland Cell 6,type=wide_channel,AgeTracker_1:decay_parameter=0,ManningCoeff=0.035,length=12.74,name=Wetland Cell 5 to Wetland Cell 6,width=1
+create link;from=Wetland Cell 6,to=Receiving Water,type=wier,AgeTracker_1:decay_parameter=0,alpha=33000,beta=2.5,crest_elevation=0,name=Wetland outlet weir
+create link;from=Wetland Cell 4,to=fixed_head (1),type=surface2groundwater_link,AgeTracker_1:decay_parameter=0,area=236,hydraulic_conductivity=0.01,length=1,name=Wetland Cell 4 - fixed_head (1)
+create link;from=Wetland Cell 5,to=fixed_head (1),type=surface2groundwater_link,AgeTracker_1:decay_parameter=0,area=342,hydraulic_conductivity=0.01,length=1,name=Wetland Cell 5 - fixed_head (1)
+create link;from=Wetland Cell 6,to=fixed_head (1),type=surface2groundwater_link,AgeTracker_1:decay_parameter=0,area=49,hydraulic_conductivity=0.01,length=1,name=Wetland Cell 6 - fixed_head (1)
+create link;from=Wetland Cell 3,to=fixed_head (1),type=surface2groundwater_link,AgeTracker_1:decay_parameter=0,area=499,hydraulic_conductivity=0.01,length=1,name=Wetland Cell 3 - fixed_head (1)
+create link;from=Wetland Cell 2,to=fixed_head (1),type=surface2groundwater_link,AgeTracker_1:decay_parameter=0,area=604,hydraulic_conductivity=0.01,length=1,name=Wetland Cell 2 - fixed_head (1)
+create link;from=Wetland Cell 1,to=fixed_head (1),type=surface2groundwater_link,AgeTracker_1:decay_parameter=0,area=894,hydraulic_conductivity=0.01,length=1,name=Wetland Cell 1 - fixed_head (1)
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=(Precipitation*1000),kernel_Delta0=1,kernel_alpha=1,kernel_tau=1,name=Precipitation (mm/day),object=Rain Gauge,observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=flow,kernel_Delta0=1,kernel_alpha=1,kernel_tau=1,name=Wetland inflow (m3/day),object=Catchment runoff to wetland inlet,observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Weighted Least Squared,error_standard_deviation=1,error_structure=normal,expression=depth,kernel_Delta0=30,kernel_alpha=1,kernel_tau=1,name=Wetland inlet stage (m),object=Wetland Cell 1,observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Weighted Least Squared,error_standard_deviation=1,error_structure=normal,expression=depth,kernel_Delta0=30,kernel_alpha=1,kernel_tau=1,name=Wetland mid-stage (m),object=Wetland Cell 3,observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Weighted Least Squared,error_standard_deviation=1,error_structure=normal,expression=depth,kernel_Delta0=30,kernel_alpha=1,kernel_tau=1,name=Wetland outlet stage (m),object=Wetland Cell 6,observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Weighted Least Squared,error_standard_deviation=1,error_structure=normal,expression=flow,kernel_Delta0=30,kernel_alpha=1,kernel_tau=1,name=Wetland outflow (m3/day),object=Wetland outlet weir,observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=depth,kernel_Delta0=1,kernel_alpha=1,kernel_tau=1,name=Wetland Cell 1 Water depth (m),object=Wetland Cell 1,observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=depth,kernel_Delta0=1,kernel_alpha=1,kernel_tau=1,name=Wetland Cell 6 Water depth (m),object=Wetland Cell 6,observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=AgeTracker_1:concentration,kernel_Delta0=1,kernel_alpha=1,kernel_tau=1,name=HRT,object=Wetland Cell 6,observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=(0-Evapotranspiration),kernel_Delta0=1,kernel_alpha=1,kernel_tau=1,name=Evaporation,object=Wetland Cell 1,observed_data=
+setasparameter; object= Contributing Catchment, parametername= CatchmentRunoffCoeff, quantity= Runoff_coeff
+setasparameter; object= Wetland Cell 1, parametername= PondAlphaMultiplier, quantity= alpha_multiplier
+setasparameter; object= Wetland Cell 2, parametername= PondAlphaMultiplier, quantity= alpha_multiplier
+setasparameter; object= Wetland Cell 3, parametername= PondAlphaMultiplier, quantity= alpha_multiplier
+setasparameter; object= Wetland Cell 4, parametername= PondAlphaMultiplier, quantity= alpha_multiplier
+setasparameter; object= Wetland Cell 5, parametername= PondAlphaMultiplier, quantity= alpha_multiplier
+setasparameter; object= Wetland Cell 6, parametername= PondAlphaMultiplier, quantity= alpha_multiplier
+setasparameter; object= Wetland outlet weir, parametername= WetlandOutletAlpha, quantity= alpha
+setasparameter; object= Wetland Cell 4 - fixed_head (1), parametername= Soil_Hydraulic_Conductivity, quantity= hydraulic_conductivity
+setasparameter; object= Wetland Cell 5 - fixed_head (1), parametername= Soil_Hydraulic_Conductivity, quantity= hydraulic_conductivity
+setasparameter; object= Wetland Cell 6 - fixed_head (1), parametername= Soil_Hydraulic_Conductivity, quantity= hydraulic_conductivity
+setasparameter; object= Wetland Cell 3 - fixed_head (1), parametername= Soil_Hydraulic_Conductivity, quantity= hydraulic_conductivity
+setasparameter; object= Wetland Cell 2 - fixed_head (1), parametername= Soil_Hydraulic_Conductivity, quantity= hydraulic_conductivity
+setasparameter; object= Wetland Cell 1 - fixed_head (1), parametername= Soil_Hydraulic_Conductivity, quantity= hydraulic_conductivity
+setasparameter; object= Evapotranspiration_Penman (Soil), parametername= Evap_Coefficient, quantity= solar_scale_fact
+setasparameter; object= Evapotranspiration_Penman (Soil), parametername= Evap_Coefficient, quantity= wind_scale_fact

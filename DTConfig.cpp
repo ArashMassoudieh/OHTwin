@@ -608,6 +608,9 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
         if (as.contains("mcmc_seed_inflation"))
             assimilation.mcmcSeedInflation =
                 as["mcmc_seed_inflation"].toDouble(1.0);
+        if (as.contains("mcmc_drift_seed_inflation"))
+            assimilation.mcmcDriftSeedInflation =
+                as["mcmc_drift_seed_inflation"].toDouble(1.5);
         if (as.contains("mcmc_kappa_min"))
             assimilation.mcmcKappaMin =
                 as["mcmc_kappa_min"].toDouble(1e-4);

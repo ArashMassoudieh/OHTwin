@@ -13,7 +13,7 @@
         "forecast_horizon": "6day",
         "start_datetime": "2020-01-03T00:00:00",
         "stop_datetime": "2022-01-03T00:00:00",
-        "time_acceleration": 200,
+        "time_acceleration": 100,
         "advance_to_observations": true,
         "state_variables": [],
         "keep_debug_outputs": true
@@ -53,7 +53,7 @@
         "method": "MCMC",
         "mcmc_budget_margin": "60s",
         "mcmc_realization_interval": 10,
-        "calibration_window_days": 100,
+        "calibration_window_days": 60,
         "mcmc_proposal_mode": "covariance",
         "mcmc_max_sweeps": 300,
         "mcmc_quorum_fraction": 0.25,
@@ -63,6 +63,14 @@
             "Wetland outflow (m3/day)",
             "Wetland inlet stage (m)",
             "Wetland outlet stage (m)"
-        ]
+        ],
+        "mcmc_seed_inflation": 1.05,
+        "mcmc_drift_detection": true,
+        "mcmc_cusum_k": 1.0,
+        "mcmc_cusum_h": 5.0,
+        "mcmc_drift_reference_cycles": 40,
+        "mcmc_t2_window_cycles": 33,
+        "mcmc_min_step_fraction": 0.0,
+        "mcmc_drift_seed_inflation": 1.5
     }
 }
