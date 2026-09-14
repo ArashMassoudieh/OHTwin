@@ -1,4 +1,19 @@
 
+# ---- codegen benchmarks (deployments/*/benchmark): keep models, forcing,
+#      scripts and the small comparison summaries; everything else is
+#      regenerable (generated projects + builds, solver outputs, logs) ----
+deployments/*/benchmark/codegen*/
+deployments/*/benchmark/results*/*
+!deployments/*/benchmark/results*/comparison.md
+!deployments/*/benchmark/results*/comparison.png
+deployments/*/benchmark/observedoutput.txt
+deployments/*/benchmark/*.log
+# ---- generic build junk ----
+**/build/
+*.o
+__pycache__/
+*.pyc
+
 build/Desktop_Qt_6_8_2-Debug/.qtc_clangd/.cache/clangd/index/
 
 build/Desktop_Qt_6_8_2-Debug/.qtc_clangd/
