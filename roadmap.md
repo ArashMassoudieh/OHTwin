@@ -70,15 +70,15 @@ is no state import/export. Each gap below is a concrete codegen work item.
 
 | id | gap | what to build | where |
 |---|---|---|---|
-| **G1** | Parameters are folded into literals | Treat every quantity bound by `setasparameter` (`Parameter::GetLocations()/GetQuans()`) as a **runtime input**: emit `double p_<obj>_<quan>` members, keep them out of the Constant tier, and emit `applyParameters(const double* v)` that rebuilds every constant that depends on them (the analyzer already has the dependency graph — add a "parameter" root). Parameter → (object,quan) map emitted as a table so the twin can address by *parameter index*, matching `SetParameterValue(i, …)`. | `DependencyAnalyzer`, `CodeGenerator` |
-| **G2** | Observations are not emitted | For each `Observation` emit its `expression` evaluated on `object` as a per-step function `observe(t, out[])`, using the same expression pipeline (they are ordinary quantity expressions: `depth`, `flow`, `AgeTracker_1:concentration`, `(Precipitation*1000)`, `(0-Evapotranspiration)`). The runtime records them after every accepted step into per-observation `(t, value)` series, exactly like `UpdateObservations`. | `CodeGenerator`, `ohq_massbalance.h` (post-step hook) |
-| **G3** | Misfit / likelihood | **Do not reimplement.** Hand the recorded series back to the interpreter's `Observation::modeled_time_series` and let `CalcMisfit()` run unchanged (all comparison methods, log-normal, kernel weights, KS, autocorrelation). This guarantees identical posteriors. (A native port of `TimeSeries::diff2/weighted_mse/…` is the Strategy-B follow-up.) | OHQ core hook (§3) |
-| **G4** | Forcing baked at gen time | Public setters for every baked source/time series (`setSeries("Rain", t[], v[], n)`), refreshing the dt **breakpoints** used to clamp steps. Needed for `injectPrecipitation` and ET inputs. The existing `set_ts_*` setters cover object series; extend to shared `ts_src_*` sources. | `CodeGenerator`, `ohq_timeseries.h` |
-| **G5** | No state import/export | `exportState(storage[], mass[], limited[], t)` / `importState(...)` so a cycle can start from the snapshot's block values at `_dt_next_start_utc`, and the forward twin can write its snapshot back. Include the outflow-limited flags and link flows. | `ohq_massbalance.h`, `ohq_transport.h` |
-| **G6** | Solver status | `solutionFailed()`, `simulationDuration()`, iteration counters — what `GetObjectiveFunctionValue` and the MCMC detail log read. Already partly there (`lastIterations`); add the failure flag and wall time. | runtime |
-| **G7** | Copy semantics | The kernel is POD arrays; copying it per chain/sample is trivial. Make the generated class trivially copyable (no raw pointers) so `T work = m_chainModels[c]` stays cheap once the kernel replaces the heavy `System` copy. | `CodeGenerator` |
-| **G8** | Model coverage for deployed models | **Wetland: DONE 2026-09-13** — (a) Penman ET source internal graph emitted as source-context member functions; (b) flow-phase geometry cached for the transport phase; (c) sources inside constituent expressions expanded; plus transport-dt and `/`,`^` parity fixes found on the way (see `deployments/Wetland_truth_codegen/benchmark/README.md`: 5–7× faster, 0.13% / 0.2% RMS agreement). Still to survey: Bioretention / Drywell / Reservoir deployments for soil/Green-Ampt forms, composites (`Composite::Propagate` after `ApplyParameters`), multi-constituent Arrhenius reactions. | `CodeGenerator` |
-| **G9** | Parameters that are *not* model quantities | `setasparameter` can bind an observation's `error_standard_deviation` (`Stage_Std`, `Outflow_Std` in Wetland). These live in the likelihood, not the physics — the kernel must skip them and the hook must still apply them to the interpreter-side `Observation`. | hook |
+| **G1** ✅ 2026-09-13 | Parameters are folded into literals | Treat every quantity bound by `setasparameter` (`Parameter::GetLocations()/GetQuans()`) as a **runtime input**: emit `double p_<obj>_<quan>` members, keep them out of the Constant tier, and emit `applyParameters(const double* v)` that rebuilds every constant that depends on them (the analyzer already has the dependency graph — add a "parameter" root). Parameter → (object,quan) map emitted as a table so the twin can address by *parameter index*, matching `SetParameterValue(i, …)`. | `DependencyAnalyzer`, `CodeGenerator` |
+| **G2** ✅ 2026-09-13 | Observations are not emitted | For each `Observation` emit its `expression` evaluated on `object` as a per-step function `observe(t, out[])`, using the same expression pipeline (they are ordinary quantity expressions: `depth`, `flow`, `AgeTracker_1:concentration`, `(Precipitation*1000)`, `(0-Evapotranspiration)`). The runtime records them after every accepted step into per-observation `(t, value)` series, exactly like `UpdateObservations`. | `CodeGenerator`, `ohq_massbalance.h` (post-step hook) |
+| **G3** ✅ 2026-09-14 | Misfit / likelihood | **Do not reimplement.** Hand the recorded series back to the interpreter's `Observation::modeled_time_series` and let `CalcMisfit()` run unchanged (all comparison methods, log-normal, kernel weights, KS, autocorrelation). This guarantees identical posteriors. (A native port of `TimeSeries::diff2/weighted_mse/…` is the Strategy-B follow-up.) | OHQ core hook (§3) |
+| **G4** ✅ 2026-09-13 | Forcing baked at gen time | Public setters for every baked source/time series (`setSeries("Rain", t[], v[], n)`), refreshing the dt **breakpoints** used to clamp steps. Needed for `injectPrecipitation` and ET inputs. The existing `set_ts_*` setters cover object series; extend to shared `ts_src_*` sources. | `CodeGenerator`, `ohq_timeseries.h` |
+| **G5** ✅ 2026-09-13 | No state import/export | `exportState(storage[], mass[], limited[], t)` / `importState(...)` — **state variable values only** (storages, constituent masses, outflow-limited flags, link flows, time). The kernel never reads or writes model *structure*: the full-model JSON snapshot (`SavetoJson`/`LoadfromJson`) stays with `System`, which hands the values across. | `ohq_massbalance.h`, `ohq_transport.h` |
+| **G6** ✅ 2026-09-14 | Solver status | `solutionFailed()`, `simulationDuration()`, iteration counters — what `GetObjectiveFunctionValue` and the MCMC detail log read. Already partly there (`lastIterations`); add the failure flag and wall time. | runtime |
+| **G7** ✅ 2026-09-14 | Copy semantics | The kernel is POD arrays; copying it per chain/sample is trivial. Make the generated class trivially copyable (no raw pointers) so `T work = m_chainModels[c]` stays cheap once the kernel replaces the heavy `System` copy. | `CodeGenerator` |
+| **G8** ✅ 2026-09-14 | Model coverage for deployed models | **Wetland: DONE 2026-09-13** — (a) Penman ET source internal graph emitted as source-context member functions; (b) flow-phase geometry cached for the transport phase; (c) sources inside constituent expressions expanded; plus transport-dt and `/`,`^` parity fixes found on the way (see `deployments/Wetland_truth_codegen/benchmark/README.md`: 5–7× faster, 0.13% / 0.2% RMS agreement). Still to survey: Bioretention / Drywell / Reservoir deployments for soil/Green-Ampt forms, composites (`Composite::Propagate` after `ApplyParameters`), multi-constituent Arrhenius reactions. | `CodeGenerator` |
+| **G9** ✅ 2026-09-14 | Parameters that are *not* model quantities | `setasparameter` can bind an observation's `error_standard_deviation` (`Stage_Std`, `Outflow_Std` in Wetland). These live in the likelihood, not the physics — the kernel must skip them and the hook must still apply them to the interpreter-side `Observation`. | hook |
 | **G10** | Interpreter parity edge cases | `OpenHydroQual/issues.md` ISSUE 1: the interpreter accepts negative storage in a converged step; the generated limiter mirrors the policy but Newton paths differ, so drainage-terminus blocks can diverge ~2%. Decide per model whether that matters for the likelihood (Wetland stages/flows are far from that regime). | both |
 
 ---
@@ -161,6 +161,75 @@ kernel numerically and the copy overhead is what is left on the profile.
   Verified: exe runs; static and shared libraries build and export a C ABI.
 
 ### Phase 1 — make the generated model *assimilable* (codegen only)
+**G3 + G9 were already done** (2026-09-14, in `OpenHydroQual/terminal/OHQ-Common/ohq_kernel.h`,
+commit `163a99f`): `ohq::KernelSystem` derives from `System` and *shadows*
+`Solve()`, so instantiating `CGA<KernelSystem>` / `CMCMC<KernelSystem>` swaps
+only the solve -- template dispatch is static and nothing in the library
+changes. It pushes the parameter values into the kernel, steps it under the
+model's `maximum_simulation_time` budget, calls `uniformize_observations` (=
+`System::FinalizeOutputs`) and copies the kernel's series into
+`observation(i)->SetModeledTimeSeries()`, after which `GetObjectiveFunctionValue()`
+scores exactly what it would have after an interpreter solve -- **G3**, with no
+misfit code reimplemented. **G9** falls out of the same design: `ApplyParameters()`
+runs as usual, so a parameter bound to an observation's `error_standard_deviation`
+reaches the interpreter-side `Observation`, and pushing it to the kernel as well
+is harmless because the kernel stores a value it never reads. Wired up in
+`OHQ-GA`/`OHQ-MCMC` behind `--kernel <lib.so>`.
+
+Since 2026-09-14 that host also runs the **parameter self-test** at startup
+(issues.md ISSUE 17 tasks C3/C4): names and counts matching is not enough, so
+`VerifyKernelMatches` perturbs every kernel-owned parameter and refuses to
+calibrate against one the kernel ignores.
+
+**G8 done 2026-09-14.** All 15 deployment models generate; Bioretention,
+Reservoir, StormwaterPond, JM, R_simple and R_LF match the interpreter to
+5e-16..1e-3 on final storages (61-1082x faster), and the three large ones
+(R 532 blocks, HQ 391, VN 450) compile. Fixed on the way: a bare quantity a link
+does not own was emitted as an undeclared symbol (HQ/VN `pressure_head`) where
+the interpreter scores it 0; a dangling capture in the resolver; and a parity
+harness that passed runs which never advanced. Found two broken deployment
+models -- `Wetland_BSh_AM.ohq` loads 7 of 13 links (duplicate template blocks,
+the second `loadtemplate` resets and omits groundwater.json) and `HQ.ohq` has two
+estimated parameters bound to nothing. Details in `OpenHydroQual/issues.md`
+ISSUE 21.
+
+**Kernel ABI done 2026-09-14.** `OpenHydroQual/codegen/tools/ohq_kernel.h`:
+the 40 fixed `ohq_kernel_*` entry points every generated library exports, plus
+an `ohq::Kernel` dlopen loader with an ABI-version guard, so ONE host binary can
+drive any generated model chosen at run time. The alias ABI was extended to the
+full capability set (it previously lacked G4 forcing injection, G5 state
+in/out, and state/mass readback, which the twin needs). `Kernel::self_test()`
+perturbs every advertised parameter and verifies the kernel responds — the
+cheap startup check ISSUE 17 called for (tasks C3/C4). Test:
+`codegen/tests/kernel_abi_test.cpp`, run against a built `.so`; validated on
+Wetland and the 8-column model.
+
+**Progress 2026-09-14:** **G6 + G7 done.**
+G6 — `solutionFailed()` / `simulationDuration()` / `stepCount()` / `resetStatus()`
+on the kernel and in both the C API and the `ohq_kernel_*` alias ABI; `step()`
+latches the failure flag so `stepTo()` drivers see it, `runTo()` accumulates wall
+time, and `initialize()` resets both (a new GA/MCMC sample).
+G7 — turned out to be a **correctness** problem, not a cost one: the solvers held
+`Model&` and the dt clamp held pointers into the model's own series, so a copied
+kernel solved the ORIGINAL's parameters/forcing and the class was not even
+copy-assignable (`chains[k] = base` did not compile). Fixed with a rebindable
+`Model*` + a generated `bindSelf()` that `step()` calls if it detects it has been
+copied. Copy-then-perturb is now bit-identical to a fresh kernel. Measured copy
+cost is 121 us against a 0.25-2 s solve, so sharing the forcing is not worth it
+(`OpenHydroQual/issues.md` ISSUE 19).
+
+**Progress 2026-09-13:** G1 + G2 done and gated (`codegen/tests/run_parity_obs.sh`:
+all parameters perturbed, both sides driven MCMC-style; on the 60-day Wetland
+model with dt capped every observation agrees to ≤ 3e-3 rms, final storages
+7e-5). Found on the way: the interpreter's dt clamp follows precipitation only,
+so it samples hourly ET twice a day on dry days (`OpenHydroQual/issues.md`
+ISSUE 8) — the kernel clamps on all forcing series instead.
+**G4 + G5 done** (`codegen/tests/kernel_api_test.cpp`): `setSeries` /
+`setPrecipitation(object, quantity, …)` by name — the same bins injected
+through the API reproduce the baked trajectory bit-for-bit; `exportState` /
+`importState(t, storage, mass, limited, limitFactor)` — values only — restart
+within 1.6e-12 of a straight run. Both also in the C API. Remaining: G6, G7,
+kernel ABI, then the `System::Solve` hook (Phase 2).
 Deliverables: G1 parameters-as-inputs, G2 observation emission, G4 series
 setters, G5 state import/export, G6 status, G7 copyable, `ohq_kernel_api.h` v1
 implemented by the exported library.

@@ -271,3 +271,7 @@ viewer/build/WebAssembly_Qt_6_8_2_multi_threaded-Release/.qtc_clangd/
 viewer/build/WebAssembly_Qt_6_8_2_multi_threaded-Release/
 
 *.zip
+
+deployments/R_truth/model/observedoutput.txt
+
+deployments/R_truth/model/output.txt
