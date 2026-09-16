@@ -618,7 +618,6 @@ bool DTAssimilation::injectCalibrationWeather(System &sys,
                                               double tStart, double tEnd,
                                               QString &errorMessage)
 {
-    Q_UNUSED(errorMessage);
     const QDateTime windowStart = QDateTime::fromMSecsSinceEpoch(
         static_cast<qint64>((tStart - 25569.0) * 86400000.0), Qt::UTC);
     const QDateTime windowEnd = QDateTime::fromMSecsSinceEpoch(
@@ -631,30 +630,83 @@ bool DTAssimilation::injectCalibrationWeather(System &sys,
     CPrecipitation precip = DTWeather::fetchPrecipitation(
         m_config.weatherSource, m_config.latitude, m_config.longitude,
         windowStart, windowEnd);
+
+    // A silently-empty fetch is NOT survivable: the model would solve the
+    // whole window with no rain and drain to empty, which is indistinguishable
+    // downstream from a genuine dry period. Fail loudly and let the caller
+    // degrade (the spin-up falls back to the full-record window).
+    if (precip.n == 0)
+    {
+        errorMessage = QString("weather injection: precipitation fetch returned "
+                               "0 bins for %1 → %2 (%3 d) from '%4' at "
+                               "(%5, %6) — refusing to solve an unforced window")
+                           .arg(windowStart.toString(Qt::ISODate),
+                                windowEnd.toString(Qt::ISODate))
+                           .arg(tEnd - tStart, 0, 'f', 1)
+                           .arg(QString::fromStdString(m_config.weatherSource))
+                           .arg(m_config.latitude).arg(m_config.longitude);
+        std::cerr << "[Assim] ERROR: " << errorMessage.toStdString() << "\n";
+        DTDebugLog::instance().log(DTDebugLog::Category::Assim, errorMessage);
+        DTDebugLog::instance().flush();
+        return false;
+    }
     DTWeather::injectPrecipitation(&sys, precip);
 
     const std::string etSource = "Evapotranspiration_Penman (Soil)";
+    QStringList emptyVars;
 
     const auto temp = DTWeather::fetchWeatherVariable(
         m_config.weatherSource, "temperature_2m",
         m_config.latitude, m_config.longitude, windowStart, windowEnd);
+    if (temp.size() == 0) emptyVars << "Temperature";
     DTWeather::injectWeather(&sys, etSource, "Temperature", temp);
 
     auto rh = DTWeather::fetchWeatherVariable(
         m_config.weatherSource, "relative_humidity_2m",
         m_config.latitude, m_config.longitude, windowStart, windowEnd);
+    if (rh.size() == 0) emptyVars << "R_h";
     rh = rh / 100.0;
     DTWeather::injectWeather(&sys, etSource, "R_h", rh);
 
     const auto wind = DTWeather::fetchWeatherVariable(
         m_config.weatherSource, "windspeed_10m",
         m_config.latitude, m_config.longitude, windowStart, windowEnd);
+    if (wind.size() == 0) emptyVars << "wind_speed";
     DTWeather::injectWeather(&sys, etSource, "wind_speed", wind);
 
     const auto rad = DTWeather::fetchWeatherVariable(
         m_config.weatherSource, "shortwave_radiation",
         m_config.latitude, m_config.longitude, windowStart, windowEnd);
+    if (rad.size() == 0) emptyVars << "solar_radiation";
     DTWeather::injectWeather(&sys, etSource, "solar_radiation", rad);
+
+    // Report what actually landed, so a partial fetch is visible in the log
+    // rather than inferred later from a wrong trajectory.
+    const QString summary =
+        QString("weather injected over %1 → %2 (%3 d): precip %4 bins, "
+                "T %5, R_h %6, wind %7, rad %8")
+            .arg(windowStart.toString(Qt::ISODate),
+                 windowEnd.toString(Qt::ISODate))
+            .arg(tEnd - tStart, 0, 'f', 1)
+            .arg(precip.n)
+            .arg(temp.size()).arg(rh.size()).arg(wind.size()).arg(rad.size());
+    std::cout << "[Assim] " << summary.toStdString() << "\n";
+    DTDebugLog::instance().log(DTDebugLog::Category::Assim, summary);
+
+    // ET forcings missing is not fatal (a deployment may have no Penman
+    // source at all), but it must never pass unnoticed: without them the
+    // Penman rate collapses and the model under-evaporates.
+    if (!emptyVars.isEmpty())
+    {
+        const QString warn =
+            QString("weather injection: %1 returned 0 samples for the same "
+                    "window in which precipitation returned %2 bins — ET "
+                    "forcing is incomplete")
+                .arg(emptyVars.join(", ")).arg(precip.n);
+        std::cerr << "[Assim] WARNING: " << warn.toStdString() << "\n";
+        DTDebugLog::instance().log(DTDebugLog::Category::Assim, warn);
+    }
+    DTDebugLog::instance().flush();
 
     return true;
 }
@@ -743,12 +795,54 @@ bool DTAssimilation::buildSpinupSnapshot(double t0, double tStart,
     spin.ApplyParameters();
 
     // 4. Window [t0, tStart] + weather forcing over it.
+    // The window MUST be written into the "General Settings" object first.
+    // SetSystemSettings() re-pushes every Settings quantity back into the
+    // System properties, so a bare SetProp() before it is silently reverted
+    // to the script's own window -- which for this model is a 2009 window,
+    // leaving the injected (2020) forcing entirely outside the solve range
+    // and draining the model to empty. Same pattern as prepareCalibrationSystem.
+    Object *spinSettings = spin.object("General Settings");
+    if (!spinSettings)
+    {
+        errorMessage = "spin-up: no 'General Settings' object in the script model";
+        return false;
+    }
+    spinSettings->Variable("simulation_start_time")->SetProperty(std::to_string(t0));
+    spinSettings->Variable("simulation_end_time")->SetProperty(std::to_string(tStart));
     spin.SetProp("simulation_start_time", t0);
     spin.SetProp("simulation_end_time",   tStart);
     spin.SetSystemSettings();
+
+    // Verify the override survived SetSystemSettings() rather than trusting it.
+    try {
+        const double gotStart = std::stod(
+            spinSettings->Variable("simulation_start_time")->GetProperty());
+        const double gotEnd = std::stod(
+            spinSettings->Variable("simulation_end_time")->GetProperty());
+        if (std::abs(gotStart - t0) > 1e-6 || std::abs(gotEnd - tStart) > 1e-6)
+        {
+            errorMessage = QString("spin-up: simulation window override did not "
+                                   "stick (wanted %1 → %2, got %3 → %4)")
+                               .arg(t0).arg(tStart).arg(gotStart).arg(gotEnd);
+            std::cerr << "[Assim] ERROR: " << errorMessage.toStdString() << "\n";
+            return false;
+        }
+        std::cout << "[Assim] spin-up window: " << gotStart << " → " << gotEnd
+                  << " (" << (gotEnd - gotStart) << " d)\n";
+    } catch (...) {
+        errorMessage = "spin-up: simulation window is not numeric after override";
+        return false;
+    }
     spin.SetSilent(true);
     QString wErr;
-    injectCalibrationWeather(spin, t0, tStart, wErr);
+    if (!injectCalibrationWeather(spin, t0, tStart, wErr))
+    {
+        // Solving [t0, tStart] unforced produces a drained IC that looks like
+        // a legitimate state to everything downstream. Refuse; the caller
+        // degrades to the full-record window, which needs no spin-up.
+        errorMessage = "spin-up: " + wErr;
+        return false;
+    }
 
     // 5. Solve and capture the end state (calculatevalue=true) at tStart.
     if (!spin.Solve())

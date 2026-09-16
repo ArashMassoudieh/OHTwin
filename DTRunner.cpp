@@ -599,19 +599,34 @@ bool DTRunner::runOnce()
 
 
     // Determine the snapshot to load for this cycle. A calibration that
-    // completed since the previous cycle takes precedence over the
-    // latest forward snapshot, since its parameters are more current.
-    QString latestSnapshot;
+    // completed since the previous cycle contributes its PARAMETERS, which
+    // are more current; the model STATE always comes from the latest forward
+    // snapshot. The calibrated snapshot is written unsolved by
+    // DTAssimilation (it solves a copy for the reanalysis), so its block
+    // storages are not the end-of-window state -- adopting them wholesale
+    // restarted the model from whatever IC the calibration happened to be
+    // built on, which for a rolling window is the spin-up IC.
+    QString latestSnapshot;      // where the STATE comes from
+    QString calibratedParamSrc;  // where the PARAMETERS come from (may be empty)
     const QString cycleStamp =
         QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
 
     if (!m_pendingCalibratedSnapshot.isEmpty() &&
         QFileInfo::exists(m_pendingCalibratedSnapshot))
     {
-        latestSnapshot = m_pendingCalibratedSnapshot;
+        calibratedParamSrc = m_pendingCalibratedSnapshot;
+        latestSnapshot     = findLatestStateSnapshot();
+        if (latestSnapshot.isEmpty())
+        {
+            // No forward state yet (calibration finished before the first
+            // forward snapshot): fall back to the calibrated snapshot whole.
+            latestSnapshot     = m_pendingCalibratedSnapshot;
+            calibratedParamSrc.clear();
+        }
         std::cout << "[Runner] [" << cycleStamp.toStdString() << "] "
-                  << "CONSUMING calibrated snapshot: "
-                  << m_pendingCalibratedSnapshot.toStdString() << "\n";
+                  << "CONSUMING calibrated snapshot (parameters only): "
+                  << m_pendingCalibratedSnapshot.toStdString() << "\n"
+                  << "[Runner]   state from: " << latestSnapshot.toStdString() << "\n";
 
         // DIAG: read parameter values from the calibrated snapshot so we can
         // confirm the calibrated values are flowing into the forward cycle.
@@ -651,6 +666,36 @@ bool DTRunner::runOnce()
             std::cerr << "[Runner] Failed to read previous state: "
                       << latestSnapshot.toStdString() << "\n";
             return false;
+        }
+
+        // Splice the calibrated parameter set onto the forward state. The
+        // forward Solve() runs with applyparameters=true, so ApplyParameters()
+        // propagates these values into the bound block/link quantities; we do
+        // not copy the calibrated snapshot's derived block values.
+        if (!calibratedParamSrc.isEmpty())
+        {
+            const QJsonObject calib = readJson(calibratedParamSrc);
+            if (calib.isEmpty())
+            {
+                std::cerr << "[Runner] Failed to read calibrated snapshot: "
+                          << calibratedParamSrc.toStdString()
+                          << " — continuing with forward parameters\n";
+            }
+            else
+            {
+                int copied = 0;
+                for (const QString &key : {QStringLiteral("Parameters"),
+                                           QStringLiteral("Set As Parameters")})
+                {
+                    if (calib.contains(key))
+                    {
+                        prevState[key] = calib[key];
+                        ++copied;
+                    }
+                }
+                std::cout << "[Runner]   merged " << copied
+                          << " calibrated parameter block(s) onto forward state\n";
+            }
         }
 
         // We will re-patch the simulation window inside runStage() per stage,

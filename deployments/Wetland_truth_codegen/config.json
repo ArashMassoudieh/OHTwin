@@ -1,9 +1,9 @@
 {
     "deployment": {
-        "name": "Wetland_truth",
+        "name": "Wetland_truth_codegen",
         "model_file": "model/Wetland.ohq",
         "viz_file": "viz_wetland.json",
-        "port": 8088
+        "port": 8090
     },
     "runtime": {
         "weather_source": "openmeteo_historical",
@@ -13,7 +13,7 @@
         "forecast_horizon": "",
         "start_datetime": "2020-01-03T00:00:00",
         "stop_datetime": "2022-01-03T00:00:00",
-        "time_acceleration": 100,
+        "time_acceleration": 200,
         "state_variables": [],
         "keep_debug_outputs": false
     },
