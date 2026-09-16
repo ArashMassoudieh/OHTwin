@@ -1,0 +1,53 @@
+# Wetland TRUTH codegen twin — outputs + WASM viewer
+server {
+    listen 8090;
+    server_name localhost;
+
+    add_header Access-Control-Allow-Origin  "*" always;
+    add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
+    add_header Access-Control-Allow-Headers "Range, Content-Type" always;
+
+    gzip on;
+    gzip_types application/wasm application/javascript text/csv application/json image/svg+xml;
+    gzip_min_length 1024;
+
+    location /outputs/ {
+        alias /home/arash/Projects/OpenHydroTwin/deployments/Wetland_truth_codegen/outputs/;
+        autoindex on;
+        types { text/csv csv; image/svg+xml svg; application/json json; text/plain txt; }
+        default_type text/plain;
+    }
+
+    location /viewer/ {
+        alias /home/arash/Projects/OpenHydroTwin/viewer_pages/wetland_truth_codegen/;
+        index OHTwinViewer.html;
+        autoindex on;
+    }
+}
+
+# Wetland ASSIMILATION codegen twin — outputs + WASM viewer
+server {
+    listen 8186;
+    server_name localhost;
+
+    add_header Access-Control-Allow-Origin  "*" always;
+    add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
+    add_header Access-Control-Allow-Headers "Range, Content-Type" always;
+
+    gzip on;
+    gzip_types application/wasm application/javascript text/csv application/json image/svg+xml;
+    gzip_min_length 1024;
+
+    location /outputs/ {
+        alias /home/arash/Projects/OpenHydroTwin/deployments/Wetland_assimilation_codegen/outputs/;
+        autoindex on;
+        types { text/csv csv; image/svg+xml svg; application/json json; text/plain txt; }
+        default_type text/plain;
+    }
+
+    location /viewer/ {
+        alias /home/arash/Projects/OpenHydroTwin/viewer_pages/wetland_assimilation_codegen/;
+        index OHTwinViewer.html;
+        autoindex on;
+    }
+}

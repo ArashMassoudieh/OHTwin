@@ -1,9 +1,9 @@
 {
     "deployment": {
-        "name": "Wetland_assimilation_MCMC",
+        "name": "Wetland_assimilation_codegen",
         "model_file": "model/Wetland.ohq",
         "viz_file": "viz_wetland.json",
-        "port": 8184
+        "port": 8186
     },
     "runtime": {
         "weather_source": "openmeteo_historical",
@@ -13,7 +13,7 @@
         "forecast_horizon": "6day",
         "start_datetime": "2020-01-03T00:00:00",
         "stop_datetime": "2022-01-03T00:00:00",
-        "time_acceleration": 100,
+        "time_acceleration": 200,
         "advance_to_observations": true,
         "state_variables": [],
         "keep_debug_outputs": true
@@ -46,8 +46,8 @@
         "truncate": true
     },
     "assimilation": {
-        "truth_csv_url": "http://localhost:8088/outputs/selected_output.csv",
-        "truth_meta_url": "http://localhost:8088/outputs/selected_output_meta.json",
+        "truth_csv_url": "http://localhost:8090/outputs/selected_output.csv",
+        "truth_meta_url": "http://localhost:8090/outputs/selected_output_meta.json",
         "posterior_snapshot_path": "outputs/calibration/posterior_latest.json",
         "poll_interval": "3day",
         "method": "MCMC",
