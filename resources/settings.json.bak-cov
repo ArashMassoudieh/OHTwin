@@ -31,8 +31,8 @@
   "nr_tolerance": {
    "type": "value",
    "default": "0.001",
-   "description": "Newton-Raphson convergence tolerance (relative)",
-   "helptext": "Convergence criterion for the Newton iteration at each time step. It is a RELATIVE measure, not an absolute residual: the iteration stops once the residual has fallen to this fraction of its value at the start of the step, so 0.001 means the residual is reduced by three orders of magnitude and no further. Two other conditions also end the iteration -- an absolute residual floor of 1e-12, and an update that has become negligible against the solution norm. Because the criterion is relative and per step, the error left behind accumulates over a long run: on a model whose outputs are compared against measurements of similar magnitude, the default can leave a numerical error that is an appreciable fraction of the model-measurement residual, and it is worth tightening until the results stop changing. A smaller value does not necessarily cost time. A better converged step is a more stable one, so the solver can often take larger steps afterwards and finish sooner; measure rather than assume.",
+   "description": "Newton-Raphson Tolerance",
+   "helptext": "Tolerance for Newton-Raphson convergence. A smaller value results in more precise but potentially slower convergence.",
    "ask_user": "true",
    "delegate": "ValueBox",
    "code": "nr_tolerance"
@@ -108,15 +108,6 @@
    "ask_user": "true",
    "delegate": "ValueBox",
    "code": "maximum_number_of_matrix_inverstions"
-  },
-  "make_timeseries_uniform": {
-   "type": "string",
-   "default": "Yes",
-   "description": "Make time series uniform",
-   "helptext": "Resamples every time series onto a uniform grid whose spacing is the initial time step, so lookups index by arithmetic instead of scanning. Leave on unless a model carries long or finely-resolved time series: the number of points created is the record length divided by the initial time step, so a small initial time step can expand a short file into millions of points and the run will appear to hang before the first step. The resampling also smears steep edges, which adds a little volume. Set to No to use each series exactly as supplied.",
-   "ask_user": "true",
-   "delegate": "ComboBox, items: Yes, No",
-   "code": "make_timeseries_uniform"
   },
   "write_solution_details": {
    "type": "string",
@@ -400,116 +391,6 @@
    "type": "string",
    "delegate": "Browser_Save",
    "code": "outputfile"
-  },
-  "continue_based_on_filename": {
-   "description": "Continue optimization using pre-created GA output file",
-   "helptext": "Resumes a previous optimization from the last complete generation in its GA output file, instead of starting from a random population. The parameters recorded in the file must match the model's parameters exactly - same names, same order - or the run is refused. New generations are appended to the output file. Leave empty to start a new optimization.",
-   "ask_user": "true",
-   "type": "string",
-   "delegate": "Browser",
-   "code": "continue_based_on_filename"
-  }
- },
- "LM": {
-  "type": "setting",
-  "typecategory": "Settings",
-  "name": {
-   "description": "Name",
-   "setvalue": "LM",
-   "type": "string",
-   "ask_user": "false",
-   "delegate": "String"
-  },
-  "description": "Levenberg-Marquardt Parameters",
-  "max_iterations": {
-   "default": "50",
-   "description": "Maximum number of iterations",
-   "helptext": "How many Gauss-Newton steps are attempted at most. Each step costs roughly one model run per calibrated parameter, so this is the main control on how long the calibration takes. A well-behaved problem usually converges well inside 50 and stops on its own.",
-   "ask_user": "true",
-   "type": "value",
-   "delegate": "ValueBox",
-   "code": "max_iterations"
-  },
-  "lambda0": {
-   "default": "0.01",
-   "description": "Initial damping (lambda)",
-   "helptext": "How cautious the first step is. Small values take the full Gauss-Newton step, which converges fastest when the starting point is already close; large values take short downhill steps, which is safer from a poor starting point. The damping adapts automatically after the first step, so this mostly affects the opening moves.",
-   "ask_user": "true",
-   "type": "value",
-   "delegate": "ValueBox",
-   "code": "lambda0"
-  },
-  "fd_step": {
-   "default": "0.001",
-   "description": "Finite-difference step (fraction of range)",
-   "helptext": "How far each parameter is nudged to measure its effect on the fit, as a fraction of that parameter's range. The model is solved with an adaptive time step, so a nudge smaller than the solver's own error measures numerical noise instead of a gradient. Increase this if the calibration stalls immediately; decrease it only if the parameters are strongly nonlinear.",
-   "ask_user": "true",
-   "type": "value",
-   "delegate": "ValueBox",
-   "code": "fd_step"
-  },
-  "central_differences": {
-   "default": "No",
-   "description": "Use central differences",
-   "helptext": "Nudges each parameter both up and down instead of only up. Twice as many model runs per iteration, in exchange for a more accurate gradient. Worth turning on when the calibration converges to a slightly different answer each time it is run.",
-   "ask_user": "true",
-   "type": "string",
-   "delegate": "ComboBox;items:No,Yes",
-   "code": "central_differences"
-  },
-  "profile_sigma": {
-   "default": "Yes",
-   "description": "Estimate error standard deviations analytically",
-   "helptext": "When an observation's error standard deviation is itself being calibrated, set it directly to the value that best fits the residuals at every iteration instead of searching for it. This is exact, costs nothing, and removes a parameter from the search. Turn it off only to compare against the genetic algorithm's treatment.",
-   "ask_user": "true",
-   "type": "string",
-   "delegate": "ComboBox;items:Yes,No",
-   "code": "profile_sigma"
-  },
-  "lm_numthreads": {
-   "default": "8",
-   "description": "Number of threads to be used",
-   "helptext": "How many perturbed models are solved at once while measuring the gradient. Nothing is gained from more threads than calibrated parameters, or than the machine has cores.",
-   "ask_user": "true",
-   "type": "value",
-   "delegate": "ValueBox",
-   "code": "lm_numthreads"
-  },
-  "tol_objective": {
-   "default": "1e-8",
-   "description": "Convergence tolerance on the fit",
-   "helptext": "The run stops when an iteration improves the fit by less than this fraction. Below the resolution the finite-difference gradient can see, further iterations only churn.",
-   "ask_user": "true",
-   "type": "value",
-   "delegate": "ValueBox",
-   "code": "tol_objective"
-  },
-  "max_rejections": {
-   "default": "10",
-   "description": "Maximum retries per iteration",
-   "helptext": "How many times a failed step is retried with heavier damping before the run concludes it has reached a minimum. Each retry is a full model run, so a large value mostly buys waiting.",
-   "ask_user": "true",
-   "type": "value",
-   "delegate": "ValueBox",
-   "code": "max_rejections"
-  },
-  "lm_outputfile": {
-   "default": "LM_output.txt",
-   "description": "LM Output File Name",
-   "helptext": "Records every iteration with its fit, damping and parameter values: the file to open to see whether and how the calibration converged.",
-   "ask_user": "true",
-   "type": "string",
-   "delegate": "Browser_Save",
-   "code": "lm_outputfile"
-  },
-  "covariancefile": {
-   "default": "LM_covariance.txt",
-   "description": "Parameter Covariance File Name",
-   "helptext": "Receives the standard error and 95% interval of every calibrated parameter and the correlation matrix between them, computed from the curvature of the likelihood at the solution. A pair of parameters correlated near 1 or -1 cannot be told apart by the data and one of them is better fixed.",
-   "ask_user": "true",
-   "type": "string",
-   "delegate": "Browser_Save",
-   "code": "covariancefile"
   }
  },
  "MCMC": {
@@ -650,48 +531,6 @@
    "code": "purturbation_change_scale",
    "criteria": "purturbation_change_scale<1",
    "warningmessage": "Purturbation change factor must be smaller than 1"
-  },
-  "covariance_proposal": {
-   "default": "Yes",
-   "type": "string",
-   "description": "Covariance-adapted proposal",
-   "helptext": "Propose correlated steps drawn from the empirical covariance of the samples so far, instead of perturbing each parameter independently. Use this when parameters trade off against one another -- a rate and a capacity that reproduce the same curve, for example. A diagonal proposal cannot move along such a ridge and the chains drift apart instead of mixing.",
-   "ask_user": "true",
-   "delegate": "ComboBox, items: Yes, No",
-   "code": "covariance_proposal"
-  },
-  "covariance_update_interval": {
-   "default": "1000",
-   "description": "Covariance refresh interval",
-   "helptext": "Samples between recomputing the proposal covariance. Only used when the covariance-adapted proposal is on.",
-   "ask_user": "true",
-   "type": "value",
-   "delegate": "ValueBox",
-   "code": "covariance_update_interval",
-   "criteria": "covariance_update_interval>0",
-   "warningmessage": "Covariance refresh interval must be greater than zero"
-  },
-  "covariance_min_samples": {
-   "default": "500",
-   "description": "Samples before first covariance",
-   "helptext": "How many post-burn-in samples to accumulate before the first covariance is formed. Until then the diagonal proposal is used.",
-   "ask_user": "true",
-   "type": "value",
-   "delegate": "ValueBox",
-   "code": "covariance_min_samples",
-   "criteria": "covariance_min_samples>0",
-   "warningmessage": "Must be greater than zero"
-  },
-  "covariance_scale": {
-   "default": "2.38",
-   "description": "Covariance proposal scale",
-   "helptext": "Step size multiplier, divided by sqrt(number of parameters). 2.38 is the optimal value for a Gaussian target (Roberts & Rosenthal 2001) and rarely needs changing.",
-   "ask_user": "true",
-   "type": "value",
-   "delegate": "ValueBox",
-   "code": "covariance_scale",
-   "criteria": "covariance_scale>0",
-   "warningmessage": "Covariance proposal scale must be greater than zero"
   },
   "samples_filename": {
    "default": "mcmc.txt",

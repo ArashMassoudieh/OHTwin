@@ -18,7 +18,7 @@
       "type": "balance",
       "massbalance": "true",
       "flow": "flow",
-      "inflow": "Precipitation,Evapotranspiration,inflow",
+      "inflow": "Precipitation,Evapotranspiration",
       "ask_user": "true",
       "unit": "m~^3;ft~^3",
       "delegate": "UnitBox",
@@ -27,15 +27,6 @@
       "criteria": "Storage>-0.0000001",
       "warningmessage": "Storage can not be a negaive number!",
       "helptext": "Initial Storage;Storage"
-    },
-    "inflow": {
-      "type": "timeseries",
-      "includeinoutput": "true",
-      "applylimit": "true",
-      "helptext": "The time series containing the inflow rate into the pond",
-      "description": "Inflow rate time series",
-      "ask_user": "true",
-      "delegate": "Browser"
     },
     "alpha": {
       "type": "value",
@@ -81,15 +72,6 @@
       "delegate": "ComboBox;Sources",
       "helptext": "Evapotranspiration"
     },
-    "inflow": {
-      "type": "timeseries",
-      "includeinoutput": "true",
-      "description": "Inflow",
-      "ask_user": "true",
-      "delegate": "Browser",
-      "unit": "m^3/day;m^3/s;ft^3/s",
-      "helptext": "User-supplied inflow time series to the pond. This could represent runoff, pipe inflow, or any other external water source."
-    },
     "bottom_elevation": {
       "type": "value",
       "description": "Bottom elevation of pond",
@@ -112,13 +94,6 @@
       "description": "Surface area",
       "ask_user": "false",
       "includeinoutput": "true"
-    },
-    "volume": {
-      "type": "expression",
-      "expression": "1",
-      "description": "Nominal volume (placeholder for reaction normalisation)",
-      "ask_user": "false",
-      "includeinoutput": "false"
     },
     "helptext": "Stormwater pond"
   },
@@ -178,24 +153,7 @@
       "includeinoutput": "true",
       "applylimit": "true"
     },
-    "helptext": "V-notch weir based on a power-law rating curve",
-    "length": {
-      "type": "value",
-      "description": "Length",
-      "default": "1",
-      "includeinoutput": "false",
-      "ask_user": "false",
-      "helptext": "Distance used only for diffusive/dispersive constituent transport across this link; does not affect flow."
-    },
-    "area": {
-      "type": "value",
-      "description": "Area",
-      "default": "0",
-      "includeinoutput": "false",
-      "ask_user": "false",
-      "unit": "m^2;ft^2",
-      "helptext": "Cross-sectional area used only for diffusive constituent transport across this link; does not affect flow."
-    }
+    "helptext": "V-notch weir based on a power-law rating curve"
   },
   "drain_pipe": {
     "type": "link",
@@ -253,24 +211,7 @@
       "includeinoutput": "true",
       "applylimit": "true"
     },
-    "helptext": "Drain pipe",
-    "length": {
-      "type": "value",
-      "description": "Length",
-      "default": "1",
-      "includeinoutput": "false",
-      "ask_user": "false",
-      "helptext": "Distance used only for diffusive/dispersive constituent transport across this link; does not affect flow."
-    },
-    "area": {
-      "type": "value",
-      "description": "Area",
-      "default": "0",
-      "includeinoutput": "false",
-      "ask_user": "false",
-      "unit": "m^2;ft^2",
-      "helptext": "Cross-sectional area used only for diffusive constituent transport across this link; does not affect flow."
-    }
+    "helptext": "Drain pipe"
   },
   "wide_channel": {
     "type": "link",

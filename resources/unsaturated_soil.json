@@ -10,7 +10,7 @@
       "type": "balance",
       "massbalance": "true",
       "flow": "flow",
-      "inflow": "Evapotranspiration",
+      "inflow": "Evapotranspiration,inflow",
       "includeinoutput": "true",
       "description": "Storage",
       "ask_user": "false",
@@ -26,6 +26,15 @@
       "delegate": "ComboBox;Sources",
       "helptext": "Evapotranspiration",
       "unit": "m^3/day;ft^3/day;ft^3/s"
+    },
+    "inflow": {
+      "type": "timeseries",
+      "includeinoutput": "true",
+      "description": "Inflow",
+      "ask_user": "true",
+      "delegate": "Browser",
+      "unit": "m^3/day;m^3/s;ft^3/s",
+      "helptext": "User-supplied inflow time series delivered directly to this cell. Use it to feed a column at its surface without a separate ponding block: water arriving faster than the cell can transmit raises theta above theta_sat, and the excess_pressure term then supplies the head that drives it downward, so the cell behaves as its own reservoir."
     },
     "depth": {
       "type": "value",
@@ -206,6 +215,8 @@
       "includeinoutput": "true",
       "delegate": "ValueBox",
       "default": "0.2",
+      "criteria": "theta_res<theta<theta_sat",
+      "warningmessage": "Initial Moisture Content must be between residual and saturated moisture contents",
       "helptext": "Initial Moisture Content; Moisture Content"
     },
     "Se": {
@@ -833,7 +844,15 @@
       "type": "string",
       "default": "20,220,120"
     },
-    "helptext": "Fixed Hydraulic Gradient link"
+    "helptext": "Fixed Hydraulic Gradient link",
+    "length": {
+      "type": "value",
+      "description": "Length",
+      "default": "1",
+      "includeinoutput": "false",
+      "ask_user": "false",
+      "helptext": "Distance used only for diffusive/dispersive constituent transport across this link; does not affect flow."
+    }
   },
   "soil_free_outflow": {
     "type": "link",
@@ -937,7 +956,7 @@
     "icon": {
       "filename": "surface2soil2.png"
     },
-    "description": "Surfacewater to soil connector (surface storage limit)",
+    "description": "Surface water to soil connector with depression storage - infiltrates only while the surface water depth exceeds the source block's depression_storage, so a residual depth is retained and the surface never fully drains",
     "area": {
       "type": "expression",
       "description": "Interface area",
@@ -975,6 +994,6 @@
       "type": "string",
       "default": "0,0,180"
     },
-    "helptext": "Surfacewater to soil connector (surface storage limit)"
+    "helptext": "Connects a surface water block to a soil block. Flow is the Darcy flux driven by the head difference, gated by a smoothed switch on (depth.s - depression_storage.s): infiltration runs at full rate while the surface depth is above the depression storage and shuts off below it, leaving a residual ponded depth. The source block must define depression_storage (e.g. Catchment); use surfacewater_to_soil_link instead if the surface should be allowed to drain completely."
   }
 }
