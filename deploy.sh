@@ -69,6 +69,7 @@ RUNNER_BIN="${RUNNER_BUILD}/bin/${RUNNER_BINARY_NAME}"
 # Where each deployment lives on EC2 (mirrors local layout)
 EC2_ROOT="/home/ubuntu/drywelldt"
 EC2_BIN="${EC2_ROOT}/bin"
+EC2_RESOURCES="$(dirname "${EC2_ROOT}")/resources"
 EC2_LIB="${EC2_ROOT}/lib"
 EC2_DEPLOY_ROOT="${EC2_ROOT}/deployments"
 EC2_WWW="/var/www/drywelldt"
@@ -352,10 +353,10 @@ scp "${SCP_OPTS[@]}" "${BUNDLE_DIR}"/plugins/tls/libqopensslbackend.so \
     "${EC2_USER}@${EC2_HOST}:${EC2_ROOT}/plugins/tls/"
 
 # Resources (OHQ JSON metadata files etc.)
-ssh "${SSH_OPTS[@]}" "mkdir -p ${EC2_BIN}/resources"
+ssh "${SSH_OPTS[@]}" "mkdir -p ${EC2_RESOURCES}"
 scp "${SCP_OPTS[@]}" "${LOCAL_PROJECT}/resources"/*.json \
                      "${LOCAL_PROJECT}/resources"/*.list \
-    "${EC2_USER}@${EC2_HOST}:${EC2_BIN}/resources/"
+    "${EC2_USER}@${EC2_HOST}:${EC2_RESOURCES}/"
 
 # systemd template unit
 scp "${SCP_OPTS[@]}" "${BUNDLE_DIR}/drywelldt@.service" \
