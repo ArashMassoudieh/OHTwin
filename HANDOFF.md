@@ -152,6 +152,9 @@ this section. Archive run 3 the same way when it finishes.
 
 ## Gotchas specific to this work
 
+- `OpenHydroTwin/resources` is a **symlink** to `../OpenHydroQual/resources`
+  (`2194e9c`), so the two repos must stay siblings at runtime, not just at build
+  time. Copy with `cp -a`/`tar`, never plain `cp -r`.
 - **Run every OHQ tool from the model's folder** — `addtemplate` resolves names
   against the process CWD before `resources/` (`OpenHydroQual/issues.md` ISSUE 6).
 - Both twins need `--fresh`; resume anchors sit past `stop_datetime`.

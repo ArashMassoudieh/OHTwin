@@ -17,12 +17,19 @@ observations, drift series — is unchanged.
 
 ## 1. What the i9 needs
 
-Both repos, as **siblings** (`OHTwin.pro` refers to `../OpenHydroQual`):
+Both repos, as **siblings** — this is now required at *runtime*, not just to
+build. As of `2194e9c`, `OpenHydroTwin/resources` is a **symlink** to
+`../OpenHydroQual/resources`, and the twin resolves templates through it:
 
 ```
-<parent>/OpenHydroQual/      # core sources + resources/ templates
-<parent>/OpenHydroTwin/      # the twin + deployments
+<parent>/OpenHydroQual/      # core sources + the real resources/ templates
+<parent>/OpenHydroTwin/      # the twin + deployments; resources -> ../OpenHydroQual/resources
 ```
+
+Check it landed: `ls -l resources` must show the symlink, and
+`ls resources/settings.json` must succeed. If you copy rather than clone, use
+`cp -a` or `tar` — plain `cp -r` dereferences the symlink and silently
+duplicates ~20 k lines of templates.
 
 Build dependencies (Ubuntu/Debian names):
 
