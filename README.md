@@ -22,3 +22,26 @@ state snapshots,
 and browser-based visualization
 
 into a unified digital twin architecture.
+
+## OpenHydroQual resources
+
+Clone `OHTwin` and `OpenHydroQual` as sibling directories. The `resources`
+entry in OHTwin is a relative symlink to `../OpenHydroQual/resources`; the
+build already uses source files from that sibling checkout. For example:
+
+```sh
+git clone https://github.com/ArashMassoudieh/OpenHydroQual.git
+git clone https://github.com/ArashMassoudieh/OHTwin.git
+```
+
+Pull OpenHydroQual to use its latest resource templates locally:
+
+```sh
+git -C ../OpenHydroQual pull
+```
+
+Run this from the OHTwin directory. Check the OpenHydroQual changes before
+deploying: `deploy.sh` and `deploy_jm.sh` copy the current JSON and list
+templates to the server, so deployed copies update on the next deployment.
+The former OHTwin-only `Pond_Plugin.json.bak_depth` is retained in
+`resource_backups/`.
