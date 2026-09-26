@@ -275,3 +275,10 @@ viewer/build/WebAssembly_Qt_6_8_2_multi_threaded-Release/
 deployments/R_truth/model/observedoutput.txt
 
 deployments/R_truth/model/output.txt
+
+# ---- deployment run artefacts: regenerable, and large (a two-year run is
+#      ~100 MB of per-cycle output). Configs, models, drift series and viz
+#      specs ARE tracked; results are archived outside the repo instead.
+deployments/*/outputs/
+deployments/*/state/
+deployments/*/snapshots/

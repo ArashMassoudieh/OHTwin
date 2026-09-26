@@ -1,4 +1,190 @@
-# Session handoff — ensemble collapse diagnosis + anti-collapse work (2026-08-06)
+# Session handoff — Wetland codegen assimilation, runs 1–3 (2026-09-26)
+
+Current work stream. The earlier Bioretention ensemble-collapse handoff is
+preserved below and is still the reference for that experiment.
+
+## Where things stand in one paragraph
+
+Three state-handling bugs that made the wetland drain to empty are **fixed and
+merged** (`657acc0`). Two full two-year runs have completed on this machine and
+are archived; they establish that the assimilation recovers most parameters well
+but that `Evap_Coefficient` is poorly determined and drags `Soil_Hydraulic_
+Conductivity` high with it. **Run 3 is set up to run on the i9** (16 chains / 16
+threads) to settle whether that residual is under-sampling or non-identifiability.
+Everything below is what you need to check it.
+
+## Important: the twin still runs the INTERPRETER
+
+`OHTwin` has **no codegen kernel wiring** — no `solver_backend`, no
+`codegen_library`, no `KernelSystem` anywhere in the sources, and the built
+binary contains zero `ohq_kernel` symbols. The `_codegen` suffix names the
+deployment copy, not the solver. Phase 2 of
+`OpenHydroQual/../OpenHydroTwin/CODEGEN_ROADMAP.md` is unwritten. A kernel would
+cut the 3.6 s forward solve to ~0.04 s, which is the real fix for the sampling
+budget — but it is not in play today.
+
+## The three runs
+
+| | run 1 | run 2 | run 3 (i9) |
+|---|---|---|---|
+| deployments | `Wetland_*_codegen` | `Wetland_*_codegen_mt` | `Wetland_*_codegen_i9` |
+| ports truth / assim | 8090 / 8186 | 8091 / 8187 | **8092 / 8188** |
+| chains | 8 | 8 | **16** |
+| MCMC `number_of_threads` | 1 | 8 | **16** |
+| solver `n_threads` | 8 | 1 | 1 |
+| `mcmc_max_sweeps` | 300 | 300 | **900** |
+| dates | 09-16 → 09-20 | 09-22 → 09-26 | pending |
+
+Model physics is byte-identical across all three — the only model diffs are
+`number_of_chains` and `number_of_threads` (lines 14 and 17 of `Wetland.ohq`).
+`time_acceleration` is 200 throughout, so a cycle's budget is
+`3 × 86400 / 200 − 60 = 1236 s` in every run.
+
+## Results so far
+
+Last-50-cycle means against known truth:
+
+| parameter | truth | run 1 | run 2 |
+|---|---|---|---|
+| CatchmentRunoffCoeff | 0.75 | +3% | **+1%** |
+| PondAlphaMultiplier | 1.0 | +16% | **+1%** |
+| WetlandOutletAlpha | 100000 | +14% | **−2%** |
+| Evap_Coefficient | 1.0 | −98% | −43% |
+| Soil_Hydraulic_Conductivity | 0.001004 | +668% | +276% |
+| Stage_Std / injected 0.005 | | 1.6× | 1.2× |
+| Outflow_Std / injected 20 | | 2.0× | 1.5× |
+
+Sampling: run 1 gave 42 sweeps and 344 evals per cycle, ESS median 10, 18/241
+cycles converged. Run 2 gave **288 sweeps, 2312 evals, ESS 29, 104/244
+converged** — a 6.7× throughput gain at zero wall-clock cost, purely from
+`number_of_threads` 1 → 8.
+
+**The open question.** ET no longer collapses but *wanders*: second-half median
+0.56, range 0.15–1.31, in a run where 43% of cycles certify. Its neighbours pin
+to 1–2%. That asymmetry suggests `Evap_Coefficient` is weakly identified rather
+than under-sampled — it binds to **both** `solar_scale_fact` and
+`wind_scale_fact` on the Penman source, with `Stage_Std` free to absorb the
+residual. The ksat over-estimate tracks it (6.8× → 3.8× median over the second
+half), consistent with the model replacing a missing ET sink with seepage.
+
+Run 3 tests the sampling side. If ET still wanders at ~2× the evaluations, treat
+it as identifiability and the next experiment is splitting the two scale factors
+into separate parameters. Only then does tightening the ET prior become a
+modelling statement rather than a patch.
+
+## Checking run 3 on the i9
+
+Full build/run instructions: `deployments/RUN_i9.md`. Folder layout on the i9 is
+identical to this machine, so the nginx block needs no path edits.
+
+Confirm on the first calibration cycle (~21 min in):
+
+```
+runCycle: cycle=1 chains=16 threads=16
+[Assim] weather injected over ... : precip N bins, T ..., R_h ..., wind ..., rad ...
+```
+
+`threads=1` means the model edit did not take. Any zero count in the weather
+line now aborts the cycle loudly instead of silently solving an unforced window.
+
+Progress at a glance:
+
+```bash
+D=deployments/Wetland_assimilation_codegen_i9
+tail -3 $D/outputs/calibration/parameter_history.csv
+python3 -c "import json;r=[json.loads(l) for l in open('$D/outputs/calibration/posterior_history.jsonl')];print('converged %d/%d'%(sum(1 for d in r if d.get('converged')),len(r)))"
+grep -E "spin-up window|weather injected" $D/outputs/debug.log | tail -3
+```
+
+(`posterior_history.jsonl` is written compact, so a `grep '"converged": true'`
+with a space silently returns 0 — use the python form, or
+`grep -c '"converged":true'`.)
+
+Expect ~3.8 days wall-clock regardless of CPU — the QTimer paces at 432 s per
+simulated day, so a faster box samples more per cycle, it does not finish sooner.
+
+Figures, with every caption computed from the run being plotted:
+
+```bash
+python3 deployments/Plots/analyse_wetland_codegen_run1.py \
+        --suffix _i9 --label "16 chains / 16 threads" \
+        --outdir deployments/Plots/wetland_run3
+```
+
+## What was fixed (merged, `657acc0`)
+
+1. **`buildSpinupSnapshot` solved the wrong window.** `SetProp()` followed by
+   `SetSystemSettings()` — which re-pushes every stored Settings value — silently
+   reverted the override, so the spin-up solved the script's **2009** window
+   (40178.8 → 40542.8) while forcing was injected for **2020**. Every rain
+   interpolation fell outside the series, the spin-up ran 364 unforced days and
+   drained the model to exactly 0. Now writes the window into the
+   `General Settings` object first (as `prepareCalibrationSystem` already did)
+   and verifies it stuck. This only bit from cycle ~20, when the record first
+   exceeds `calibration_window_days` and the rolling branch activates — which is
+   the clue that located it.
+2. **`DTRunner` adopted the calibrated snapshot wholesale.** Its comment says the
+   snapshot is taken for its *parameters*, but the code copied the whole System
+   JSON including block storages — and `DTAssimilation` writes that snapshot
+   deliberately unsolved. State now comes from the latest forward snapshot; only
+   `Parameters` / `Set As Parameters` are merged in (`Solve(true)` applies them).
+3. **Weather injection could not report failure** (`Q_UNUSED(errorMessage)`,
+   returned `true` unconditionally, and the spin-up discarded the result). Now
+   fails on an empty precipitation fetch and logs per-variable sample counts.
+
+Result: **0 of 17,689** output points below 0.01 m over two years, versus 1437 of
+4369 before; `Stage_Std` 29× → 1.6× the injected noise.
+
+## Archives — results live OUTSIDE the repo
+
+`deployments/*/{outputs,state,snapshots}/` are gitignored (a two-year run is
+~100 MB). Completed runs are archived whole:
+
+```
+~/Projects/OHTwin_results_archive/
+  20260920_wetland_codegen_run1.tar.gz        19 MB  + .README.md
+  20260926_wetland_codegen_run2_mt.tar.gz     23 MB
+  wetland_run3_i9_deployments.tar.gz          27 KB  (transfer bundle)
+```
+
+The run-1 README records settings, results and open issues in the same shape as
+this section. Archive run 3 the same way when it finishes.
+
+## Gotchas specific to this work
+
+- **Run every OHQ tool from the model's folder** — `addtemplate` resolves names
+  against the process CWD before `resources/` (`OpenHydroQual/issues.md` ISSUE 6).
+- Both twins need `--fresh`; resume anchors sit past `stop_datetime`.
+- Truth first, then the assimilator, and only a little ahead — the advance has no
+  upper clamp, so a finished truth triggers one enormous catch-up solve.
+- `number_of_threads` (MCMC, spreads chains over cores) and `n_threads` (solver)
+  are different settings. The solver one must be **1**: samples already run in
+  parallel, and `posteriorLocal` forces `SetNumThreads(1)` per sample anyway.
+  Threads beyond the chain count do nothing.
+- `MCMC/number_of_threads` defaults to **1** in `resources/settings.json`. That
+  single line cost run 1 a 6.7× throughput factor.
+- nginx sites for the *older* deployments still alias
+  `/home/arash/Projects/DrywellDT/...`, which no longer exists — port 8088
+  returns 404. Only the `wetland_codegen*` blocks are correct.
+- The Qt Creator viewer deploys `viewer/config.json` next to the binary on every
+  build; repoint its URLs when switching runs.
+
+## Key files for this stream
+
+- `DTRunner.cpp` (~line 600, snapshot adoption), `DTAssimilation.cpp`
+  (`buildSpinupSnapshot`, `injectCalibrationWeather`, `prepareCalibrationSystem`)
+- `deployments/RUN_i9.md` — build + run instructions for the i9
+- `deployments/Plots/analyse_wetland_codegen_run1.py` — the four figures,
+  `--suffix` selects the run
+- `deployments/wetland_codegen{,_mt,_i9}.nginx` — server blocks per run
+- `OpenHydroQual/issues.md`, `OpenHydroTwin/CODEGEN_ROADMAP.md`
+
+---
+
+# Earlier handoff — ensemble collapse diagnosis + anti-collapse work (2026-08-06)
+
+*Superseded as the current state by the section above, but still the reference
+for the Bioretention drift experiments and the anti-collapse machinery.*
 
 Supersedes the 2026-07-27 handoff. Binary built and clean: `build-qmake/bin/OHTwin`.
 

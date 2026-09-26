@@ -1,0 +1,1563 @@
+{
+    "canvas": {
+        "width": 860,
+        "height": 410
+    },
+    "components": [
+        {
+            "id": "rain",
+            "label": "Rain",
+            "x": 20,
+            "y": 15,
+            "width": 820,
+            "height": 45,
+            "bind": {
+                "intensity": {
+                    "source": "Rain",
+                    "property": "Intensity"
+                }
+            },
+            "draw": [
+                {
+                    "shape": "ellipse",
+                    "cx": 0.08333333333333333,
+                    "cy": 0.58,
+                    "rx": 0.008,
+                    "ry": 0.22,
+                    "fill": {
+                        "bind": "water_color"
+                    }
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.16666666666666666,
+                    "cy": 0.58,
+                    "rx": 0.008,
+                    "ry": 0.22,
+                    "fill": {
+                        "bind": "water_color"
+                    }
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.25,
+                    "cy": 0.58,
+                    "rx": 0.008,
+                    "ry": 0.22,
+                    "fill": {
+                        "bind": "water_color"
+                    }
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.3333333333333333,
+                    "cy": 0.58,
+                    "rx": 0.008,
+                    "ry": 0.22,
+                    "fill": {
+                        "bind": "water_color"
+                    }
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.4166666666666667,
+                    "cy": 0.58,
+                    "rx": 0.008,
+                    "ry": 0.22,
+                    "fill": {
+                        "bind": "water_color"
+                    }
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.5,
+                    "cy": 0.58,
+                    "rx": 0.008,
+                    "ry": 0.22,
+                    "fill": {
+                        "bind": "water_color"
+                    }
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.5833333333333334,
+                    "cy": 0.58,
+                    "rx": 0.008,
+                    "ry": 0.22,
+                    "fill": {
+                        "bind": "water_color"
+                    }
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.6666666666666666,
+                    "cy": 0.58,
+                    "rx": 0.008,
+                    "ry": 0.22,
+                    "fill": {
+                        "bind": "water_color"
+                    }
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.75,
+                    "cy": 0.58,
+                    "rx": 0.008,
+                    "ry": 0.22,
+                    "fill": {
+                        "bind": "water_color"
+                    }
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.8333333333333334,
+                    "cy": 0.58,
+                    "rx": 0.008,
+                    "ry": 0.22,
+                    "fill": {
+                        "bind": "water_color"
+                    }
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.9166666666666666,
+                    "cy": 0.58,
+                    "rx": 0.008,
+                    "ry": 0.22,
+                    "fill": {
+                        "bind": "water_color"
+                    }
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.22,
+                    "anchor": "middle",
+                    "value": {
+                        "bind": "label"
+                    },
+                    "font_size": 11,
+                    "font_weight": 600,
+                    "fill": "#1E293B"
+                }
+            ]
+        },
+        {
+            "id": "rain_gauge",
+            "block": "Rain Gauge",
+            "label": "Rain Gauge",
+            "x": 730,
+            "y": 80,
+            "width": 90,
+            "height": 55,
+            "draw": [
+                {
+                    "shape": "rect",
+                    "x": 0.35,
+                    "y": 0.15,
+                    "w": 0.3,
+                    "h": 0.7,
+                    "fill": "#DBEAFE",
+                    "stroke": "#2563EB",
+                    "stroke_width": 1.3
+                },
+                {
+                    "shape": "line",
+                    "x1": 0.25,
+                    "y1": 0.15,
+                    "x2": 0.75,
+                    "y2": 0.15,
+                    "stroke": "#2563EB",
+                    "stroke_width": 1.3
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.98,
+                    "anchor": "middle",
+                    "value": {
+                        "bind": "label"
+                    },
+                    "font_size": 8,
+                    "font_weight": 600,
+                    "fill": "#1E293B"
+                }
+            ]
+        },
+        {
+            "id": "catchment",
+            "block": "Contributing Catchment",
+            "label": "Contributing Catchment",
+            "x": 540,
+            "y": 95,
+            "width": 240,
+            "height": 80,
+            "bind": {
+                "depth_value": {
+                    "block": "Contributing Catchment",
+                    "property": "depth"
+                }
+            },
+            "draw": [
+                {
+                    "shape": "polygon",
+                    "points": [
+                        [
+                            0,
+                            1
+                        ],
+                        [
+                            1,
+                            1
+                        ],
+                        [
+                            0.88,
+                            0.38
+                        ],
+                        [
+                            0.08,
+                            0.18
+                        ]
+                    ],
+                    "fill": "#94A3B8",
+                    "stroke": "#475569",
+                    "stroke_width": 1.6
+                },
+                {
+                    "shape": "line",
+                    "x1": 0.08,
+                    "y1": 0.32,
+                    "x2": 0.88,
+                    "y2": 0.52,
+                    "stroke": "#CBD5E1",
+                    "stroke_width": 1.0,
+                    "dash": "4 3"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.76,
+                    "anchor": "middle",
+                    "value": {
+                        "bind": "label"
+                    },
+                    "font_size": 10,
+                    "font_weight": 600,
+                    "fill": "#1E293B"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.94,
+                    "anchor": "middle",
+                    "value": {
+                        "expr": "depth_value",
+                        "format": "d = %.3f m"
+                    },
+                    "font_size": 8,
+                    "fill": "#334155"
+                }
+            ]
+        },
+        {
+            "id": "wetland_cell_1",
+            "block": "Wetland Cell 1",
+            "label": "Wetland Cell 1",
+            "fill_max": 1.2,
+            "x": 420,
+            "y": 205,
+            "width": 170,
+            "height": 105,
+            "bind": {
+                "fill_value": {
+                    "block": "Wetland Cell 1",
+                    "property": "depth"
+                },
+                "storage_value": {
+                    "block": "Wetland Cell 1",
+                    "property": "Storage"
+                }
+            },
+            "thresholds": [
+                {
+                    "below": 0.25,
+                    "color": "#BAE6FD"
+                },
+                {
+                    "below": 0.5,
+                    "color": "#7DD3FC"
+                },
+                {
+                    "below": 0.75,
+                    "color": "#38BDF8"
+                },
+                {
+                    "above": 0.75,
+                    "color": "#0284C7"
+                }
+            ],
+            "draw": [
+                {
+                    "shape": "polygon",
+                    "points": [
+                        [
+                            0,
+                            0.18
+                        ],
+                        [
+                            1,
+                            0.18
+                        ],
+                        [
+                            0.92,
+                            1
+                        ],
+                        [
+                            0.08,
+                            1
+                        ]
+                    ],
+                    "fill": "#8B7355",
+                    "stroke": "#5B4636",
+                    "stroke_width": 1.6
+                },
+                {
+                    "shape": "rect",
+                    "x": 0.08,
+                    "y": {
+                        "expr": "1 - 0.82 * fill_fraction"
+                    },
+                    "w": 0.84,
+                    "h": {
+                        "expr": "0.82 * fill_fraction"
+                    },
+                    "fill": {
+                        "bind": "water_color"
+                    },
+                    "stroke": "none",
+                    "clip": true
+                },
+                {
+                    "shape": "polygon",
+                    "points": [
+                        [
+                            0,
+                            0.18
+                        ],
+                        [
+                            1,
+                            0.18
+                        ],
+                        [
+                            0.92,
+                            1
+                        ],
+                        [
+                            0.08,
+                            1
+                        ]
+                    ],
+                    "fill": "none",
+                    "stroke": "#5B4636",
+                    "stroke_width": 1.6
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.18,
+                    "cy": 0.12,
+                    "rx": 0.012,
+                    "ry": 0.12,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.36,
+                    "cy": 0.1,
+                    "rx": 0.012,
+                    "ry": 0.1,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.55,
+                    "cy": 0.12,
+                    "rx": 0.012,
+                    "ry": 0.12,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.75,
+                    "cy": 0.1,
+                    "rx": 0.012,
+                    "ry": 0.1,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.1,
+                    "anchor": "middle",
+                    "value": {
+                        "bind": "label"
+                    },
+                    "font_size": 10,
+                    "font_weight": 600,
+                    "fill": "#1E293B"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.78,
+                    "anchor": "middle",
+                    "value": {
+                        "expr": "fill_value",
+                        "format": "d = %.2f m"
+                    },
+                    "font_size": 8,
+                    "fill": "#0F172A"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.94,
+                    "anchor": "middle",
+                    "value": {
+                        "expr": "storage_value",
+                        "format": "S = %.1f m\u00b3"
+                    },
+                    "font_size": 8,
+                    "fill": "#0F172A"
+                }
+            ]
+        },
+        {
+            "id": "wetland_cell_2",
+            "block": "Wetland Cell 2",
+            "label": "Wetland Cell 2",
+            "fill_max": 1.2,
+            "x": 235,
+            "y": 265,
+            "width": 155,
+            "height": 90,
+            "bind": {
+                "fill_value": {
+                    "block": "Wetland Cell 2",
+                    "property": "depth"
+                },
+                "storage_value": {
+                    "block": "Wetland Cell 2",
+                    "property": "Storage"
+                }
+            },
+            "thresholds": [
+                {
+                    "below": 0.25,
+                    "color": "#BAE6FD"
+                },
+                {
+                    "below": 0.5,
+                    "color": "#7DD3FC"
+                },
+                {
+                    "below": 0.75,
+                    "color": "#38BDF8"
+                },
+                {
+                    "above": 0.75,
+                    "color": "#0284C7"
+                }
+            ],
+            "draw": [
+                {
+                    "shape": "polygon",
+                    "points": [
+                        [
+                            0,
+                            0.18
+                        ],
+                        [
+                            1,
+                            0.18
+                        ],
+                        [
+                            0.92,
+                            1
+                        ],
+                        [
+                            0.08,
+                            1
+                        ]
+                    ],
+                    "fill": "#8B7355",
+                    "stroke": "#5B4636",
+                    "stroke_width": 1.6
+                },
+                {
+                    "shape": "rect",
+                    "x": 0.08,
+                    "y": {
+                        "expr": "1 - 0.82 * fill_fraction"
+                    },
+                    "w": 0.84,
+                    "h": {
+                        "expr": "0.82 * fill_fraction"
+                    },
+                    "fill": {
+                        "bind": "water_color"
+                    },
+                    "stroke": "none",
+                    "clip": true
+                },
+                {
+                    "shape": "polygon",
+                    "points": [
+                        [
+                            0,
+                            0.18
+                        ],
+                        [
+                            1,
+                            0.18
+                        ],
+                        [
+                            0.92,
+                            1
+                        ],
+                        [
+                            0.08,
+                            1
+                        ]
+                    ],
+                    "fill": "none",
+                    "stroke": "#5B4636",
+                    "stroke_width": 1.6
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.18,
+                    "cy": 0.12,
+                    "rx": 0.012,
+                    "ry": 0.12,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.36,
+                    "cy": 0.1,
+                    "rx": 0.012,
+                    "ry": 0.1,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.55,
+                    "cy": 0.12,
+                    "rx": 0.012,
+                    "ry": 0.12,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.75,
+                    "cy": 0.1,
+                    "rx": 0.012,
+                    "ry": 0.1,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.1,
+                    "anchor": "middle",
+                    "value": {
+                        "bind": "label"
+                    },
+                    "font_size": 10,
+                    "font_weight": 600,
+                    "fill": "#1E293B"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.78,
+                    "anchor": "middle",
+                    "value": {
+                        "expr": "fill_value",
+                        "format": "d = %.2f m"
+                    },
+                    "font_size": 8,
+                    "fill": "#0F172A"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.94,
+                    "anchor": "middle",
+                    "value": {
+                        "expr": "storage_value",
+                        "format": "S = %.1f m\u00b3"
+                    },
+                    "font_size": 8,
+                    "fill": "#0F172A"
+                }
+            ]
+        },
+        {
+            "id": "wetland_cell_3",
+            "block": "Wetland Cell 3",
+            "label": "Wetland Cell 3",
+            "fill_max": 1.2,
+            "x": 55,
+            "y": 265,
+            "width": 150,
+            "height": 85,
+            "bind": {
+                "fill_value": {
+                    "block": "Wetland Cell 3",
+                    "property": "depth"
+                },
+                "storage_value": {
+                    "block": "Wetland Cell 3",
+                    "property": "Storage"
+                }
+            },
+            "thresholds": [
+                {
+                    "below": 0.25,
+                    "color": "#BAE6FD"
+                },
+                {
+                    "below": 0.5,
+                    "color": "#7DD3FC"
+                },
+                {
+                    "below": 0.75,
+                    "color": "#38BDF8"
+                },
+                {
+                    "above": 0.75,
+                    "color": "#0284C7"
+                }
+            ],
+            "draw": [
+                {
+                    "shape": "polygon",
+                    "points": [
+                        [
+                            0,
+                            0.18
+                        ],
+                        [
+                            1,
+                            0.18
+                        ],
+                        [
+                            0.92,
+                            1
+                        ],
+                        [
+                            0.08,
+                            1
+                        ]
+                    ],
+                    "fill": "#8B7355",
+                    "stroke": "#5B4636",
+                    "stroke_width": 1.6
+                },
+                {
+                    "shape": "rect",
+                    "x": 0.08,
+                    "y": {
+                        "expr": "1 - 0.82 * fill_fraction"
+                    },
+                    "w": 0.84,
+                    "h": {
+                        "expr": "0.82 * fill_fraction"
+                    },
+                    "fill": {
+                        "bind": "water_color"
+                    },
+                    "stroke": "none",
+                    "clip": true
+                },
+                {
+                    "shape": "polygon",
+                    "points": [
+                        [
+                            0,
+                            0.18
+                        ],
+                        [
+                            1,
+                            0.18
+                        ],
+                        [
+                            0.92,
+                            1
+                        ],
+                        [
+                            0.08,
+                            1
+                        ]
+                    ],
+                    "fill": "none",
+                    "stroke": "#5B4636",
+                    "stroke_width": 1.6
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.18,
+                    "cy": 0.12,
+                    "rx": 0.012,
+                    "ry": 0.12,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.36,
+                    "cy": 0.1,
+                    "rx": 0.012,
+                    "ry": 0.1,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.55,
+                    "cy": 0.12,
+                    "rx": 0.012,
+                    "ry": 0.12,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.75,
+                    "cy": 0.1,
+                    "rx": 0.012,
+                    "ry": 0.1,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.1,
+                    "anchor": "middle",
+                    "value": {
+                        "bind": "label"
+                    },
+                    "font_size": 10,
+                    "font_weight": 600,
+                    "fill": "#1E293B"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.78,
+                    "anchor": "middle",
+                    "value": {
+                        "expr": "fill_value",
+                        "format": "d = %.2f m"
+                    },
+                    "font_size": 8,
+                    "fill": "#0F172A"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.94,
+                    "anchor": "middle",
+                    "value": {
+                        "expr": "storage_value",
+                        "format": "S = %.1f m\u00b3"
+                    },
+                    "font_size": 8,
+                    "fill": "#0F172A"
+                }
+            ]
+        },
+        {
+            "id": "wetland_cell_4",
+            "block": "Wetland Cell 4",
+            "label": "Wetland Cell 4",
+            "fill_max": 1.2,
+            "x": 60,
+            "y": 125,
+            "width": 145,
+            "height": 80,
+            "bind": {
+                "fill_value": {
+                    "block": "Wetland Cell 4",
+                    "property": "depth"
+                },
+                "storage_value": {
+                    "block": "Wetland Cell 4",
+                    "property": "Storage"
+                }
+            },
+            "thresholds": [
+                {
+                    "below": 0.25,
+                    "color": "#BAE6FD"
+                },
+                {
+                    "below": 0.5,
+                    "color": "#7DD3FC"
+                },
+                {
+                    "below": 0.75,
+                    "color": "#38BDF8"
+                },
+                {
+                    "above": 0.75,
+                    "color": "#0284C7"
+                }
+            ],
+            "draw": [
+                {
+                    "shape": "polygon",
+                    "points": [
+                        [
+                            0,
+                            0.18
+                        ],
+                        [
+                            1,
+                            0.18
+                        ],
+                        [
+                            0.92,
+                            1
+                        ],
+                        [
+                            0.08,
+                            1
+                        ]
+                    ],
+                    "fill": "#8B7355",
+                    "stroke": "#5B4636",
+                    "stroke_width": 1.6
+                },
+                {
+                    "shape": "rect",
+                    "x": 0.08,
+                    "y": {
+                        "expr": "1 - 0.82 * fill_fraction"
+                    },
+                    "w": 0.84,
+                    "h": {
+                        "expr": "0.82 * fill_fraction"
+                    },
+                    "fill": {
+                        "bind": "water_color"
+                    },
+                    "stroke": "none",
+                    "clip": true
+                },
+                {
+                    "shape": "polygon",
+                    "points": [
+                        [
+                            0,
+                            0.18
+                        ],
+                        [
+                            1,
+                            0.18
+                        ],
+                        [
+                            0.92,
+                            1
+                        ],
+                        [
+                            0.08,
+                            1
+                        ]
+                    ],
+                    "fill": "none",
+                    "stroke": "#5B4636",
+                    "stroke_width": 1.6
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.18,
+                    "cy": 0.12,
+                    "rx": 0.012,
+                    "ry": 0.12,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.36,
+                    "cy": 0.1,
+                    "rx": 0.012,
+                    "ry": 0.1,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.55,
+                    "cy": 0.12,
+                    "rx": 0.012,
+                    "ry": 0.12,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.75,
+                    "cy": 0.1,
+                    "rx": 0.012,
+                    "ry": 0.1,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.1,
+                    "anchor": "middle",
+                    "value": {
+                        "bind": "label"
+                    },
+                    "font_size": 10,
+                    "font_weight": 600,
+                    "fill": "#1E293B"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.78,
+                    "anchor": "middle",
+                    "value": {
+                        "expr": "fill_value",
+                        "format": "d = %.2f m"
+                    },
+                    "font_size": 8,
+                    "fill": "#0F172A"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.94,
+                    "anchor": "middle",
+                    "value": {
+                        "expr": "storage_value",
+                        "format": "S = %.1f m\u00b3"
+                    },
+                    "font_size": 8,
+                    "fill": "#0F172A"
+                }
+            ]
+        },
+        {
+            "id": "wetland_cell_5",
+            "block": "Wetland Cell 5",
+            "label": "Wetland Cell 5",
+            "fill_max": 1.2,
+            "x": 250,
+            "y": 115,
+            "width": 150,
+            "height": 85,
+            "bind": {
+                "fill_value": {
+                    "block": "Wetland Cell 5",
+                    "property": "depth"
+                },
+                "storage_value": {
+                    "block": "Wetland Cell 5",
+                    "property": "Storage"
+                }
+            },
+            "thresholds": [
+                {
+                    "below": 0.25,
+                    "color": "#BAE6FD"
+                },
+                {
+                    "below": 0.5,
+                    "color": "#7DD3FC"
+                },
+                {
+                    "below": 0.75,
+                    "color": "#38BDF8"
+                },
+                {
+                    "above": 0.75,
+                    "color": "#0284C7"
+                }
+            ],
+            "draw": [
+                {
+                    "shape": "polygon",
+                    "points": [
+                        [
+                            0,
+                            0.18
+                        ],
+                        [
+                            1,
+                            0.18
+                        ],
+                        [
+                            0.92,
+                            1
+                        ],
+                        [
+                            0.08,
+                            1
+                        ]
+                    ],
+                    "fill": "#8B7355",
+                    "stroke": "#5B4636",
+                    "stroke_width": 1.6
+                },
+                {
+                    "shape": "rect",
+                    "x": 0.08,
+                    "y": {
+                        "expr": "1 - 0.82 * fill_fraction"
+                    },
+                    "w": 0.84,
+                    "h": {
+                        "expr": "0.82 * fill_fraction"
+                    },
+                    "fill": {
+                        "bind": "water_color"
+                    },
+                    "stroke": "none",
+                    "clip": true
+                },
+                {
+                    "shape": "polygon",
+                    "points": [
+                        [
+                            0,
+                            0.18
+                        ],
+                        [
+                            1,
+                            0.18
+                        ],
+                        [
+                            0.92,
+                            1
+                        ],
+                        [
+                            0.08,
+                            1
+                        ]
+                    ],
+                    "fill": "none",
+                    "stroke": "#5B4636",
+                    "stroke_width": 1.6
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.18,
+                    "cy": 0.12,
+                    "rx": 0.012,
+                    "ry": 0.12,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.36,
+                    "cy": 0.1,
+                    "rx": 0.012,
+                    "ry": 0.1,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.55,
+                    "cy": 0.12,
+                    "rx": 0.012,
+                    "ry": 0.12,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.75,
+                    "cy": 0.1,
+                    "rx": 0.012,
+                    "ry": 0.1,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.1,
+                    "anchor": "middle",
+                    "value": {
+                        "bind": "label"
+                    },
+                    "font_size": 10,
+                    "font_weight": 600,
+                    "fill": "#1E293B"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.78,
+                    "anchor": "middle",
+                    "value": {
+                        "expr": "fill_value",
+                        "format": "d = %.2f m"
+                    },
+                    "font_size": 8,
+                    "fill": "#0F172A"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.94,
+                    "anchor": "middle",
+                    "value": {
+                        "expr": "storage_value",
+                        "format": "S = %.1f m\u00b3"
+                    },
+                    "font_size": 8,
+                    "fill": "#0F172A"
+                }
+            ]
+        },
+        {
+            "id": "wetland_cell_6",
+            "block": "Wetland Cell 6",
+            "label": "Wetland Cell 6",
+            "fill_max": 1.2,
+            "x": 445,
+            "y": 125,
+            "width": 145,
+            "height": 80,
+            "bind": {
+                "fill_value": {
+                    "block": "Wetland Cell 6",
+                    "property": "depth"
+                },
+                "storage_value": {
+                    "block": "Wetland Cell 6",
+                    "property": "Storage"
+                }
+            },
+            "thresholds": [
+                {
+                    "below": 0.25,
+                    "color": "#BAE6FD"
+                },
+                {
+                    "below": 0.5,
+                    "color": "#7DD3FC"
+                },
+                {
+                    "below": 0.75,
+                    "color": "#38BDF8"
+                },
+                {
+                    "above": 0.75,
+                    "color": "#0284C7"
+                }
+            ],
+            "draw": [
+                {
+                    "shape": "polygon",
+                    "points": [
+                        [
+                            0,
+                            0.18
+                        ],
+                        [
+                            1,
+                            0.18
+                        ],
+                        [
+                            0.92,
+                            1
+                        ],
+                        [
+                            0.08,
+                            1
+                        ]
+                    ],
+                    "fill": "#8B7355",
+                    "stroke": "#5B4636",
+                    "stroke_width": 1.6
+                },
+                {
+                    "shape": "rect",
+                    "x": 0.08,
+                    "y": {
+                        "expr": "1 - 0.82 * fill_fraction"
+                    },
+                    "w": 0.84,
+                    "h": {
+                        "expr": "0.82 * fill_fraction"
+                    },
+                    "fill": {
+                        "bind": "water_color"
+                    },
+                    "stroke": "none",
+                    "clip": true
+                },
+                {
+                    "shape": "polygon",
+                    "points": [
+                        [
+                            0,
+                            0.18
+                        ],
+                        [
+                            1,
+                            0.18
+                        ],
+                        [
+                            0.92,
+                            1
+                        ],
+                        [
+                            0.08,
+                            1
+                        ]
+                    ],
+                    "fill": "none",
+                    "stroke": "#5B4636",
+                    "stroke_width": 1.6
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.18,
+                    "cy": 0.12,
+                    "rx": 0.012,
+                    "ry": 0.12,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.36,
+                    "cy": 0.1,
+                    "rx": 0.012,
+                    "ry": 0.1,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.55,
+                    "cy": 0.12,
+                    "rx": 0.012,
+                    "ry": 0.12,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "ellipse",
+                    "cx": 0.75,
+                    "cy": 0.1,
+                    "rx": 0.012,
+                    "ry": 0.1,
+                    "fill": "#166534"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.1,
+                    "anchor": "middle",
+                    "value": {
+                        "bind": "label"
+                    },
+                    "font_size": 10,
+                    "font_weight": 600,
+                    "fill": "#1E293B"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.78,
+                    "anchor": "middle",
+                    "value": {
+                        "expr": "fill_value",
+                        "format": "d = %.2f m"
+                    },
+                    "font_size": 8,
+                    "fill": "#0F172A"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.94,
+                    "anchor": "middle",
+                    "value": {
+                        "expr": "storage_value",
+                        "format": "S = %.1f m\u00b3"
+                    },
+                    "font_size": 8,
+                    "fill": "#0F172A"
+                }
+            ]
+        },
+        {
+            "id": "receiving_water",
+            "block": "Receiving Water",
+            "label": "Receiving Water",
+            "x": 650,
+            "y": 145,
+            "width": 150,
+            "height": 70,
+            "bind": {
+                "head_value": {
+                    "block": "Receiving Water",
+                    "property": "head"
+                }
+            },
+            "draw": [
+                {
+                    "shape": "rect",
+                    "x": 0,
+                    "y": 0.38,
+                    "w": 1,
+                    "h": 0.62,
+                    "fill": "#0F766E",
+                    "stroke": "#134E4A",
+                    "stroke_width": 1.6
+                },
+                {
+                    "shape": "rect",
+                    "x": 0,
+                    "y": 0.18,
+                    "w": 1,
+                    "h": 0.2,
+                    "fill": "#38BDF8",
+                    "stroke": "none"
+                },
+                {
+                    "shape": "line",
+                    "x1": 0,
+                    "y1": 0.18,
+                    "x2": 1,
+                    "y2": 0.18,
+                    "stroke": "#0369A1",
+                    "stroke_width": 2.0,
+                    "dash": "6 3"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.62,
+                    "anchor": "middle",
+                    "value": {
+                        "bind": "label"
+                    },
+                    "font_size": 10,
+                    "font_weight": 600,
+                    "fill": "#ECFEFF"
+                },
+                {
+                    "shape": "text",
+                    "x": 0.5,
+                    "y": 0.86,
+                    "anchor": "middle",
+                    "value": {
+                        "expr": "head_value",
+                        "format": "h = %.2f m"
+                    },
+                    "font_size": 8,
+                    "fill": "#ECFEFF"
+                }
+            ]
+        }
+    ],
+    "connectors": [
+        {
+            "link": "Catchment runoff to wetland inlet",
+            "from": "Contributing Catchment",
+            "to": "Wetland Cell 1",
+            "attach": "auto",
+            "bind": {
+                "flow_value": {
+                    "link": "Catchment runoff to wetland inlet",
+                    "property": "flow"
+                }
+            },
+            "draw": [
+                {
+                    "shape": "line",
+                    "stroke": "#2563EB",
+                    "stroke_width": 2.2
+                },
+                {
+                    "shape": "text",
+                    "value": {
+                        "expr": "flow_value",
+                        "format": "%.2f m\u00b3/d"
+                    },
+                    "font_size": 8,
+                    "fill": "#475569"
+                }
+            ]
+        },
+        {
+            "link": "Wetland Cell 1 to Wetland Cell 2",
+            "from": "Wetland Cell 1",
+            "to": "Wetland Cell 2",
+            "attach": "auto",
+            "bind": {
+                "flow_value": {
+                    "link": "Wetland Cell 1 to Wetland Cell 2",
+                    "property": "flow"
+                }
+            },
+            "draw": [
+                {
+                    "shape": "line",
+                    "stroke": "#0891B2",
+                    "stroke_width": 2.0
+                },
+                {
+                    "shape": "text",
+                    "value": {
+                        "expr": "flow_value",
+                        "format": "%.2f m\u00b3/d"
+                    },
+                    "font_size": 8,
+                    "fill": "#475569"
+                }
+            ]
+        },
+        {
+            "link": "Wetland Cell 2 to Wetland Cell 3",
+            "from": "Wetland Cell 2",
+            "to": "Wetland Cell 3",
+            "attach": "auto",
+            "bind": {
+                "flow_value": {
+                    "link": "Wetland Cell 2 to Wetland Cell 3",
+                    "property": "flow"
+                }
+            },
+            "draw": [
+                {
+                    "shape": "line",
+                    "stroke": "#0891B2",
+                    "stroke_width": 2.0
+                },
+                {
+                    "shape": "text",
+                    "value": {
+                        "expr": "flow_value",
+                        "format": "%.2f m\u00b3/d"
+                    },
+                    "font_size": 8,
+                    "fill": "#475569"
+                }
+            ]
+        },
+        {
+            "link": "Wetland Cell 3 to Wetland Cell 4",
+            "from": "Wetland Cell 3",
+            "to": "Wetland Cell 4",
+            "attach": "auto",
+            "bind": {
+                "flow_value": {
+                    "link": "Wetland Cell 3 to Wetland Cell 4",
+                    "property": "flow"
+                }
+            },
+            "draw": [
+                {
+                    "shape": "line",
+                    "stroke": "#0891B2",
+                    "stroke_width": 2.0
+                },
+                {
+                    "shape": "text",
+                    "value": {
+                        "expr": "flow_value",
+                        "format": "%.2f m\u00b3/d"
+                    },
+                    "font_size": 8,
+                    "fill": "#475569"
+                }
+            ]
+        },
+        {
+            "link": "Wetland Cell 4 to Wetland Cell 5",
+            "from": "Wetland Cell 4",
+            "to": "Wetland Cell 5",
+            "attach": "auto",
+            "bind": {
+                "flow_value": {
+                    "link": "Wetland Cell 4 to Wetland Cell 5",
+                    "property": "flow"
+                }
+            },
+            "draw": [
+                {
+                    "shape": "line",
+                    "stroke": "#0891B2",
+                    "stroke_width": 2.0
+                },
+                {
+                    "shape": "text",
+                    "value": {
+                        "expr": "flow_value",
+                        "format": "%.2f m\u00b3/d"
+                    },
+                    "font_size": 8,
+                    "fill": "#475569"
+                }
+            ]
+        },
+        {
+            "link": "Wetland Cell 5 to Wetland Cell 6",
+            "from": "Wetland Cell 5",
+            "to": "Wetland Cell 6",
+            "attach": "auto",
+            "bind": {
+                "flow_value": {
+                    "link": "Wetland Cell 5 to Wetland Cell 6",
+                    "property": "flow"
+                }
+            },
+            "draw": [
+                {
+                    "shape": "line",
+                    "stroke": "#0891B2",
+                    "stroke_width": 2.0
+                },
+                {
+                    "shape": "text",
+                    "value": {
+                        "expr": "flow_value",
+                        "format": "%.2f m\u00b3/d"
+                    },
+                    "font_size": 8,
+                    "fill": "#475569"
+                }
+            ]
+        },
+        {
+            "link": "Wetland outlet weir",
+            "from": "Wetland Cell 6",
+            "to": "Receiving Water",
+            "attach": "auto",
+            "bind": {
+                "flow_value": {
+                    "link": "Wetland outlet weir",
+                    "property": "flow"
+                }
+            },
+            "draw": [
+                {
+                    "shape": "line",
+                    "stroke": "#DC2626",
+                    "stroke_width": 2.4
+                },
+                {
+                    "shape": "text",
+                    "value": {
+                        "expr": "flow_value",
+                        "format": "%.2f m\u00b3/d"
+                    },
+                    "font_size": 8,
+                    "fill": "#475569"
+                }
+            ]
+        }
+    ]
+}
