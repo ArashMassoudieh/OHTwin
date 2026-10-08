@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include "DTKernelModel.h"
 #include "DTConfig.h"
 
 #include <QDateTime>
@@ -179,6 +180,11 @@ private:
     //     forecast_viz.svg only; no state side-effects.
     // Both stages start from the same initial-condition path
     // (modelJsonPath empty → cold start from script).
+    // Codegen backend: Advance + Forecast with the kernel; fills `advance` (state snapshot written) and
+    // `forecast` (ok = false if disabled or failed). Returns false only if Advance failed.
+    bool runKernelStages(const QDateTime &advanceStart, const QDateTime &advanceEnd,
+                         StageResult &advance, StageResult &forecast);
+
     StageResult runStage(StageKind kind,
                          const QDateTime &stageStart,
                          const QDateTime &stageEnd,
@@ -284,6 +290,8 @@ private:
     // Owned for the entire lifetime of the runner; shared with
     // m_assimilation (raw pointer) so calibration cycles can append rows.
     std::unique_ptr<RunLogger> m_runLogger;
+
+    std::unique_ptr<DTKernelModel> m_kernel;   // codegen backend (solver.backend = "codegen")
 
     // -----------------------------------------------------------------------
     // Parameter drift (Truth Twin)

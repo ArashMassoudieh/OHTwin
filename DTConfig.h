@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include "DTForcing.h"
+
 #include <QJsonObject>
 #include <QString>
 #include <QtGlobal>
@@ -101,6 +103,17 @@ struct ObservationConfig
 // The block is OPTIONAL in config.json. If absent or empty, no drift is
 // applied and the Truth Twin behaves exactly as a forward simulator.
 // ---------------------------------------------------------------------------
+// Forward solver. "interpreter" (default) builds an OpenHydroQual System each stage; "codegen" runs a
+// code-generated kernel (DTKernelModel) loaded once at start-up.
+struct SolverConfig
+{
+    std::string backend = "interpreter";   // "interpreter" | "codegen"
+    std::string library;                   // codegen: kernel shared library (resolved path)
+    double      dt0 = 0.0005;              // codegen: initial time step (days) of every stage
+    std::map<std::string, double> parameters;   // codegen: parameter overrides by name
+    bool isCodegen() const { return backend == "codegen"; }
+};
+
 struct ParameterDriftEntry
 {
     std::string parameter;
@@ -391,6 +404,9 @@ public:
     // Time-varying parameter overrides driven by external CSV time series.
     // Empty vector = no drift (default).
     std::vector<ParameterDriftEntry> parameterDrift;
+
+    SolverConfig  solver;
+    ForcingConfig forcing;   // empty unless a "forcing" object is given (DTForcing.h)
 
 private:
     // Parse "300s", "15min", "4hr", "1day" -> milliseconds.

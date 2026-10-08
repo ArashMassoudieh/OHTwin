@@ -4,7 +4,7 @@ QT += core network
 CONFIG += console
 CONFIG -= app_bundle
 
-CONFIG += c++14
+CONFIG += c++17
 
 # ============================================================
 # Build folder
@@ -34,7 +34,8 @@ INCLUDEPATH += ../OpenHydroQual/aquifolium/include
 INCLUDEPATH += ../OpenHydroQual/aquifolium/src
 INCLUDEPATH += ../OpenHydroQual/aquifolium/include/GA
 INCLUDEPATH += ../OpenHydroQual/aquifolium/include/MCMC
-INCLUDEPATH += ../OpenHydroQual/jsoncpp/include/
+INCLUDEPATH += $$PWD/../OpenHydroQual/jsoncpp/include
+INCLUDEPATH += $$PWD/../OpenHydroQual/codegen/tools      # ohq_kernel.h (codegen kernel ABI)
 INCLUDEPATH += ../OpenHydroQual/
 
 macx:  DEFINES += mac_version
@@ -110,7 +111,7 @@ linux {
 DEFINES += ARMA_USE_LAPACK ARMA_USE_BLAS GSL
     QMAKE_CXXFLAGS += -fopenmp
     QMAKE_LFLAGS   += -fopenmp
-    LIBS += -larmadillo -llapack -lblas -lgsl -lgomp
+    LIBS += -larmadillo -llapack -lblas -lgsl -lgomp -ldl
 }
 
 macx {
@@ -136,6 +137,8 @@ SOURCES += \
     DTRunner.cpp \
     DTStreamingMCMC.cpp \
     DTWeather.cpp \
+    DTForcing.cpp \
+    DTKernelModel.cpp \
     RunLogger.cpp \
     VizRenderer.cpp \
     main.cpp \
@@ -207,6 +210,8 @@ HEADERS += \
     DTRunner.h \
     DTStreamingMCMC.h \
     DTWeather.h \
+    DTForcing.h \
+    DTKernelModel.h \
     RunLogger.h \
     VizRenderer.h \
     noaaweatherfetcher.h

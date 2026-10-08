@@ -181,13 +181,55 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
     }
     scriptFile = resolvePath(modelFileQ).toStdString();
 
+    // ------------------------------------------------------------------
+    // solver{} (optional): forward backend
+    // ------------------------------------------------------------------
+    if (root.contains("solver"))
+    {
+        const QJsonObject sv = root.value("solver").toObject();
+        solver.backend = sv.value("backend").toString("interpreter").trimmed().toStdString();
+        if (solver.backend != "interpreter" && solver.backend != "codegen")
+        {
+            errorMessage = "config.json solver.backend must be 'interpreter' or 'codegen'";
+            return false;
+        }
+        solver.dt0 = sv.value("dt0").toDouble(0.0005);
+        if (solver.isCodegen())
+        {
+            const QString lib = sv.value("library").toString().trimmed();
+            if (lib.isEmpty())
+            {
+                errorMessage = "config.json solver.library is required for the codegen backend";
+                return false;
+            }
+            solver.library = resolvePath(lib).toStdString();
+        }
+        const QJsonObject pv = sv.value("parameters").toObject();
+        for (auto it = pv.constBegin(); it != pv.constEnd(); ++it)
+            solver.parameters[it.key().toStdString()] = it.value().toDouble();
+    }
+
+    // ------------------------------------------------------------------
+    // forcing{} (optional): one series per model source (DTForcing.h)
+    // ------------------------------------------------------------------
+    if (root.contains("forcing"))
+    {
+        QString ferr;
+        if (!DTForcing::parse(root.value("forcing"), [this](const QString &p) { return resolvePath(p); },
+                              forcing, ferr))
+        {
+            errorMessage = "config.json forcing: " + ferr;
+            return false;
+        }
+    }
+
     const QString vizFileQ = dep.value("viz_file").toString().trimmed();
-    if (vizFileQ.isEmpty())
+    if (vizFileQ.isEmpty() && !solver.isCodegen())
     {
         errorMessage = "config.json deployment.viz_file is required";
         return false;
     }
-    vizFile = resolvePath(vizFileQ).toStdString();
+    if (!vizFileQ.isEmpty()) vizFile = resolvePath(vizFileQ).toStdString();
 
     // ------------------------------------------------------------------
     // runtime{}
@@ -710,7 +752,7 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
         errorMessage = "model_file does not exist: " + QString::fromStdString(scriptFile);
         return false;
     }
-    if (!QFileInfo::exists(QString::fromStdString(vizFile)))
+    if (!vizFile.empty() && !QFileInfo::exists(QString::fromStdString(vizFile)))
     {
         errorMessage = "viz_file does not exist: " + QString::fromStdString(vizFile);
         return false;
