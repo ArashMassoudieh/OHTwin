@@ -57,6 +57,7 @@ struct KernelStageResult
     bool ok = false;
     QString error;
     TimeSeriesSet<double> observed;      // one series per model observation, per accepted step
+    TimeSeriesSet<double> outputs;       // kernel outputs (ohq_generate --outputs), every outputInterval
     KernelState endState;
     long steps = 0;
 };
@@ -70,6 +71,10 @@ public:
     bool load(const std::string &libraryPath, QString &err);
     bool loaded() const;
     std::string className() const;
+    // Kernel outputs ("object:quantity", empty for a kernel generated without --outputs) and the interval
+    // (days) at which runStage samples them; 0 = not sampled.
+    std::vector<std::string> outputNames() const;
+    void setOutputInterval(double days) { outputInterval_ = days; }
 
     // Solve [t0, t1]. `init` empty -> the model's own initial values at t0.
     KernelStageResult runStage(double t0, double t1, double dt0, const KernelState &init,
@@ -78,4 +83,5 @@ public:
 
 private:
     std::unique_ptr<ohq::Kernel> k_;
+    double outputInterval_ = 0;
 };

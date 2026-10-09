@@ -72,6 +72,13 @@ bool DTKernelModel::load(const std::string &libraryPath, QString &err)
 bool DTKernelModel::loaded() const { return k_ && k_->n_states() > 0; }
 std::string DTKernelModel::className() const { return k_->class_name(); }
 
+std::vector<std::string> DTKernelModel::outputNames() const
+{
+    std::vector<std::string> n;
+    for (int i = 0; k_ && i < k_->outputCount(); ++i) n.push_back(k_->output_name(i));
+    return n;
+}
+
 KernelStageResult DTKernelModel::runStage(double t0, double t1, double dt0, const KernelState &init,
                                           const std::map<std::string, double> &parameters,
                                           const ForcingConfig &forcing,
@@ -136,7 +143,24 @@ KernelStageResult DTKernelModel::runStage(double t0, double t1, double dt0, cons
         }
     }
 
-    const int ok = k.run_to(h, t1);
+    // outputs: run to each sample time and read them (the step is clamped to the sample times)
+    const int nOut = k.outputCount();
+    std::vector<TimeSeries<double>> outs(outputInterval_ > 0 ? nOut : 0);
+    std::vector<double> buf(nOut > 0 ? nOut : 1);
+    auto sample = [&]() {
+        k.outputs(h, buf.data());
+        for (size_t i = 0; i < outs.size(); ++i) outs[i].append(k.time(h), buf[i]);
+    };
+    int ok = 1;
+    if (!outs.empty())
+    {
+        sample();
+        for (int n = 1; ok && t0 + n * outputInterval_ < t1 - 1e-9; ++n)
+            if ((ok = k.run_to(h, t0 + n * outputInterval_)) && !k.solution_failed(h)) sample();
+    }
+    if (ok) ok = k.run_to(h, t1);
+    if (ok && !outs.empty() && !k.solution_failed(h)) sample();
+    for (size_t i = 0; i < outs.size(); ++i) r.outputs.append(outs[i], k.output_name(int(i)));
     r.steps = k.step_count(h);
     if (!ok || k.solution_failed(h))
     {
