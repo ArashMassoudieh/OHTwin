@@ -223,6 +223,29 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
         }
     }
 
+    // ------------------------------------------------------------------
+    // viewer{} (optional): viewer files every cycle (DTViewerWriter.h)
+    // ------------------------------------------------------------------
+    if (root.contains("viewer"))
+    {
+        const QJsonObject vw = root.value("viewer").toObject();
+        viewer.enabled = true;
+        viewer.config = resolvePath(vw.value("config").toString()).toStdString();
+        viewer.webDir = resolvePath(vw.value("web_dir").toString("web")).toStdString();
+        viewer.observationsDir = resolvePath(vw.value("observations_dir").toString()).toStdString();
+        viewer.historyFile = resolvePath(vw.value("history_file").toString("state/viewer_history.bin")).toStdString();
+        if (viewer.config.empty())
+        {
+            errorMessage = "config.json viewer.config is required";
+            return false;
+        }
+        if (!solver.isCodegen())
+        {
+            errorMessage = "config.json viewer needs the codegen backend (solver.backend = \"codegen\")";
+            return false;
+        }
+    }
+
     const QString vizFileQ = dep.value("viz_file").toString().trimmed();
     if (vizFileQ.isEmpty() && !solver.isCodegen())
     {
@@ -283,6 +306,23 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
     {
         forecastHorizonMs = 0;
     }
+
+    catchUp = rt.value("catch_up").toBool(false);
+    for (const auto &[key, dst] : {std::pair<const char *, qint64 *>{"data_latency", &dataLatencyMs},
+                                   std::pair<const char *, qint64 *>{"check_interval", &checkIntervalMs}})
+    {
+        const QString s = rt.value(key).toString().trimmed();
+        if (s.isEmpty()) continue;
+        QString e;
+        *dst = parseIntervalMs(s.toStdString(), e);
+        if (*dst < 0)
+        {
+            errorMessage = QString("config.json runtime.%1 error: %2").arg(key, e);
+            return false;
+        }
+    }
+    preCycleCommand  = rt.value("pre_cycle_command").toString().trimmed().toStdString();
+    preCycleTimeoutS = rt.value("pre_cycle_timeout_s").toInt(1800);
 
     // Optional cold-start / weather paths (relative to deployment root).
     loadModelJson =

@@ -208,8 +208,12 @@ int main(int argc, char *argv[])
     // historical replay deployments.
     QTimer intervalTimer;
 
+    // Catch-up deployments look every check_interval (each cycle then advances to the latest reachable
+    // boundary, or is skipped); the others tick once per interval.
     const double wallClockIntervalMsD =
-        static_cast<double>(config.intervalMs) / config.timeAcceleration;
+        (config.catchUp && config.checkIntervalMs > 0)
+            ? static_cast<double>(config.checkIntervalMs)
+            : static_cast<double>(config.intervalMs) / config.timeAcceleration;
     const qint64 wallClockIntervalMs =
         static_cast<qint64>(std::max(1.0, wallClockIntervalMsD));
 

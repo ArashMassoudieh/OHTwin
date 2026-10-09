@@ -41,6 +41,8 @@
 #include "VizRenderer.h"
 #include "DTWeather.h"
 #include <QThread>
+#include <QProcess>
+#include <QTimeZone>
 #include "RunLogger.h"
 
 // ---------------------------------------------------------------------------
@@ -241,6 +243,16 @@ bool DTRunner::init(QString &errorMessage)
         if (!m_config.forcing.enabled)
             std::cerr << "[Runner] warning: codegen backend without a forcing map; the kernel will use the "
                          "forcing compiled into it\n";
+        if (m_config.viewer.enabled)
+        {
+            m_viewer.reset(new DTViewerWriter);
+            QString verr;
+            if (!m_viewer->init(m_config.viewer, m_kernel->outputNames(), m_config.forcing, verr))
+            {
+                errorMessage = verr;
+                return false;
+            }
+        }
     }
 
     // Validate script file exists
@@ -547,7 +559,20 @@ bool DTRunner::runOnce()
     // (a 2020-2022 window is years behind it), so reconciling against the
     // wall clock is meaningless there — and for any replay that ran past the
     // present it would stall the run completely.
-    if (m_config.isLiveForecastMode())
+    // Catch-up cycling (runtime.catch_up): advance to the latest interval boundary that the data can reach
+    // (wall clock minus data_latency), however far that is; nothing new -> skip the cycle.
+    QDateTime catchUpEnd;
+    if (m_config.catchUp)
+    {
+        const qint64 iv = m_config.intervalMs;
+        const qint64 reach = QDateTime::currentDateTimeUtc().toMSecsSinceEpoch() - m_config.dataLatencyMs;
+        catchUpEnd = QDateTime::fromMSecsSinceEpoch((reach / iv) * iv, QTimeZone::UTC);
+        if (catchUpEnd <= m_nextIntervalStart)
+            return true;                                  // the next boundary is not reachable yet
+        if (!runPreCycleCommand())
+            std::cerr << "[Runner] pre_cycle_command failed; running the cycle on the data at hand\n";
+    }
+    else if (m_config.isLiveForecastMode())
     {
         const QDateTime nowUtc     = QDateTime::currentDateTimeUtc();
         const qint64    aheadMs    = nowUtc.msecsTo(m_nextIntervalStart);
@@ -571,7 +596,14 @@ bool DTRunner::runOnce()
     const QDateTime advanceStart = m_nextIntervalStart;
     QDateTime       advanceEnd;
 
-    if (m_config.advanceToObservations &&
+    if (catchUpEnd.isValid())
+    {
+        advanceEnd = catchUpEnd;
+        if (advanceStart.msecsTo(advanceEnd) > m_config.intervalMs)
+            std::cout << "[Runner] catch-up: advancing " << advanceStart.msecsTo(advanceEnd) / 86400000.0
+                      << " days to " << advanceEnd.toString(Qt::ISODate).toStdString() << "\n";
+    }
+    else if (m_config.advanceToObservations &&
         m_assimilation &&
         m_assimilation->bufferPointCount() > 0)
     {
@@ -898,6 +930,26 @@ bool DTRunner::runOnce()
 }
 
 // ---------------------------------------------------------------------------
+// runPreCycleCommand
+// runtime.pre_cycle_command (e.g. the rain/ET/observation feeds) run through the shell in the deployment root,
+// before a catch-up cycle; its output goes to the log. A failure is reported, the cycle runs on the data at hand.
+// ---------------------------------------------------------------------------
+bool DTRunner::runPreCycleCommand()
+{
+    if (m_config.preCycleCommand.empty()) return true;
+    QProcess p;
+    p.setWorkingDirectory(QString::fromStdString(m_config.deploymentRoot));
+    p.setProcessChannelMode(QProcess::MergedChannels);
+    std::cout << "[Runner] pre_cycle_command: " << m_config.preCycleCommand << "\n";
+    p.start("/bin/sh", {"-c", QString::fromStdString(m_config.preCycleCommand)});
+    const bool finished = p.waitForFinished(m_config.preCycleTimeoutS * 1000);
+    const QByteArray out = p.readAll();
+    if (!out.isEmpty()) std::cout << out.toStdString() << (out.endsWith('\n') ? "" : "\n");
+    if (!finished) { p.kill(); p.waitForFinished(5000); return false; }
+    return p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
+}
+
+// ---------------------------------------------------------------------------
 // runKernelStages
 // Codegen backend (solver.backend = "codegen"). Same cycle as the interpreter path: Advance [t, t+D] from the
 // latest state snapshot, whose end state becomes the next snapshot, then Forecast [t, t+D+H] from the same
@@ -911,7 +963,7 @@ bool DTRunner::runKernelStages(const QDateTime &advanceStart, const QDateTime &a
     const double t0 = toOHQDaySerial(advanceStart);
     const double tA = toOHQDaySerial(advanceEnd);
     const bool   doForecast = m_forecastDays > 0.0;
-    const QDateTime forecastEnd = advanceStart.addMSecs(m_config.intervalMs + m_config.forecastHorizonMs);
+    const QDateTime forecastEnd = advanceEnd.addMSecs(m_config.forecastHorizonMs);
     const double tF = doForecast ? toOHQDaySerial(forecastEnd) : tA;
 
     KernelState init;
@@ -937,6 +989,8 @@ bool DTRunner::runKernelStages(const QDateTime &advanceStart, const QDateTime &a
     }
 
     // ---- Advance --------------------------------------------------------
+    if (m_viewer)                                    // the viewer history needs the last history_days only
+        m_kernel->setOutputSampling(m_viewer->stepDays(), tA - m_viewer->historyDays());
     const QDateTime wallA = QDateTime::currentDateTimeUtc();
     const KernelStageResult ra = m_kernel->runStage(t0, tA, m_config.solver.dt0, init, m_config.solver.parameters,
                                                     m_config.forcing, series);
@@ -952,6 +1006,7 @@ bool DTRunner::runKernelStages(const QDateTime &advanceStart, const QDateTime &a
     }
     advance.ok = true;
     advance.observed = ra.observed;
+    if (m_viewer) m_viewer->addHistory(ra.outputTimes, ra.outputRows, series);
 
     QJsonObject extra;
     extra["_dt_interval_start_utc"] = advanceStart.toString(Qt::ISODate);
@@ -972,15 +1027,38 @@ bool DTRunner::runKernelStages(const QDateTime &advanceStart, const QDateTime &a
                                RunLogger::Status::Ok, QString());
 
     // ---- Forecast -------------------------------------------------------
+    // From the Advance end state (not again from t0: a catch-up Advance can be long). forecast.observed still
+    // spans [t0, tF], the Advance followed by the Forecast, as the selected_output merge expects.
     forecast.ok = false;
     forecast.kind = StageKind::Forecast;
     if (doForecast)
     {
         const QDateTime wallF = QDateTime::currentDateTimeUtc();
-        const KernelStageResult rf = m_kernel->runStage(t0, tF, m_config.solver.dt0, init,
+        if (m_viewer) m_kernel->setOutputSampling(m_viewer->stepDays(), tA);
+        const KernelStageResult rf = m_kernel->runStage(tA, tF, m_config.solver.dt0, ra.endState,
                                                         m_config.solver.parameters, m_config.forcing, series);
         forecast.ok = rf.ok;
-        forecast.observed = rf.observed;
+        forecast.observed = ra.observed;
+        for (size_t s = 0; s < forecast.observed.size() && s < rf.observed.size(); ++s)
+        {
+            TimeSeries<double> &dst = forecast.observed[s];
+            const double last = dst.size() ? dst.getTime(dst.size() - 1) : -1e300;
+            for (size_t j = 0; j < rf.observed[s].size(); ++j)
+                if (rf.observed[s].getTime(j) > last + 1e-9)
+                    dst.append(rf.observed[s].getTime(j), rf.observed[s].getValue(j));
+        }
+        if (rf.ok && m_viewer)
+        {
+            QJsonObject status;
+            status["cycle"] = m_runsCompleted + 1;
+            status["rain_source"] = QString("MRMS radar (observed), Open-Meteo (forecast)");
+            QString werr;
+            if (!m_viewer->write(tA, rf.outputTimes, rf.outputRows, series, status, werr))
+                std::cerr << "[Runner] Viewer files: " << werr.toStdString() << "\n";
+            else
+                std::cout << "[Runner] Viewer files written (now " << advanceEnd.toString(Qt::ISODate).toStdString()
+                          << ", forecast to " << forecastEnd.toString(Qt::ISODate).toStdString() << ")\n";
+        }
         if (!rf.ok)
             std::cerr << "[Runner] Forecast (kernel) failed (continuing): " << rf.error.toStdString() << "\n";
         if (m_runLogger)

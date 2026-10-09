@@ -21,6 +21,7 @@
 #pragma once
 
 #include "DTKernelModel.h"
+#include "DTViewerWriter.h"
 #include "DTConfig.h"
 
 #include <QDateTime>
@@ -292,6 +293,8 @@ private:
     std::unique_ptr<RunLogger> m_runLogger;
 
     std::unique_ptr<DTKernelModel> m_kernel;   // codegen backend (solver.backend = "codegen")
+    std::unique_ptr<DTViewerWriter> m_viewer;  // viewer files every cycle (config "viewer")
+    bool runPreCycleCommand();
 
     // -----------------------------------------------------------------------
     // Parameter drift (Truth Twin)

@@ -247,7 +247,13 @@ bool parse(const QJsonValue &v, const std::function<QString(const QString &)> &r
             return false;
         }
         if (fe.provider == "csv")
-            fe.file = resolve(e.value("file").toString()).toStdString();
+        {
+            if (e.contains("files"))
+                for (const QJsonValue &f : e.value("files").toArray())
+                    fe.files.push_back(resolve(f.toString()).toStdString());
+            else
+                fe.files.push_back(resolve(e.value("file").toString()).toStdString());
+        }
         else if (fe.provider == "openmeteo")
         {
             for (const QJsonValue &pv : e.value("points").toArray())
@@ -327,8 +333,27 @@ bool fetch(const ForcingConfig &cfg, double t0, double t1, std::vector<ForcingSe
         const bool pr = e.isPrecipitation();
         if (e.provider == "csv")
         {
-            QString e2;
-            if (!readCsv(e.file, pr, s, e2)) { err = e2; return false; }
+            for (const std::string &file : e.files)
+            {
+                ForcingSeries part;
+                QString e2;
+                if (!readCsv(file, pr, part, e2)) { err = e2; return false; }
+                if (part.value.empty()) continue;
+                // the later file wins from its first time on
+                const double cut = pr ? part.start.front() : part.t.front();
+                size_t keep = 0;
+                while (keep < s.value.size() && (pr ? s.end[keep] <= cut + 1e-9 : s.t[keep] < cut - 1e-9)) ++keep;
+                s.value.resize(keep);
+                if (pr) { s.start.resize(keep); s.end.resize(keep); } else s.t.resize(keep);
+                s.value.insert(s.value.end(), part.value.begin(), part.value.end());
+                if (pr)
+                {
+                    s.start.insert(s.start.end(), part.start.begin(), part.start.end());
+                    s.end.insert(s.end.end(), part.end.begin(), part.end.end());
+                }
+                else
+                    s.t.insert(s.t.end(), part.t.begin(), part.t.end());
+            }
         }
         else
         {

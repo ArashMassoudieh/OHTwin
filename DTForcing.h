@@ -68,7 +68,8 @@ struct ForcingEntry
     std::string variable;       // "precipitation" | "et0"
     std::string provider;       // "openmeteo" | "csv"
     std::vector<ForcingPoint> points;
-    std::string file;           // csv provider (resolved path)
+    std::vector<std::string> files;   // csv provider (resolved paths); a later file replaces the earlier ones
+                                      // from its first time on (history file + live feed)
     double scale = 1.0;         // multiplier (bias factor)
     std::vector<ForcingTarget> targets;
     bool isPrecipitation() const { return variable == "precipitation"; }

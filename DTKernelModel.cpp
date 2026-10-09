@@ -24,6 +24,8 @@
 #include <QFile>
 #include <QJsonDocument>
 
+#include <algorithm>
+#include <cmath>
 #include <iostream>
 
 bool KernelState::save(const QString &path, const QJsonObject &extra) const
@@ -143,24 +145,25 @@ KernelStageResult DTKernelModel::runStage(double t0, double t1, double dt0, cons
         }
     }
 
-    // outputs: run to each sample time and read them (the step is clamped to the sample times)
+    // outputs: run to each grid time in [max(t0, from), t1] and read them there
     const int nOut = k.outputCount();
-    std::vector<TimeSeries<double>> outs(outputInterval_ > 0 ? nOut : 0);
-    std::vector<double> buf(nOut > 0 ? nOut : 1);
-    auto sample = [&]() {
-        k.outputs(h, buf.data());
-        for (size_t i = 0; i < outs.size(); ++i) outs[i].append(k.time(h), buf[i]);
-    };
     int ok = 1;
-    if (!outs.empty())
+    if (outputInterval_ > 0 && nOut > 0)
     {
-        sample();
-        for (int n = 1; ok && t0 + n * outputInterval_ < t1 - 1e-9; ++n)
-            if ((ok = k.run_to(h, t0 + n * outputInterval_)) && !k.solution_failed(h)) sample();
+        const double eps = 1e-7;
+        for (double n = std::ceil((std::max(t0, outputFrom_) - eps) / outputInterval_); ok; n += 1)
+        {
+            const double ts = n * outputInterval_;
+            if (ts > t1 + eps) break;
+            if (ts > t0 + eps) ok = k.run_to(h, ts) && !k.solution_failed(h);
+            if (!ok) break;
+            std::vector<double> row(nOut);
+            k.outputs(h, row.data());
+            r.outputTimes.push_back(ts);
+            r.outputRows.push_back(std::move(row));
+        }
     }
     if (ok) ok = k.run_to(h, t1);
-    if (ok && !outs.empty() && !k.solution_failed(h)) sample();
-    for (size_t i = 0; i < outs.size(); ++i) r.outputs.append(outs[i], k.output_name(int(i)));
     r.steps = k.step_count(h);
     if (!ok || k.solution_failed(h))
     {

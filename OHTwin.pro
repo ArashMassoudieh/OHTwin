@@ -139,6 +139,7 @@ SOURCES += \
     DTWeather.cpp \
     DTForcing.cpp \
     DTKernelModel.cpp \
+    DTViewerWriter.cpp \
     RunLogger.cpp \
     VizRenderer.cpp \
     main.cpp \
@@ -212,6 +213,7 @@ HEADERS += \
     DTWeather.h \
     DTForcing.h \
     DTKernelModel.h \
+    DTViewerWriter.h \
     RunLogger.h \
     VizRenderer.h \
     noaaweatherfetcher.h
