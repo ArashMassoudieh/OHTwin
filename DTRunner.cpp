@@ -260,7 +260,7 @@ bool DTRunner::init(QString &errorMessage)
     {
         // hot-restart path checked at run-time (snapshot may not exist yet)
     }
-    else
+    else if (!m_config.solver.isCodegen())      // the kernel carries the model; no script needed
     {
         const QFileInfo fi(QString::fromStdString(m_config.scriptFile));
         if (!fi.exists())

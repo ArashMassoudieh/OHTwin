@@ -173,12 +173,8 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
         return false;
     }
 
+    // model_file: required by the interpreter; a codegen deployment never reads it (checked after solver{})
     const QString modelFileQ = dep.value("model_file").toString().trimmed();
-    if (modelFileQ.isEmpty())
-    {
-        errorMessage = "config.json deployment.model_file is required";
-        return false;
-    }
     scriptFile = resolvePath(modelFileQ).toStdString();
 
     // ------------------------------------------------------------------
@@ -787,7 +783,12 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
     // ------------------------------------------------------------------
     // Sanity-check that the model and viz files exist
     // ------------------------------------------------------------------
-    if (!QFileInfo::exists(QString::fromStdString(scriptFile)))
+    if (!solver.isCodegen() && scriptFile.empty())
+    {
+        errorMessage = "config.json deployment.model_file is required";
+        return false;
+    }
+    if (!solver.isCodegen() && !QFileInfo::exists(QString::fromStdString(scriptFile)))
     {
         errorMessage = "model_file does not exist: " + QString::fromStdString(scriptFile);
         return false;
