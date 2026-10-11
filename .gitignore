@@ -288,3 +288,49 @@ deployments/Wetland_assimilation_codegen_i9/outputs_run_killed_by_reboot_2026092
 deployments/Wetland_assimilation_codegen_i9/run.log
 
 deployments/Wetland_truth_codegen_i9/run.log
+
+# ============================================================================
+# Generic run-artefact rules. Everything below is REGENERABLE from the tracked
+# inputs (config.json, model/*.ohq, drift/*.csv, viz_*.json, forcing files).
+# These supersede the per-deployment one-off entries accumulated above.
+# ============================================================================
+
+# --- per-cycle solver output, state snapshots, logs -------------------------
+deployments/*/outputs/
+# archived/backup output dirs (gitignore has no trailing comments)
+deployments/*/outputs_*/
+deployments/*/state/
+deployments/*/snapshots/
+deployments/*/run.log
+deployments/*/*.log
+deployments/*/nohup.out
+
+# --- scratch files the engine drops next to a model -------------------------
+# The interpreter writes these into model/ during a solve; none are inputs.
+deployments/*/model/output.txt
+deployments/*/model/observedoutput.txt
+deployments/*/model/errors.txt
+deployments/*/model/fit_measures.txt
+deployments/*/model/state.json
+deployments/*/model/solution_details.txt
+deployments/*/model/mapped_modeled_results.txt
+deployments/*/model/objective_function_values.txt
+deployments/*/model/Objective_Function_TimeSeries.txt
+
+# --- code-generated kernels -------------------------------------------------
+# Regenerate with:
+#   cd deployments/<dep>/model && ohq_generate Wetland.ohq <resources> \
+#       kernel <Class> Storage --project shared
+#   cmake -S kernel -B kernel/build -DCMAKE_BUILD_TYPE=Release && \
+#       cmake --build kernel/build
+# ~930 KB per deployment (generated header + embedded runtime + build tree),
+# and it must be regenerated whenever the .ohq changes, so tracking it would
+# go stale silently.
+deployments/*/model/kernel/
+
+# --- archived run results ---------------------------------------------------
+# Completed-run archives kept locally for analysis; large and reproducible.
+runs_archive/
+
+# --- local backups this workflow creates ------------------------------------
+*.bak_*
