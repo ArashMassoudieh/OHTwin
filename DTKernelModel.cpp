@@ -81,6 +81,13 @@ std::vector<std::string> DTKernelModel::outputNames() const
     return n;
 }
 
+std::vector<std::string> DTKernelModel::parameterNames() const
+{
+    std::vector<std::string> n;
+    for (int i = 0; k_ && i < k_->n_parameters(); ++i) n.push_back(k_->parameter_name(i));
+    return n;
+}
+
 KernelStageResult DTKernelModel::runStage(double t0, double t1, double dt0, const KernelState &init,
                                           const std::map<std::string, double> &parameters,
                                           const ForcingConfig &forcing,

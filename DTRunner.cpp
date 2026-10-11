@@ -445,6 +445,27 @@ bool DTRunner::init(QString &errorMessage)
         std::cout << "[Runner] " << m_parameterDrift.size()
                   << " parameter drift series active.\n";
 
+    // A drift parameter the kernel does not expose would be dropped silently:
+    // runStage only warns on an unknown name, and the run would then look
+    // healthy while the parameter stayed frozen at its compiled-in value --
+    // which, for a Truth Twin, means no drift at all. Fail at startup instead.
+    if (m_kernel && !m_parameterDrift.empty())
+    {
+        const std::vector<std::string> kp = m_kernel->parameterNames();
+        for (const auto &entry : m_config.parameterDrift)
+            if (std::find(kp.begin(), kp.end(), entry.parameter) == kp.end())
+            {
+                errorMessage = QString("parameter_drift targets '%1', which the kernel "
+                                       "(%2) does not expose; drift would be silently "
+                                       "ignored under the codegen backend")
+                                   .arg(QString::fromStdString(entry.parameter),
+                                        QString::fromStdString(m_kernel->className()));
+                return false;
+            }
+        std::cout << "[Runner] parameter drift verified against the kernel ("
+                  << m_parameterDrift.size() << " series)\n";
+    }
+
 
     return true;
 }
@@ -992,7 +1013,9 @@ bool DTRunner::runKernelStages(const QDateTime &advanceStart, const QDateTime &a
     if (m_viewer)                                    // the viewer history needs the last history_days only
         m_kernel->setOutputSampling(m_viewer->stepDays(), tA - m_viewer->historyDays());
     const QDateTime wallA = QDateTime::currentDateTimeUtc();
-    const KernelStageResult ra = m_kernel->runStage(t0, tA, m_config.solver.dt0, init, m_config.solver.parameters,
+    // Drift sampled at this stage's window midpoint, as the interpreter does.
+    const std::map<std::string, double> paramsA = kernelParameters(0.5 * (t0 + tA));
+    const KernelStageResult ra = m_kernel->runStage(t0, tA, m_config.solver.dt0, init, paramsA,
                                                     m_config.forcing, series);
     advance.kind = StageKind::Advance;
     if (!ra.ok)
@@ -1035,8 +1058,9 @@ bool DTRunner::runKernelStages(const QDateTime &advanceStart, const QDateTime &a
     {
         const QDateTime wallF = QDateTime::currentDateTimeUtc();
         if (m_viewer) m_kernel->setOutputSampling(m_viewer->stepDays(), tA);
+        const std::map<std::string, double> paramsF = kernelParameters(0.5 * (tA + tF));
         const KernelStageResult rf = m_kernel->runStage(tA, tF, m_config.solver.dt0, ra.endState,
-                                                        m_config.solver.parameters, m_config.forcing, series);
+                                                        paramsF, m_config.forcing, series);
         forecast.ok = rf.ok;
         forecast.observed = ra.observed;
         for (size_t s = 0; s < forecast.observed.size() && s < rf.observed.size(); ++s)
@@ -1711,6 +1735,28 @@ void DTRunner::applyParameterDrift(System *system, double tSerial)
                   << " <- " << value
                   << " (at t=" << tSerial << ")\n";
     }
+}
+
+// ---------------------------------------------------------------------------
+// kernelParameters
+// The codegen path never builds a System, so applyParameterDrift has nothing to
+// write to. Merge the drift values into the parameter map the kernel is driven
+// with instead; DTKernelModel::runStage matches these by NAME, so the kernel's
+// own parameter ordering does not matter here.
+// ---------------------------------------------------------------------------
+std::map<std::string, double> DTRunner::kernelParameters(double tSerial) const
+{
+    std::map<std::string, double> params = m_config.solver.parameters;
+    for (size_t i = 0; i < m_parameterDrift.size(); ++i)
+    {
+        const std::string &name = m_config.parameterDrift[i].parameter;
+        const double value = m_parameterDrift[i].interpol(tSerial);
+        params[name] = value;              // drift wins over a static override
+        std::cout << "[Runner] Parameter drift (kernel): " << name
+                  << " <- " << value
+                  << " (at t=" << tSerial << ")\n";
+    }
+    return params;
 }
 
 

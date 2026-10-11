@@ -224,6 +224,13 @@ private:
     // m_parameterDrift is empty.
     void applyParameterDrift(System *system, double tSerial);
 
+    // Codegen counterpart of applyParameterDrift. The kernel is driven by a
+    // name->value map rather than a live System, so drift has to be merged into
+    // that map per stage instead of being written onto Parameter objects.
+    // Returns solver.parameters overlaid with each drift series sampled at
+    // tSerial (the stage-window midpoint, matching the interpreter path).
+    std::map<std::string, double> kernelParameters(double tSerial) const;
+
     // Return the noise sigma for one observed-output series. The default
     // value comes from observations.noiseSigma; optional entries in
     // observations.noiseSigmaByPattern override it when their lower-case
