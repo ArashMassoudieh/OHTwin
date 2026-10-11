@@ -282,3 +282,9 @@ deployments/R_truth/model/output.txt
 deployments/*/outputs/
 deployments/*/state/
 deployments/*/snapshots/
+
+deployments/Wetland_assimilation_codegen_i9/outputs_run_killed_by_reboot_20260927/
+
+deployments/Wetland_assimilation_codegen_i9/run.log
+
+deployments/Wetland_truth_codegen_i9/run.log
