@@ -39,5 +39,13 @@
             "parameter": "Soil_Hydraulic_Conductivity",
             "csv": "drift/ksat_drift_wetland.csv"
         }
-    ]
+    ],
+    "solver": {
+        "backend": "codegen",
+        "library": "model/kernel/build/libWetland.so",
+        "dt0": 0.0005
+    },
+    "forcing": {
+        "file": "forcing_map.json"
+    }
 }

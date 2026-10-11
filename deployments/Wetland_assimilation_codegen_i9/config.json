@@ -72,5 +72,13 @@
         "mcmc_t2_window_cycles": 33,
         "mcmc_min_step_fraction": 0.0,
         "mcmc_drift_seed_inflation": 1.5
+    },
+    "solver": {
+        "backend": "codegen",
+        "library": "model/kernel/build/libWetland.so",
+        "dt0": 0.0005
+    },
+    "forcing": {
+        "file": "forcing_map.json"
     }
 }

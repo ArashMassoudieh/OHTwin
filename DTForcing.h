@@ -78,6 +78,13 @@ struct ForcingEntry
 struct ForcingConfig
 {
     bool enabled = false;
+    // Open-Meteo endpoint. false: /v1/forecast, a window around NOW sized by
+    // pastDays/forecastDays -- right for a live twin. true: /v1/archive over the
+    // SIMULATION window -- the only thing that works for a deployment replaying a
+    // past period, where a now-relative fetch returns no data at all. Set with
+    // "source": "archive" in the forcing map; mirrors runtime.weather_source =
+    // "openmeteo_historical" on the interpreter side.
+    bool archive = false;
     int pastDays = 3;
     int forecastDays = 10;
     std::vector<ForcingEntry> entries;

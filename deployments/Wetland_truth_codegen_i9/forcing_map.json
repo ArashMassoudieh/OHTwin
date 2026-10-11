@@ -1,0 +1,38 @@
+{
+    "_comment": [
+        "Runtime forcing for the codegen backend (kernel ABI G4: set_series /",
+        "set_precipitation). The series compiled into the kernel is only a default --",
+        "for this model an empty 2010 window -- and these entries replace it each",
+        "cycle. Without them the kernel runs with zero precipitation and",
+        "CatchmentRunoffCoeff provably has no effect on the output.",
+        "",
+        "source=archive: fetch over the SIMULATION window from the Open-Meteo",
+        "archive. The default (forecast) fetches around the current date, which",
+        "returns nothing for a deployment replaying 2020.",
+        "",
+        "Targets mirror what the interpreter injects in DTRunner::runStage."
+    ],
+    "source": "archive",
+    "entries": [
+        { "name": "rain", "variable": "precipitation", "provider": "openmeteo",
+          "points": [ { "lat": 38.91088, "lon": -76.98569, "weight": 1.0 } ],
+          "scale": 1.0,
+          "targets": [ { "source": "Rain", "quantity": "timeseries" } ] },
+
+        { "name": "temperature", "variable": "temperature", "provider": "openmeteo",
+          "points": [ { "lat": 38.91088, "lon": -76.98569, "weight": 1.0 } ],
+          "targets": [ { "source": "Evapotranspiration_Penman (Soil)", "quantity": "Temperature" } ] },
+
+        { "name": "humidity", "variable": "humidity", "provider": "openmeteo",
+          "points": [ { "lat": 38.91088, "lon": -76.98569, "weight": 1.0 } ],
+          "targets": [ { "source": "Evapotranspiration_Penman (Soil)", "quantity": "R_h" } ] },
+
+        { "name": "wind", "variable": "wind", "provider": "openmeteo",
+          "points": [ { "lat": 38.91088, "lon": -76.98569, "weight": 1.0 } ],
+          "targets": [ { "source": "Evapotranspiration_Penman (Soil)", "quantity": "wind_speed" } ] },
+
+        { "name": "solar", "variable": "solar", "provider": "openmeteo",
+          "points": [ { "lat": 38.91088, "lon": -76.98569, "weight": 1.0 } ],
+          "targets": [ { "source": "Evapotranspiration_Penman (Soil)", "quantity": "solar_radiation" } ] }
+    ]
+}
