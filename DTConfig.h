@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include "DTForcing.h"
+
 #include <QJsonObject>
 #include <QString>
 #include <QtGlobal>
@@ -101,6 +103,27 @@ struct ObservationConfig
 // The block is OPTIONAL in config.json. If absent or empty, no drift is
 // applied and the Truth Twin behaves exactly as a forward simulator.
 // ---------------------------------------------------------------------------
+// Forward solver. "interpreter" (default) builds an OpenHydroQual System each stage; "codegen" runs a
+// code-generated kernel (DTKernelModel) loaded once at start-up.
+struct SolverConfig
+{
+    std::string backend = "interpreter";   // "interpreter" | "codegen"
+    std::string library;                   // codegen: kernel shared library (resolved path)
+    double      dt0 = 0.0005;              // codegen: initial time step (days) of every stage
+    std::map<std::string, double> parameters;   // codegen: parameter overrides by name
+    bool isCodegen() const { return backend == "codegen"; }
+};
+
+// Viewer files written every cycle (OpenWatershedTwin viewer; codegen backend with kernel outputs).
+struct ViewerOutputConfig
+{
+    bool        enabled = false;
+    std::string config;            // the watershed's viewer_config.json (resolved path)
+    std::string webDir;            // where the viewer files go (resolved; default <deployment>/web)
+    std::string observationsDir;   // gage observations <gage>_<kind>.csv "t,value" (display units); optional
+    std::string historyFile;       // rolling history of the viewer values (default <state_dir>/viewer_history.bin)
+};
+
 struct ParameterDriftEntry
 {
     std::string parameter;
@@ -391,6 +414,20 @@ public:
     // Time-varying parameter overrides driven by external CSV time series.
     // Empty vector = no drift (default).
     std::vector<ParameterDriftEntry> parameterDrift;
+
+    SolverConfig  solver;
+    ForcingConfig forcing;   // empty unless a "forcing" object is given (DTForcing.h)
+    ViewerOutputConfig viewer;   // "viewer" object (optional)
+
+    // Catch-up cycling (runtime.catch_up): each cycle advances to the latest interval boundary that is at least
+    // data_latency behind the wall clock, in one step however far that is (a cold start at start_datetime thus
+    // spins up to the present in its first cycle); nothing to do -> the cycle is skipped. check_interval sets how
+    // often the timer looks (default: the interval).
+    bool   catchUp = false;
+    qint64 dataLatencyMs = 0;
+    qint64 checkIntervalMs = 0;
+    std::string preCycleCommand;     // runtime.pre_cycle_command: run (shell) before each cycle, e.g. the feeds
+    int    preCycleTimeoutS = 1800;
 
 private:
     // Parse "300s", "15min", "4hr", "1day" -> milliseconds.

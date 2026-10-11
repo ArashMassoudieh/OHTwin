@@ -41,6 +41,8 @@
 #include "VizRenderer.h"
 #include "DTWeather.h"
 #include <QThread>
+#include <QProcess>
+#include <QTimeZone>
 #include "RunLogger.h"
 
 // ---------------------------------------------------------------------------
@@ -229,12 +231,36 @@ DTRunner::~DTRunner()
 // ---------------------------------------------------------------------------
 bool DTRunner::init(QString &errorMessage)
 {
+    if (m_config.solver.isCodegen())
+    {
+        m_kernel.reset(new DTKernelModel);
+        QString kerr;
+        if (!m_kernel->load(m_config.solver.library, kerr))
+        {
+            errorMessage = "solver.library: " + kerr;
+            return false;
+        }
+        if (!m_config.forcing.enabled)
+            std::cerr << "[Runner] warning: codegen backend without a forcing map; the kernel will use the "
+                         "forcing compiled into it\n";
+        if (m_config.viewer.enabled)
+        {
+            m_viewer.reset(new DTViewerWriter);
+            QString verr;
+            if (!m_viewer->init(m_config.viewer, m_kernel->outputNames(), m_config.forcing, verr))
+            {
+                errorMessage = verr;
+                return false;
+            }
+        }
+    }
+
     // Validate script file exists
     if (!m_config.loadModelJson.empty())
     {
         // hot-restart path checked at run-time (snapshot may not exist yet)
     }
-    else
+    else if (!m_config.solver.isCodegen())      // the kernel carries the model; no script needed
     {
         const QFileInfo fi(QString::fromStdString(m_config.scriptFile));
         if (!fi.exists())
@@ -533,7 +559,20 @@ bool DTRunner::runOnce()
     // (a 2020-2022 window is years behind it), so reconciling against the
     // wall clock is meaningless there — and for any replay that ran past the
     // present it would stall the run completely.
-    if (m_config.isLiveForecastMode())
+    // Catch-up cycling (runtime.catch_up): advance to the latest interval boundary that the data can reach
+    // (wall clock minus data_latency), however far that is; nothing new -> skip the cycle.
+    QDateTime catchUpEnd;
+    if (m_config.catchUp)
+    {
+        const qint64 iv = m_config.intervalMs;
+        const qint64 reach = QDateTime::currentDateTimeUtc().toMSecsSinceEpoch() - m_config.dataLatencyMs;
+        catchUpEnd = QDateTime::fromMSecsSinceEpoch((reach / iv) * iv, QTimeZone::UTC);
+        if (catchUpEnd <= m_nextIntervalStart)
+            return true;                                  // the next boundary is not reachable yet
+        if (!runPreCycleCommand())
+            std::cerr << "[Runner] pre_cycle_command failed; running the cycle on the data at hand\n";
+    }
+    else if (m_config.isLiveForecastMode())
     {
         const QDateTime nowUtc     = QDateTime::currentDateTimeUtc();
         const qint64    aheadMs    = nowUtc.msecsTo(m_nextIntervalStart);
@@ -557,7 +596,14 @@ bool DTRunner::runOnce()
     const QDateTime advanceStart = m_nextIntervalStart;
     QDateTime       advanceEnd;
 
-    if (m_config.advanceToObservations &&
+    if (catchUpEnd.isValid())
+    {
+        advanceEnd = catchUpEnd;
+        if (advanceStart.msecsTo(advanceEnd) > m_config.intervalMs)
+            std::cout << "[Runner] catch-up: advancing " << advanceStart.msecsTo(advanceEnd) / 86400000.0
+                      << " days to " << advanceEnd.toString(Qt::ISODate).toStdString() << "\n";
+    }
+    else if (m_config.advanceToObservations &&
         m_assimilation &&
         m_assimilation->bufferPointCount() > 0)
     {
@@ -598,169 +644,177 @@ bool DTRunner::runOnce()
     std::cout << "\n[Runner] ======== Cycle " << (m_runsCompleted + 1) << " ========\n";
 
 
-    // Determine the snapshot to load for this cycle. A calibration that
-    // completed since the previous cycle contributes its PARAMETERS, which
-    // are more current; the model STATE always comes from the latest forward
-    // snapshot. The calibrated snapshot is written unsolved by
-    // DTAssimilation (it solves a copy for the reanalysis), so its block
-    // storages are not the end-of-window state -- adopting them wholesale
-    // restarted the model from whatever IC the calibration happened to be
-    // built on, which for a rolling window is the spin-up IC.
-    QString latestSnapshot;      // where the STATE comes from
-    QString calibratedParamSrc;  // where the PARAMETERS come from (may be empty)
-    const QString cycleStamp =
-        QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-
-    if (!m_pendingCalibratedSnapshot.isEmpty() &&
-        QFileInfo::exists(m_pendingCalibratedSnapshot))
-    {
-        calibratedParamSrc = m_pendingCalibratedSnapshot;
-        latestSnapshot     = findLatestStateSnapshot();
-        if (latestSnapshot.isEmpty())
-        {
-            // No forward state yet (calibration finished before the first
-            // forward snapshot): fall back to the calibrated snapshot whole.
-            latestSnapshot     = m_pendingCalibratedSnapshot;
-            calibratedParamSrc.clear();
-        }
-        std::cout << "[Runner] [" << cycleStamp.toStdString() << "] "
-                  << "CONSUMING calibrated snapshot (parameters only): "
-                  << m_pendingCalibratedSnapshot.toStdString() << "\n"
-                  << "[Runner]   state from: " << latestSnapshot.toStdString() << "\n";
-
-        // DIAG: read parameter values from the calibrated snapshot so we can
-        // confirm the calibrated values are flowing into the forward cycle.
-        QJsonObject snap = readJson(m_pendingCalibratedSnapshot);
-        if (!snap.isEmpty() && snap.contains("Parameters"))
-        {
-            std::cout << "[Runner]   parameters in calibrated snapshot:\n";
-            const QJsonObject params = snap["Parameters"].toObject();
-            for (auto it = params.constBegin(); it != params.constEnd(); ++it)
-            {
-                const QJsonObject p = it.value().toObject();
-                std::cout << "[Runner]     " << it.key().toStdString()
-                          << " = " << p["value"].toString().toStdString()
-                          << " [" << p["low"].toString().toStdString()
-                          << ", " << p["high"].toString().toStdString() << "]\n";
-            }
-        }
-        m_pendingCalibratedSnapshot.clear();
-    }
-    else
-    {
-        latestSnapshot = findLatestStateSnapshot();
-        std::cout << "[Runner] [" << cycleStamp.toStdString() << "] "
-                  << "loading forward snapshot: "
-                  << (latestSnapshot.isEmpty()
-                          ? std::string("(cold start)")
-                          : latestSnapshot.toStdString()) << "\n";
-    }
-
-    QString initialModelJsonPath;
-
-    if (!latestSnapshot.isEmpty())
-    {
-        QJsonObject prevState = readJson(latestSnapshot);
-        if (prevState.isEmpty())
-        {
-            std::cerr << "[Runner] Failed to read previous state: "
-                      << latestSnapshot.toStdString() << "\n";
-            return false;
-        }
-
-        // Splice the calibrated parameter set onto the forward state. The
-        // forward Solve() runs with applyparameters=true, so ApplyParameters()
-        // propagates these values into the bound block/link quantities; we do
-        // not copy the calibrated snapshot's derived block values.
-        if (!calibratedParamSrc.isEmpty())
-        {
-            const QJsonObject calib = readJson(calibratedParamSrc);
-            if (calib.isEmpty())
-            {
-                std::cerr << "[Runner] Failed to read calibrated snapshot: "
-                          << calibratedParamSrc.toStdString()
-                          << " — continuing with forward parameters\n";
-            }
-            else
-            {
-                int copied = 0;
-                for (const QString &key : {QStringLiteral("Parameters"),
-                                           QStringLiteral("Set As Parameters")})
-                {
-                    if (calib.contains(key))
-                    {
-                        prevState[key] = calib[key];
-                        ++copied;
-                    }
-                }
-                std::cout << "[Runner]   merged " << copied
-                          << " calibrated parameter block(s) onto forward state\n";
-            }
-        }
-
-        // We will re-patch the simulation window inside runStage() per stage,
-        // but writing the prev state once gives both stages a stable base file.
-        initialModelJsonPath =
-            QString::fromStdString(m_config.stateDir) + "/_current_input.json";
-        if (!writeJson(prevState, initialModelJsonPath))
-        {
-            std::cerr << "[Runner] Failed to write base initial-condition state\n";
-            return false;
-        }
-        std::cout << "[Runner] Initial condition: " << latestSnapshot.toStdString() << "\n";
-    }
-    else
-    {
-        std::cout << "[Runner] Initial condition: cold start from script "
-                  << m_config.scriptFile << "\n";
-        // initialModelJsonPath stays empty → runStage() cold-starts from script
-    }
-
-    // ------------------------------------------------------------------
-    // Stage A — Advance [t, t+Δ]
-    // ------------------------------------------------------------------
-    const StageResult advance = runStage(StageKind::Advance,
-                                         advanceStart, advanceEnd,
-                                         initialModelJsonPath);
-    if (!advance.ok)
-    {
-        std::cerr << "[Runner] Advance stage failed.\n";
-        return false;
-    }
-
-    // Hand the freshly-written state snapshot to the assimilation thread
-    // so its next calibration cycle has a System to load. The connection
-    // is QueuedConnection across threads (see DTRunner::init()), so this
-    // emit returns immediately and the assim thread picks the path up
-    // through its own event loop. No-op when assimilation is disabled.
-    if (m_assimilation && !advance.stateSnapshotPath.isEmpty())
-    {
-        emit snapshotReady(advance.stateSnapshotPath);
-    }
-
-    // ------------------------------------------------------------------
-    // Stage B — Forecast [t, t+Δ+H]   (optional)
-    // ------------------------------------------------------------------
-    StageResult forecast;
+    StageResult advance, forecast;
     forecast.ok = false;
 
-    if (m_forecastDays > 0.0)
+    if (m_config.solver.isCodegen())
     {
-        const QDateTime forecastEnd =
-            advanceStart.addMSecs(m_config.intervalMs + m_config.forecastHorizonMs);
-
-        forecast = runStage(StageKind::Forecast,
-                            advanceStart, forecastEnd,
-                            initialModelJsonPath);
-        if (!forecast.ok)
-        {
-            std::cerr << "[Runner] Forecast stage failed (continuing).\n";
-            // Non-fatal: Advance already updated state for next cycle.
-        }
+        if (!runKernelStages(advanceStart, advanceEnd, advance, forecast))
+            return false;
     }
     else
     {
-        std::cout << "[Runner] Forecast stage disabled (forecast_horizon = 0).\n";
+        // Determine the snapshot to load for this cycle. A calibration that
+        // completed since the previous cycle contributes its PARAMETERS, which
+        // are more current; the model STATE always comes from the latest forward
+        // snapshot. The calibrated snapshot is written unsolved by
+        // DTAssimilation (it solves a copy for the reanalysis), so its block
+        // storages are not the end-of-window state -- adopting them wholesale
+        // restarted the model from whatever IC the calibration happened to be
+        // built on, which for a rolling window is the spin-up IC.
+        QString latestSnapshot;      // where the STATE comes from
+        QString calibratedParamSrc;  // where the PARAMETERS come from (may be empty)
+        const QString cycleStamp =
+            QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+
+        if (!m_pendingCalibratedSnapshot.isEmpty() &&
+            QFileInfo::exists(m_pendingCalibratedSnapshot))
+        {
+            calibratedParamSrc = m_pendingCalibratedSnapshot;
+            latestSnapshot     = findLatestStateSnapshot();
+            if (latestSnapshot.isEmpty())
+            {
+                // No forward state yet (calibration finished before the first
+                // forward snapshot): fall back to the calibrated snapshot whole.
+                latestSnapshot     = m_pendingCalibratedSnapshot;
+                calibratedParamSrc.clear();
+            }
+            std::cout << "[Runner] [" << cycleStamp.toStdString() << "] "
+                      << "CONSUMING calibrated snapshot (parameters only): "
+                      << m_pendingCalibratedSnapshot.toStdString() << "\n"
+                      << "[Runner]   state from: " << latestSnapshot.toStdString() << "\n";
+
+            // DIAG: read parameter values from the calibrated snapshot so we can
+            // confirm the calibrated values are flowing into the forward cycle.
+            QJsonObject snap = readJson(m_pendingCalibratedSnapshot);
+            if (!snap.isEmpty() && snap.contains("Parameters"))
+            {
+                std::cout << "[Runner]   parameters in calibrated snapshot:\n";
+                const QJsonObject params = snap["Parameters"].toObject();
+                for (auto it = params.constBegin(); it != params.constEnd(); ++it)
+                {
+                    const QJsonObject p = it.value().toObject();
+                    std::cout << "[Runner]     " << it.key().toStdString()
+                              << " = " << p["value"].toString().toStdString()
+                              << " [" << p["low"].toString().toStdString()
+                              << ", " << p["high"].toString().toStdString() << "]\n";
+                }
+            }
+            m_pendingCalibratedSnapshot.clear();
+        }
+        else
+        {
+            latestSnapshot = findLatestStateSnapshot();
+            std::cout << "[Runner] [" << cycleStamp.toStdString() << "] "
+                      << "loading forward snapshot: "
+                      << (latestSnapshot.isEmpty()
+                              ? std::string("(cold start)")
+                              : latestSnapshot.toStdString()) << "\n";
+        }
+
+        QString initialModelJsonPath;
+
+        if (!latestSnapshot.isEmpty())
+        {
+            QJsonObject prevState = readJson(latestSnapshot);
+            if (prevState.isEmpty())
+            {
+                std::cerr << "[Runner] Failed to read previous state: "
+                          << latestSnapshot.toStdString() << "\n";
+                return false;
+            }
+
+            // Splice the calibrated parameter set onto the forward state. The
+            // forward Solve() runs with applyparameters=true, so ApplyParameters()
+            // propagates these values into the bound block/link quantities; we do
+            // not copy the calibrated snapshot's derived block values.
+            if (!calibratedParamSrc.isEmpty())
+            {
+                const QJsonObject calib = readJson(calibratedParamSrc);
+                if (calib.isEmpty())
+                {
+                    std::cerr << "[Runner] Failed to read calibrated snapshot: "
+                              << calibratedParamSrc.toStdString()
+                              << " — continuing with forward parameters\n";
+                }
+                else
+                {
+                    int copied = 0;
+                    for (const QString &key : {QStringLiteral("Parameters"),
+                                               QStringLiteral("Set As Parameters")})
+                    {
+                        if (calib.contains(key))
+                        {
+                            prevState[key] = calib[key];
+                            ++copied;
+                        }
+                    }
+                    std::cout << "[Runner]   merged " << copied
+                              << " calibrated parameter block(s) onto forward state\n";
+                }
+            }
+
+            // We will re-patch the simulation window inside runStage() per stage,
+            // but writing the prev state once gives both stages a stable base file.
+            initialModelJsonPath =
+                QString::fromStdString(m_config.stateDir) + "/_current_input.json";
+            if (!writeJson(prevState, initialModelJsonPath))
+            {
+                std::cerr << "[Runner] Failed to write base initial-condition state\n";
+                return false;
+            }
+            std::cout << "[Runner] Initial condition: " << latestSnapshot.toStdString() << "\n";
+        }
+        else
+        {
+            std::cout << "[Runner] Initial condition: cold start from script "
+                      << m_config.scriptFile << "\n";
+            // initialModelJsonPath stays empty → runStage() cold-starts from script
+        }
+
+        // ------------------------------------------------------------------
+        // Stage A — Advance [t, t+Δ]
+        // ------------------------------------------------------------------
+        advance = runStage(StageKind::Advance,
+                                             advanceStart, advanceEnd,
+                                             initialModelJsonPath);
+        if (!advance.ok)
+        {
+            std::cerr << "[Runner] Advance stage failed.\n";
+            return false;
+        }
+
+        // Hand the freshly-written state snapshot to the assimilation thread
+        // so its next calibration cycle has a System to load. The connection
+        // is QueuedConnection across threads (see DTRunner::init()), so this
+        // emit returns immediately and the assim thread picks the path up
+        // through its own event loop. No-op when assimilation is disabled.
+        if (m_assimilation && !advance.stateSnapshotPath.isEmpty())
+        {
+            emit snapshotReady(advance.stateSnapshotPath);
+        }
+
+        // ------------------------------------------------------------------
+        // Stage B — Forecast [t, t+Δ+H]   (optional)
+        // ------------------------------------------------------------------
+        if (m_forecastDays > 0.0)
+        {
+            const QDateTime forecastEnd =
+                advanceStart.addMSecs(m_config.intervalMs + m_config.forecastHorizonMs);
+
+            forecast = runStage(StageKind::Forecast,
+                                advanceStart, forecastEnd,
+                                initialModelJsonPath);
+            if (!forecast.ok)
+            {
+                std::cerr << "[Runner] Forecast stage failed (continuing).\n";
+                // Non-fatal: Advance already updated state for next cycle.
+            }
+        }
+        else
+        {
+            std::cout << "[Runner] Forecast stage disabled (forecast_horizon = 0).\n";
+        }
     }
 
     // ------------------------------------------------------------------
@@ -872,6 +926,149 @@ bool DTRunner::runOnce()
         }
     }
 
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// runPreCycleCommand
+// runtime.pre_cycle_command (e.g. the rain/ET/observation feeds) run through the shell in the deployment root,
+// before a catch-up cycle; its output goes to the log. A failure is reported, the cycle runs on the data at hand.
+// ---------------------------------------------------------------------------
+bool DTRunner::runPreCycleCommand()
+{
+    if (m_config.preCycleCommand.empty()) return true;
+    QProcess p;
+    p.setWorkingDirectory(QString::fromStdString(m_config.deploymentRoot));
+    p.setProcessChannelMode(QProcess::MergedChannels);
+    std::cout << "[Runner] pre_cycle_command: " << m_config.preCycleCommand << "\n";
+    p.start("/bin/sh", {"-c", QString::fromStdString(m_config.preCycleCommand)});
+    const bool finished = p.waitForFinished(m_config.preCycleTimeoutS * 1000);
+    const QByteArray out = p.readAll();
+    if (!out.isEmpty()) std::cout << out.toStdString() << (out.endsWith('\n') ? "" : "\n");
+    if (!finished) { p.kill(); p.waitForFinished(5000); return false; }
+    return p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
+}
+
+// ---------------------------------------------------------------------------
+// runKernelStages
+// Codegen backend (solver.backend = "codegen"). Same cycle as the interpreter path: Advance [t, t+D] from the
+// latest state snapshot, whose end state becomes the next snapshot, then Forecast [t, t+D+H] from the same
+// state. Forcing comes from the forcing map (one fetch covering both stages); parameters are those compiled
+// into the kernel, overridden by solver.parameters. Snapshots hold the kernel state values by name plus the
+// usual _dt_* bookkeeping keys, so init() resumes from them as from an interpreter snapshot.
+// ---------------------------------------------------------------------------
+bool DTRunner::runKernelStages(const QDateTime &advanceStart, const QDateTime &advanceEnd,
+                               StageResult &advance, StageResult &forecast)
+{
+    const double t0 = toOHQDaySerial(advanceStart);
+    const double tA = toOHQDaySerial(advanceEnd);
+    const bool   doForecast = m_forecastDays > 0.0;
+    const QDateTime forecastEnd = advanceEnd.addMSecs(m_config.forecastHorizonMs);
+    const double tF = doForecast ? toOHQDaySerial(forecastEnd) : tA;
+
+    KernelState init;
+    const QString snap = findLatestStateSnapshot();
+    if (!snap.isEmpty() && !init.load(snap))
+    {
+        std::cerr << "[Runner] " << snap.toStdString()
+                  << " is not a kernel snapshot; starting from the model's initial values\n";
+        init = KernelState();
+    }
+    std::cout << "[Runner] Kernel initial condition: "
+              << (init.empty() ? std::string("model initial values (cold start)") : snap.toStdString()) << "\n";
+
+    std::vector<ForcingSeries> series;
+    if (m_config.forcing.enabled)
+    {
+        QString ferr;
+        if (!DTForcing::fetch(m_config.forcing, t0, tF, series, ferr))
+        {
+            std::cerr << "[Runner] Forcing: " << ferr.toStdString() << "\n";
+            return false;
+        }
+    }
+
+    // ---- Advance --------------------------------------------------------
+    if (m_viewer)                                    // the viewer history needs the last history_days only
+        m_kernel->setOutputSampling(m_viewer->stepDays(), tA - m_viewer->historyDays());
+    const QDateTime wallA = QDateTime::currentDateTimeUtc();
+    const KernelStageResult ra = m_kernel->runStage(t0, tA, m_config.solver.dt0, init, m_config.solver.parameters,
+                                                    m_config.forcing, series);
+    advance.kind = StageKind::Advance;
+    if (!ra.ok)
+    {
+        std::cerr << "[Runner] Advance (kernel) failed: " << ra.error.toStdString() << "\n";
+        if (m_runLogger)
+            m_runLogger->recordRun(RunLogger::RunType::ForwardAdvance, m_runsCompleted + 1, wallA,
+                                   QDateTime::currentDateTimeUtc(), t0, tA, snap, QString(),
+                                   RunLogger::Status::Failed, ra.error);
+        return false;
+    }
+    advance.ok = true;
+    advance.observed = ra.observed;
+    if (m_viewer) m_viewer->addHistory(ra.outputTimes, ra.outputRows, series);
+
+    QJsonObject extra;
+    extra["_dt_interval_start_utc"] = advanceStart.toString(Qt::ISODate);
+    extra["_dt_interval_end_utc"]   = advanceEnd.toString(Qt::ISODate);
+    extra["_dt_next_start_utc"]     = advanceEnd.toString(Qt::ISODate);
+    extra["_dt_runs_completed"]     = m_runsCompleted + 1;
+    extra["_dt_kernel"]             = QString::fromStdString(m_kernel->className());
+    const QString snapshotPath =
+        QString::fromStdString(m_config.stateDir) + "/" + makeSnapshotFilename(advanceEnd);
+    if (!ra.endState.save(snapshotPath, extra))
+        std::cerr << "[Runner] Warning: failed to write kernel state snapshot\n";
+    else
+        std::cout << "[Runner] State snapshot: " << snapshotPath.toStdString() << "\n";
+    advance.stateSnapshotPath = snapshotPath;
+    if (m_runLogger)
+        m_runLogger->recordRun(RunLogger::RunType::ForwardAdvance, m_runsCompleted + 1, wallA,
+                               QDateTime::currentDateTimeUtc(), t0, tA, snap, snapshotPath,
+                               RunLogger::Status::Ok, QString());
+
+    // ---- Forecast -------------------------------------------------------
+    // From the Advance end state (not again from t0: a catch-up Advance can be long). forecast.observed still
+    // spans [t0, tF], the Advance followed by the Forecast, as the selected_output merge expects.
+    forecast.ok = false;
+    forecast.kind = StageKind::Forecast;
+    if (doForecast)
+    {
+        const QDateTime wallF = QDateTime::currentDateTimeUtc();
+        if (m_viewer) m_kernel->setOutputSampling(m_viewer->stepDays(), tA);
+        const KernelStageResult rf = m_kernel->runStage(tA, tF, m_config.solver.dt0, ra.endState,
+                                                        m_config.solver.parameters, m_config.forcing, series);
+        forecast.ok = rf.ok;
+        forecast.observed = ra.observed;
+        for (size_t s = 0; s < forecast.observed.size() && s < rf.observed.size(); ++s)
+        {
+            TimeSeries<double> &dst = forecast.observed[s];
+            const double last = dst.size() ? dst.getTime(dst.size() - 1) : -1e300;
+            for (size_t j = 0; j < rf.observed[s].size(); ++j)
+                if (rf.observed[s].getTime(j) > last + 1e-9)
+                    dst.append(rf.observed[s].getTime(j), rf.observed[s].getValue(j));
+        }
+        if (rf.ok && m_viewer)
+        {
+            QJsonObject status;
+            status["cycle"] = m_runsCompleted + 1;
+            status["rain_source"] = QString("MRMS radar (observed), Open-Meteo (forecast)");
+            QString werr;
+            if (!m_viewer->write(tA, rf.outputTimes, rf.outputRows, series, status, werr))
+                std::cerr << "[Runner] Viewer files: " << werr.toStdString() << "\n";
+            else
+                std::cout << "[Runner] Viewer files written (now " << advanceEnd.toString(Qt::ISODate).toStdString()
+                          << ", forecast to " << forecastEnd.toString(Qt::ISODate).toStdString() << ")\n";
+        }
+        if (!rf.ok)
+            std::cerr << "[Runner] Forecast (kernel) failed (continuing): " << rf.error.toStdString() << "\n";
+        if (m_runLogger)
+            m_runLogger->recordRun(RunLogger::RunType::ForwardForecast, m_runsCompleted + 1, wallF,
+                                   QDateTime::currentDateTimeUtc(), t0, tF, snap, QString(),
+                                   rf.ok ? RunLogger::Status::Ok : RunLogger::Status::Failed,
+                                   rf.ok ? QString() : rf.error);
+    }
+    else
+        std::cout << "[Runner] Forecast stage disabled (forecast_horizon = 0).\n";
     return true;
 }
 
