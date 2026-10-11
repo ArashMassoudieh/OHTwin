@@ -150,6 +150,12 @@ struct DTStreamingSettings
     //
     // seedInflation: multiplicative ensemble inflation applied about the seed
     // mean in proposal space (EnKF-style). 1.0 = off (previous behaviour).
+    // rngSeed: fixes the sampler's RNG so two runs are byte-comparable. 0 (the
+    // default) draws from std::random_device, i.e. a different chain every run.
+    // Needed to compare backends: without it the acceptance sequence differs for
+    // reasons that have nothing to do with the forward model.
+    unsigned long long rngSeed    = 0;     // config: mcmc_rng_seed
+
     double seedInflation          = 1.0;   // config: mcmc_seed_inflation
 
     // kappaMin: hard floor on the global proposal scalar. In the accel-100 run

@@ -683,6 +683,9 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
         if (as.contains("mcmc_proposal_mode"))
             assimilation.mcmcProposalMode =
                 as["mcmc_proposal_mode"].toString().trimmed().toStdString();
+        if (as.contains("mcmc_rng_seed"))
+            assimilation.mcmcRngSeed =
+                static_cast<unsigned long long>(as["mcmc_rng_seed"].toDouble(0));
         if (as.contains("mcmc_seed_inflation"))
             assimilation.mcmcSeedInflation =
                 as["mcmc_seed_inflation"].toDouble(1.0);

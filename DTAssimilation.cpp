@@ -1362,6 +1362,7 @@ bool DTAssimilation::runCalibrationMCMC(ohq::KernelSystem &sys,
     mcmc.streamSettings.quorumFraction      = m_config.assimilation.mcmcQuorumFraction;
     mcmc.streamSettings.adaptiveCovariance  = (m_config.assimilation.mcmcProposalMode == "covariance");
     mcmc.streamSettings.seedInflation       = m_config.assimilation.mcmcSeedInflation;
+    mcmc.streamSettings.rngSeed             = m_config.assimilation.mcmcRngSeed;
     mcmc.streamSettings.driftSeedInflation  = m_config.assimilation.mcmcDriftSeedInflation;
     mcmc.streamSettings.kappaMin            = m_config.assimilation.mcmcKappaMin;
     mcmc.streamSettings.minStepFraction     = m_config.assimilation.mcmcMinStepFraction;

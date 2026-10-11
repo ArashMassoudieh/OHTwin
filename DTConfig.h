@@ -208,6 +208,10 @@ struct AssimilationConfig
     // under-dispersion compounds cycle over cycle. Inflating the seed
     // ensemble about its own mean restores spread without moving the
     // estimate. 1.0 disables it; 1.05-1.2 is the useful range.
+    // Fixes the MCMC RNG so two runs are comparable sample-by-sample (A/B of
+    // forward backends). 0 = nondeterministic, the normal setting.
+    unsigned long long mcmcRngSeed = 0;
+
     double mcmcSeedInflation = 1.0;
 
     // Seed inflation used once drift is detected (SeedMode::RatioReseed).

@@ -55,6 +55,8 @@ DTStreamingMCMC::DTStreamingMCMC(ohq::KernelSystem *system)
     // for the parallel sweep are derived from m_seedRng in runCycle().
     std::random_device rd;
     m_seedRng.seed((static_cast<std::uint64_t>(rd()) << 32) ^ rd());
+    // streamSettings is populated by the caller after construction; if it carries
+    // a fixed seed, initializeCycle() re-seeds before any draw is taken.
 
     // Streaming mode never uses the base class's pre-allocated sample
     // storage; keep it empty. total_number_of_samples is retired (Sec. 3.8).
@@ -1074,6 +1076,13 @@ const char *DTStreamingMCMC::seedModeName(SeedMode m)
 
 bool DTStreamingMCMC::initializeCycle(SeedMode mode, QString &errorMessage)
 {
+    // Fixed seed (mcmc_rng_seed != 0): reproducible chains, for A/B comparison of
+    // forward backends. Seeded per cycle with the cycle index mixed in, so cycles
+    // are not identical to each other while the whole run stays reproducible.
+    if (streamSettings.rngSeed != 0)
+        m_seedRng.seed(streamSettings.rngSeed
+                       + 0x9E3779B97F4A7C15ULL * static_cast<std::uint64_t>(m_cycleIndex));
+
     m_lastSeedMode = mode;
 
     const unsigned int np = MCMC_Settings.number_of_parameters;
