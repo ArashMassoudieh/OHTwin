@@ -42,8 +42,8 @@
 // ---------------------------------------------------------------------------
 // Construction
 // ---------------------------------------------------------------------------
-DTStreamingMCMC::DTStreamingMCMC(System *system)
-    : CMCMC<System>(system)
+DTStreamingMCMC::DTStreamingMCMC(ohq::KernelSystem *system)
+    : CMCMC<ohq::KernelSystem>(system)
 {
     // Base ctor has already:
     //   - set Model = system

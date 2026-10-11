@@ -29,6 +29,7 @@
 #include "System.h"
 #include <atomic>
 #include <QDateTime>
+#include "terminal/OHQ-Common/ohq_kernel.h"
 
 class DTConfig;
 class RunLogger;
@@ -114,6 +115,7 @@ private:
     QTimer                m_pollTimer;
     bool                  m_started = false;
     bool m_calibrationInProgress = false;   // touched only on assim thread
+    bool m_kernelVerified = false;   // VerifyKernelMatches runs once, on cycle 1
     std::atomic<double> m_bufferTMax{0.0};
     std::atomic<qint64> m_bufferPointCount{0};
     qint64 m_pollIntervalWallClockMs = 0;
@@ -146,7 +148,7 @@ private:
                           double tStart, double tEnd,
                           const QDateTime &calStart,
                           QString &errorMessage);
-    bool runCalibrationMCMC(System &sys,
+    bool runCalibrationMCMC(ohq::KernelSystem &sys,
                             double tStart, double tEnd,
                             const QDateTime &calStart,
                             QString &errorMessage);
