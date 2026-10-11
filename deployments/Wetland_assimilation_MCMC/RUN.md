@@ -4,8 +4,8 @@ Two processes: a **truth twin** that generates synthetic sensor data with a
 drifting parameter, and an **assimilation twin** that must track that drift
 without being told. They communicate over HTTP through nginx, not directly.
 
-Binary: `/home/arash/Projects/DrywellDT/build-qmake/bin/OHTwin`
-(rebuild with `cd /home/arash/Projects/DrywellDT/build-qmake && make -j$(nproc)`)
+Binary: `/home/arash/Projects/OpenHydroTwin/build-qmake/bin/OHTwin`
+(rebuild with `cd /home/arash/Projects/OpenHydroTwin/build-qmake && make -j$(nproc)`)
 
 ## The experiment
 
@@ -37,7 +37,7 @@ against a finished truth makes it attempt a single ~730-day solve.
 ### 1. Truth
 
 ```bash
-cd /home/arash/Projects/DrywellDT && ./build-qmake/bin/OHTwin --deployment deployments/Wetland_truth --fresh --force
+cd /home/arash/Projects/OpenHydroTwin && ./build-qmake/bin/OHTwin --deployment deployments/Wetland_truth --fresh --force
 ```
 
 Wait until `outputs/selected_output.csv` exists and is growing (~30 s), then:
@@ -45,7 +45,7 @@ Wait until `outputs/selected_output.csv` exists and is growing (~30 s), then:
 ### 2. Assimilator
 
 ```bash
-cd /home/arash/Projects/DrywellDT && ./build-qmake/bin/OHTwin --deployment deployments/Wetland_assimilation_MCMC --fresh --force
+cd /home/arash/Projects/OpenHydroTwin && ./build-qmake/bin/OHTwin --deployment deployments/Wetland_assimilation_MCMC --fresh --force
 ```
 
 `--fresh` erases `state/` **and** `outputs/` recursively, including

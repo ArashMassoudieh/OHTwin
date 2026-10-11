@@ -45,8 +45,8 @@ You'll need two terminals.
 observations before launching forward):
 
 ```bash
-cd /home/arash/Projects/DrywellDT/build  # or wherever the binary is
-./OpenHydroTwin /home/arash/Projects/DrywellDT/deployments/Bioretention_truth
+cd /home/arash/Projects/OpenHydroTwin
+./build-qmake/bin/OHTwin --deployment deployments/Bioretention_truth
 ```
 
 Wait until you see at least 2-3 cycles complete (each cycle at 1000x
@@ -55,7 +55,7 @@ acceleration takes ~86 seconds of wall time for a simulated day).
 **Terminal 2 — Forward Twin:**
 
 ```bash
-./OpenHydroTwin /home/arash/Projects/DrywellDT/deployments/Bioretention_forward
+./build-qmake/bin/OHTwin --deployment deployments/Bioretention_forward
 ```
 
 ## What to look for in the forward twin's logs

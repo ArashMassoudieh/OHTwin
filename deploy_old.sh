@@ -14,7 +14,7 @@ PEM_FILE="/home/arash/Dropbox/AWS (Selective Sync Conflict)/ArashLinux.pem"
 SSH_CMD="ssh -i \"${PEM_FILE}\" ${EC2_USER}@${EC2_HOST}"
 SCP_CMD="scp -i \"${PEM_FILE}\""
 
-LOCAL_PROJECT="/home/arash/Projects/DrywellDT"
+LOCAL_PROJECT="/home/arash/Projects/OpenHydroTwin"
 LOCAL_VIEWER="${LOCAL_PROJECT}/viewer"
 QT_LIB_DIR="/home/arash/Qt/6.8.2/gcc_64/lib"
 OHQ_LIB_DIR="${LOCAL_PROJECT}/libs/release"
@@ -226,7 +226,7 @@ eval "${SCP_CMD} \
 log "Patching model script paths for EC2..."
 sed \
     -e "s|/home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources|/home/ubuntu/drywelldt/bin/resources|g" \
-    -e "s|timeseries=/home/arash/Projects/DrywellDT/outputs/[^,]*|timeseries=|g" \
+    -e "s|timeseries=/home/arash/Projects/OpenHydroTwin/outputs/[^,]*|timeseries=|g" \
     "${LOCAL_PROJECT}/models/simple_pond_catchment.ohq" \
     > /tmp/simple_pond_catchment_ec2.ohq
 

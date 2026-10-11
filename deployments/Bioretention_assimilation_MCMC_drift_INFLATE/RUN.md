@@ -39,7 +39,7 @@ up at `deployments/Bioretention_truth_drift_RUN1_outputs/`.
 Terminal 1 — truth:
 
 ```bash
-cd /home/arash/Projects/DrywellDT && ./build-qmake/bin/OHTwin --deployment deployments/Bioretention_truth_drift --fresh --force
+cd /home/arash/Projects/OpenHydroTwin && ./build-qmake/bin/OHTwin --deployment deployments/Bioretention_truth_drift --fresh --force
 ```
 
 Wait ~30 s for `selected_output.csv` to appear and start growing, then
@@ -47,7 +47,7 @@ Wait ~30 s for `selected_output.csv` to appear and start growing, then
 Terminal 2 — assimilator:
 
 ```bash
-cd /home/arash/Projects/DrywellDT && ./build-qmake/bin/OHTwin --deployment deployments/Bioretention_assimilation_MCMC_drift_INFLATE --fresh --force
+cd /home/arash/Projects/OpenHydroTwin && ./build-qmake/bin/OHTwin --deployment deployments/Bioretention_assimilation_MCMC_drift_INFLATE --fresh --force
 ```
 
 Both need `--fresh` or they quit immediately (resume anchors sit past

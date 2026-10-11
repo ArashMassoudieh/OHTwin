@@ -57,7 +57,7 @@ DOMAIN="openhydrotwin.com"
 # folder, which no longer exists. The key now lives here.
 PEM_FILE="${PEM_FILE:-/home/arash/Dropbox/AWS_/ArashLinux.pem}"
 
-LOCAL_PROJECT="/home/arash/Projects/DrywellDT"
+LOCAL_PROJECT="/home/arash/Projects/OpenHydroTwin"
 LOCAL_VIEWER="${LOCAL_PROJECT}/viewer"
 
 DEPLOYMENT="JM_forecast"          # directory under deployments/

@@ -38,7 +38,7 @@ EC2_PUBLIC_IP="52.42.223.42"
 EC2_HOST="${EC2_PUBLIC_IP}"
 PEM_FILE="/home/arash/Dropbox/AWS (Selective Sync Conflict)/ArashLinux.pem"
 
-LOCAL_PROJECT="/home/arash/Projects/DrywellDT"
+LOCAL_PROJECT="/home/arash/Projects/OpenHydroTwin"
 LOCAL_VIEWER="${LOCAL_PROJECT}/viewer"
 
 # Qt install (Qt-installer layout). Bump QT_VER on a Qt upgrade and every
