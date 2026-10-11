@@ -102,6 +102,25 @@ bool DTAssimilation::configure(QString &errorMessage)
     m_pollIntervalWallClockMs =
         std::min(wallClockIntervalMs, static_cast<qint64>(INT_MAX));
 
+    // Codegen backend: load the generated kernel once. ohq::TheKernel() is a
+    // static singleton, so every KernelSystem built later -- the calibration
+    // System and each chain's copy -- picks it up. If it is not loaded,
+    // KernelSystem::Solve() falls back to System::Solve(), i.e. the interpreter,
+    // so a failure here is reported rather than silently halving performance.
+    if (m_config.solver.isCodegen())
+    {
+        if (!ohq::LoadKernel(m_config.solver.library))
+        {
+            errorMessage = "solver.library: cannot load generated kernel "
+                           + QString::fromStdString(m_config.solver.library);
+            return false;
+        }
+        std::cout << "[Assim] forward model: generated kernel "
+                  << m_config.solver.library << "\n";
+    }
+    else
+        std::cout << "[Assim] forward model: interpreter\n";
+
     // NOTE: the initial buffer refresh has been moved to startTimer(),
     // which runs on the assimilation thread. Refreshing here triggers
     //   "QObject::startTimer: Timers cannot be started from another thread"
@@ -596,10 +615,27 @@ bool DTAssimilation::runCalibration(QString &errorMessage)
     std::cout << "[Assim] [" << calStart.toString(Qt::ISODate).toStdString() << "] "
               << "calibration cycle " << (m_cyclesCompleted + 1) << " starting\n";
 
-    System sys;
+    ohq::KernelSystem sys;   // Solve() delegates to the kernel when one is loaded
     double tStart = -1.0, tEnd = -1.0;
     if (!prepareCalibrationSystem(sys, tStart, tEnd, calStart, errorMessage))
         return false;
+
+    // One-time kernel self-test, on the first cycle that has a populated System.
+    // Names and counts matching is not enough: a kernel can advertise a parameter
+    // and silently ignore it, which would leave the sampler exploring a dimension
+    // the forward model never reads. VerifyKernelMatches perturbs each one and
+    // checks the output actually moves.
+    if (m_config.solver.isCodegen() && !m_kernelVerified)
+    {
+        if (!ohq::VerifyKernelMatches(sys))
+        {
+            errorMessage = "generated kernel does not match the model's parameters "
+                           "(see the report above); refusing to calibrate against it";
+            return false;
+        }
+        m_kernelVerified = true;
+        std::cout << "[Assim] kernel parameter self-test passed\n";
+    }
 
     if (m_config.assimilation.method == "MCMC")
         return runCalibrationMCMC(sys, tStart, tEnd, calStart, errorMessage);
@@ -1297,7 +1333,7 @@ bool DTAssimilation::runCalibrationGA(System &sys,
 // is a normal, successful cycle whose ensemble is carried forward, and is
 // logged as Status::Ok with a "provisional" note — never as a failure.
 // ---------------------------------------------------------------------------
-bool DTAssimilation::runCalibrationMCMC(System &sys,
+bool DTAssimilation::runCalibrationMCMC(ohq::KernelSystem &sys,
                                         double tStart,
                                         double tEnd,
                                         const QDateTime &calStart,
@@ -1326,6 +1362,7 @@ bool DTAssimilation::runCalibrationMCMC(System &sys,
     mcmc.streamSettings.quorumFraction      = m_config.assimilation.mcmcQuorumFraction;
     mcmc.streamSettings.adaptiveCovariance  = (m_config.assimilation.mcmcProposalMode == "covariance");
     mcmc.streamSettings.seedInflation       = m_config.assimilation.mcmcSeedInflation;
+    mcmc.streamSettings.rngSeed             = m_config.assimilation.mcmcRngSeed;
     mcmc.streamSettings.driftSeedInflation  = m_config.assimilation.mcmcDriftSeedInflation;
     mcmc.streamSettings.kappaMin            = m_config.assimilation.mcmcKappaMin;
     mcmc.streamSettings.minStepFraction     = m_config.assimilation.mcmcMinStepFraction;

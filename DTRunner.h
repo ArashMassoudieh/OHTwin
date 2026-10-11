@@ -224,6 +224,22 @@ private:
     // m_parameterDrift is empty.
     void applyParameterDrift(System *system, double tSerial);
 
+    // Codegen counterpart of applyParameterDrift. The kernel is driven by a
+    // name->value map rather than a live System, so drift has to be merged into
+    // that map per stage instead of being written onto Parameter objects.
+    // Returns solver.parameters overlaid with each drift series sampled at
+    // tSerial (the stage-window midpoint, matching the interpreter path).
+    std::map<std::string, double> kernelParameters(double tSerial) const;
+
+    // Dual snapshot (codegen + assimilation). runKernelStages normally writes a
+    // state-values-only file, but DTAssimilation rebuilds its calibration System
+    // with System::LoadfromJson and so needs the FULL model in the snapshot. This
+    // writes one file carrying both: the model (for the calibration) plus
+    // _kernel_states (for the kernel's own fast resume).
+    bool writeDualSnapshot(const QString &path, const KernelState &endState,
+                           const QJsonObject &extra);
+    std::unique_ptr<System> m_snapshotSystem;   // built once, only for this
+
     // Return the noise sigma for one observed-output series. The default
     // value comes from observations.noiseSigma; optional entries in
     // observations.noiseSigmaByPattern override it when their lower-case

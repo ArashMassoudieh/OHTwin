@@ -36,6 +36,12 @@ INCLUDEPATH += ../OpenHydroQual/aquifolium/include/GA
 INCLUDEPATH += ../OpenHydroQual/aquifolium/include/MCMC
 INCLUDEPATH += $$PWD/../OpenHydroQual/jsoncpp/include
 INCLUDEPATH += $$PWD/../OpenHydroQual/codegen/tools      # ohq_kernel.h (codegen kernel ABI)
+# OpenHydroQual root, for the qualified include "terminal/OHQ-Common/ohq_kernel.h"
+# (ohq::KernelSystem). Deliberately NOT -I.../terminal/OHQ-Common: that directory
+# holds a DIFFERENT header also called ohq_kernel.h, and DTKernelModel.cpp includes
+# the codegen one by bare name -- having both on the path makes which it gets
+# depend on -I order.
+INCLUDEPATH += $$PWD/../OpenHydroQual
 INCLUDEPATH += ../OpenHydroQual/
 
 macx:  DEFINES += mac_version

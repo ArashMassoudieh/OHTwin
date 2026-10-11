@@ -445,6 +445,27 @@ bool DTRunner::init(QString &errorMessage)
         std::cout << "[Runner] " << m_parameterDrift.size()
                   << " parameter drift series active.\n";
 
+    // A drift parameter the kernel does not expose would be dropped silently:
+    // runStage only warns on an unknown name, and the run would then look
+    // healthy while the parameter stayed frozen at its compiled-in value --
+    // which, for a Truth Twin, means no drift at all. Fail at startup instead.
+    if (m_kernel && !m_parameterDrift.empty())
+    {
+        const std::vector<std::string> kp = m_kernel->parameterNames();
+        for (const auto &entry : m_config.parameterDrift)
+            if (std::find(kp.begin(), kp.end(), entry.parameter) == kp.end())
+            {
+                errorMessage = QString("parameter_drift targets '%1', which the kernel "
+                                       "(%2) does not expose; drift would be silently "
+                                       "ignored under the codegen backend")
+                                   .arg(QString::fromStdString(entry.parameter),
+                                        QString::fromStdString(m_kernel->className()));
+                return false;
+            }
+        std::cout << "[Runner] parameter drift verified against the kernel ("
+                  << m_parameterDrift.size() << " series)\n";
+    }
+
 
     return true;
 }
@@ -651,6 +672,14 @@ bool DTRunner::runOnce()
     {
         if (!runKernelStages(advanceStart, advanceEnd, advance, forecast))
             return false;
+
+        // Same handoff the interpreter branch does further down: without it
+        // DTAssimilation::m_latestSnapshotPath stays empty and every calibration
+        // aborts with "no forward snapshot available yet", even though the
+        // snapshot was written. The interpreter's emit sits inside its own
+        // branch, which this path returns before reaching.
+        if (m_assimilation && !advance.stateSnapshotPath.isEmpty())
+            emit snapshotReady(advance.stateSnapshotPath);
     }
     else
     {
@@ -992,7 +1021,9 @@ bool DTRunner::runKernelStages(const QDateTime &advanceStart, const QDateTime &a
     if (m_viewer)                                    // the viewer history needs the last history_days only
         m_kernel->setOutputSampling(m_viewer->stepDays(), tA - m_viewer->historyDays());
     const QDateTime wallA = QDateTime::currentDateTimeUtc();
-    const KernelStageResult ra = m_kernel->runStage(t0, tA, m_config.solver.dt0, init, m_config.solver.parameters,
+    // Drift sampled at this stage's window midpoint, as the interpreter does.
+    const std::map<std::string, double> paramsA = kernelParameters(0.5 * (t0 + tA));
+    const KernelStageResult ra = m_kernel->runStage(t0, tA, m_config.solver.dt0, init, paramsA,
                                                     m_config.forcing, series);
     advance.kind = StageKind::Advance;
     if (!ra.ok)
@@ -1016,10 +1047,14 @@ bool DTRunner::runKernelStages(const QDateTime &advanceStart, const QDateTime &a
     extra["_dt_kernel"]             = QString::fromStdString(m_kernel->className());
     const QString snapshotPath =
         QString::fromStdString(m_config.stateDir) + "/" + makeSnapshotFilename(advanceEnd);
-    if (!ra.endState.save(snapshotPath, extra))
-        std::cerr << "[Runner] Warning: failed to write kernel state snapshot\n";
+    const bool needFullModel = m_config.assimilation.enabled;
+    const bool snapOk = needFullModel ? writeDualSnapshot(snapshotPath, ra.endState, extra)
+                                      : ra.endState.save(snapshotPath, extra);
+    if (!snapOk)
+        std::cerr << "[Runner] Warning: failed to write state snapshot\n";
     else
-        std::cout << "[Runner] State snapshot: " << snapshotPath.toStdString() << "\n";
+        std::cout << "[Runner] State snapshot: " << snapshotPath.toStdString()
+                  << (needFullModel ? "  (dual: model + kernel state)" : "") << "\n";
     advance.stateSnapshotPath = snapshotPath;
     if (m_runLogger)
         m_runLogger->recordRun(RunLogger::RunType::ForwardAdvance, m_runsCompleted + 1, wallA,
@@ -1035,8 +1070,9 @@ bool DTRunner::runKernelStages(const QDateTime &advanceStart, const QDateTime &a
     {
         const QDateTime wallF = QDateTime::currentDateTimeUtc();
         if (m_viewer) m_kernel->setOutputSampling(m_viewer->stepDays(), tA);
+        const std::map<std::string, double> paramsF = kernelParameters(0.5 * (tA + tF));
         const KernelStageResult rf = m_kernel->runStage(tA, tF, m_config.solver.dt0, ra.endState,
-                                                        m_config.solver.parameters, m_config.forcing, series);
+                                                        paramsF, m_config.forcing, series);
         forecast.ok = rf.ok;
         forecast.observed = ra.observed;
         for (size_t s = 0; s < forecast.observed.size() && s < rf.observed.size(); ++s)
@@ -1711,6 +1747,84 @@ void DTRunner::applyParameterDrift(System *system, double tSerial)
                   << " <- " << value
                   << " (at t=" << tSerial << ")\n";
     }
+}
+
+// ---------------------------------------------------------------------------
+// kernelParameters
+// The codegen path never builds a System, so applyParameterDrift has nothing to
+// write to. Merge the drift values into the parameter map the kernel is driven
+// with instead; DTKernelModel::runStage matches these by NAME, so the kernel's
+// own parameter ordering does not matter here.
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// writeDualSnapshot
+// The kernel path never builds a System, which is where its speed comes from --
+// but DTAssimilation::prepareCalibrationSystem rebuilds its System with
+// System::LoadfromJson(snapshot), so a state-values-only snapshot leaves it with
+// nothing to load and every calibration aborts with "no forward snapshot
+// available yet". Write one file that satisfies both readers.
+//
+// The kernel's state names are block names and its state variable is the one
+// ohq_generate was given (Storage), so the values map straight onto the model.
+// ---------------------------------------------------------------------------
+bool DTRunner::writeDualSnapshot(const QString &path, const KernelState &endState,
+                                 const QJsonObject &extra)
+{
+    const std::string defaultTemplatePath =
+        QCoreApplication::applicationDirPath().toStdString() + "/../../resources/";
+    if (!m_snapshotSystem)
+    {
+        m_snapshotSystem.reset(new System());
+        m_snapshotSystem->SetDefaultTemplatePath(defaultTemplatePath);
+        m_snapshotSystem->SetSilent(true);
+        Script scr(m_config.scriptFile, m_snapshotSystem.get());
+        m_snapshotSystem->CreateFromScript(scr, defaultTemplatePath + "settings.json");
+        std::cout << "[Runner] dual snapshots enabled (calibration needs the full model)\n";
+    }
+
+    int applied = 0, missing = 0;
+    for (const auto &kv : endState.storage)
+    {
+        Object *o = m_snapshotSystem->object(kv.first);
+        if (!o) { ++missing; continue; }
+        if (o->SetVal("Storage", kv.second)) ++applied;
+    }
+    if (missing)
+        std::cerr << "[Runner] dual snapshot: " << missing
+                  << " kernel state name(s) have no matching object\n";
+
+    if (!m_snapshotSystem->SavetoJson(path.toStdString(), {}, false, true))
+        return false;
+
+    // Merge the kernel keys into the model JSON so KernelState::load() still
+    // recognises it on the next cycle.
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) return false;
+    QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+    f.close();
+    for (auto it = extra.constBegin(); it != extra.constEnd(); ++it) o[it.key()] = it.value();
+    o["_kernel_state_time"] = endState.time;
+    QJsonObject ks;
+    for (const auto &kv : endState.storage) ks[QString::fromStdString(kv.first)] = kv.second;
+    o["_kernel_states"] = ks;
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return false;
+    f.write(QJsonDocument(o).toJson(QJsonDocument::Indented));
+    return true;
+}
+
+std::map<std::string, double> DTRunner::kernelParameters(double tSerial) const
+{
+    std::map<std::string, double> params = m_config.solver.parameters;
+    for (size_t i = 0; i < m_parameterDrift.size(); ++i)
+    {
+        const std::string &name = m_config.parameterDrift[i].parameter;
+        const double value = m_parameterDrift[i].interpol(tSerial);
+        params[name] = value;              // drift wins over a static override
+        std::cout << "[Runner] Parameter drift (kernel): " << name
+                  << " <- " << value
+                  << " (at t=" << tSerial << ")\n";
+    }
+    return params;
 }
 
 

@@ -49,11 +49,25 @@ double toSerial(const QDateTime &dt)
     return epoch.msecsTo(dt.toUTC()) / 86400000.0;
 }
 
+QDateTime fromSerial(double serial)
+{
+    const QDateTime epoch(kOHQEpoch, QTime(0, 0), QTimeZone::UTC);
+    return epoch.addMSecs(static_cast<qint64>(serial * 86400000.0));
+}
+
 // Open-Meteo hourly variable name for a forcing variable.
 QString openMeteoName(const std::string &variable)
 {
     if (variable == "precipitation") return "precipitation";
     if (variable == "et0")           return "et0_fao_evapotranspiration";
+    // Penman ET inputs. The interpreter fetches exactly these four for an
+    // "Evapotranspiration_Penmam (S)" source (DTRunner::runStage), so a codegen
+    // deployment using Penman needs them in its forcing map or the kernel runs on
+    // whatever ET inputs were baked in at generation time.
+    if (variable == "temperature")   return "temperature_2m";
+    if (variable == "humidity")      return "relative_humidity_2m";
+    if (variable == "wind")          return "windspeed_10m";
+    if (variable == "solar")         return "shortwave_radiation";
     return QString();
 }
 
@@ -71,19 +85,33 @@ QString pointKey(double lat, double lon)
 
 // One multi-location request. Returns false on a network or parse error.
 bool requestOpenMeteo(const std::vector<std::pair<double, double>> &pts, const QString &var, int pastDays,
-                      int forecastDays, std::vector<HourlyPoint> &out, QString &err)
+                      int forecastDays, bool archive, double t0, double t1,
+                      std::vector<HourlyPoint> &out, QString &err)
 {
     QStringList lats, lons;
     for (const auto &p : pts) { lats << QString::number(p.first, 'f', 4); lons << QString::number(p.second, 'f', 4); }
-    QUrl url("https://api.open-meteo.com/v1/forecast");
+    QUrl url(archive ? "https://archive-api.open-meteo.com/v1/archive"
+                     : "https://api.open-meteo.com/v1/forecast");
     QUrlQuery q;
     q.addQueryItem("latitude", lats.join(","));
     q.addQueryItem("longitude", lons.join(","));
     q.addQueryItem("hourly", var);
-    q.addQueryItem("past_days", QString::number(pastDays));
-    q.addQueryItem("forecast_days", QString::number(forecastDays));
+    if (archive)
+    {
+        // A day either side, as the interpreter's archive fetch does, so the
+        // window is fully covered after hourly stamps are clipped.
+        q.addQueryItem("start_date", fromSerial(t0).date().addDays(-1).toString("yyyy-MM-dd"));
+        q.addQueryItem("end_date",   fromSerial(t1).date().addDays(1).toString("yyyy-MM-dd"));
+    }
+    else
+    {
+        q.addQueryItem("past_days", QString::number(pastDays));
+        q.addQueryItem("forecast_days", QString::number(forecastDays));
+    }
     q.addQueryItem("timezone", "GMT");
     url.setQuery(q);
+    std::cout << "[Forcing] " << (archive ? "archive" : "forecast") << " fetch: "
+              << url.toString().toStdString() << "\n";
 
     QNetworkAccessManager nam;
     QNetworkRequest req(url);
@@ -230,6 +258,7 @@ bool parse(const QJsonValue &v, const std::function<QString(const QString &)> &r
         }
         o = doc.object();
     }
+    cfg.archive = (o.value("source").toString("forecast").trimmed().toLower() == "archive");
     cfg.pastDays = o.value("past_days").toInt(3);
     cfg.forecastDays = o.value("forecast_days").toInt(10);
     const QJsonArray entries = o.value("entries").toArray();
@@ -241,9 +270,21 @@ bool parse(const QJsonValue &v, const std::function<QString(const QString &)> &r
         fe.variable = e.value("variable").toString().toStdString();
         fe.provider = e.value("provider").toString("openmeteo").toStdString();
         fe.scale = e.value("scale").toDouble(1.0);
-        if (fe.variable != "precipitation" && fe.variable != "et0")
+        // Accept anything openMeteoName() knows; a csv provider carries its own
+        // values and only needs to know whether it is an interval (precipitation)
+        // or point series.
+        if (fe.provider == "openmeteo" && openMeteoName(fe.variable).isEmpty())
         {
-            err = QString("forcing entry '%1': variable must be 'precipitation' or 'et0'").arg(fe.name.c_str());
+            err = QString("forcing entry '%1': unknown variable '%2' (precipitation, et0, "
+                          "temperature, humidity, wind, solar)")
+                      .arg(fe.name.c_str(), fe.variable.c_str());
+            return false;
+        }
+        if (fe.provider == "csv" && fe.variable != "precipitation" && fe.variable != "et0"
+            && openMeteoName(fe.variable).isEmpty())
+        {
+            err = QString("forcing entry '%1': unknown variable '%2'")
+                      .arg(fe.name.c_str(), fe.variable.c_str());
             return false;
         }
         if (fe.provider == "csv")
@@ -296,9 +337,17 @@ bool fetch(const ForcingConfig &cfg, double t0, double t1, std::vector<ForcingSe
 {
     out.assign(cfg.entries.size(), ForcingSeries());
 
-    // Open-Meteo: one batched request per variable for all distinct points of the cycle.
+    // Open-Meteo: one batched request per variable for all distinct points of the
+    // cycle. Driven by the variables the map actually uses rather than a fixed
+    // list -- a hard-coded {precipitation, et0} silently fetched nothing for the
+    // Penman inputs, and the entries then failed window coverage with "no data".
     std::map<std::string, std::map<QString, HourlyPoint>> om;   // variable -> point key -> hourly data
-    for (const char *var : {"precipitation", "et0"})
+    std::vector<std::string> wanted;
+    for (const auto &e : cfg.entries)
+        if (e.provider == "openmeteo"
+            && std::find(wanted.begin(), wanted.end(), e.variable) == wanted.end())
+            wanted.push_back(e.variable);
+    for (const std::string &var : wanted)
     {
         std::vector<std::pair<double, double>> pts;
         std::map<QString, int> seen;
@@ -316,7 +365,8 @@ bool fetch(const ForcingConfig &cfg, double t0, double t1, std::vector<ForcingSe
             std::vector<std::pair<double, double>> b(pts.begin() + i, pts.begin() + std::min(pts.size(), i + batch));
             std::vector<HourlyPoint> res;
             QString e2;
-            if (!requestOpenMeteo(b, openMeteoName(var), cfg.pastDays, cfg.forecastDays, res, e2))
+            if (!requestOpenMeteo(b, openMeteoName(var), cfg.pastDays, cfg.forecastDays,
+                                  cfg.archive, t0, t1, res, e2))
             {
                 err = e2;
                 return false;

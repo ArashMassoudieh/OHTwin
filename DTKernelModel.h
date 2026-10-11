@@ -76,6 +76,11 @@ public:
     // Kernel outputs ("object:quantity", empty for a kernel generated without --outputs). runStage samples them
     // at the multiples of `days` (an absolute grid, e.g. whole hours) that are >= `from`; days = 0: not sampled.
     std::vector<std::string> outputNames() const;
+
+    // Parameter names in the kernel's own order. Used to verify, before a run
+    // starts, that every parameter the twin intends to drive (parameter drift,
+    // solver.parameters) actually exists in the kernel -- runStage only warns.
+    std::vector<std::string> parameterNames() const;
     void setOutputSampling(double days, double from = -1e300) { outputInterval_ = days; outputFrom_ = from; }
 
     // Solve [t0, t1]. `init` empty -> the model's own initial values at t0.

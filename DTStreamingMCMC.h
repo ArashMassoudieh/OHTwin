@@ -63,6 +63,11 @@
 // ---------------------------------------------------------------------------
 
 #include "MCMC.h"
+
+// ohq::KernelSystem — a System whose Solve() delegates to a generated kernel when
+// one is loaded and falls back to System::Solve otherwise. Qualified on purpose:
+// a different header of the same basename lives in codegen/tools.
+#include "terminal/OHQ-Common/ohq_kernel.h"
 #include "System.h"
 #include "TimeSeries.h"
 
@@ -145,6 +150,12 @@ struct DTStreamingSettings
     //
     // seedInflation: multiplicative ensemble inflation applied about the seed
     // mean in proposal space (EnKF-style). 1.0 = off (previous behaviour).
+    // rngSeed: fixes the sampler's RNG so two runs are byte-comparable. 0 (the
+    // default) draws from std::random_device, i.e. a different chain every run.
+    // Needed to compare backends: without it the acceptance sequence differs for
+    // reasons that have nothing to do with the forward model.
+    unsigned long long rngSeed    = 0;     // config: mcmc_rng_seed
+
     double seedInflation          = 1.0;   // config: mcmc_seed_inflation
 
     // kappaMin: hard floor on the global proposal scalar. In the accel-100 run
@@ -328,10 +339,10 @@ enum class SeedMode
     ProvisionalResume   // previous cycle was provisional: resume carried chain states
 };
 
-class DTStreamingMCMC : public CMCMC<System>
+class DTStreamingMCMC : public CMCMC<ohq::KernelSystem>
 {
 public:
-    explicit DTStreamingMCMC(System *system);
+    explicit DTStreamingMCMC(ohq::KernelSystem *system);
 
     DTStreamingSettings streamSettings;
 
@@ -618,7 +629,7 @@ private:
     // touch the same System concurrently, not even as a copy source.
     // Memory: nc pristine copies + up to numberOfThreads transient
     // working copies resident during a sweep.
-    std::vector<System> m_chainModels;
+    std::vector<ohq::KernelSystem> m_chainModels;
 
     // Predictive-band output reservoir (Sec: realizations). Reset each cycle.
     DTOutputReservoir m_outputReservoir;
