@@ -672,6 +672,14 @@ bool DTRunner::runOnce()
     {
         if (!runKernelStages(advanceStart, advanceEnd, advance, forecast))
             return false;
+
+        // Same handoff the interpreter branch does further down: without it
+        // DTAssimilation::m_latestSnapshotPath stays empty and every calibration
+        // aborts with "no forward snapshot available yet", even though the
+        // snapshot was written. The interpreter's emit sits inside its own
+        // branch, which this path returns before reaching.
+        if (m_assimilation && !advance.stateSnapshotPath.isEmpty())
+            emit snapshotReady(advance.stateSnapshotPath);
     }
     else
     {
@@ -1039,10 +1047,14 @@ bool DTRunner::runKernelStages(const QDateTime &advanceStart, const QDateTime &a
     extra["_dt_kernel"]             = QString::fromStdString(m_kernel->className());
     const QString snapshotPath =
         QString::fromStdString(m_config.stateDir) + "/" + makeSnapshotFilename(advanceEnd);
-    if (!ra.endState.save(snapshotPath, extra))
-        std::cerr << "[Runner] Warning: failed to write kernel state snapshot\n";
+    const bool needFullModel = m_config.assimilation.enabled;
+    const bool snapOk = needFullModel ? writeDualSnapshot(snapshotPath, ra.endState, extra)
+                                      : ra.endState.save(snapshotPath, extra);
+    if (!snapOk)
+        std::cerr << "[Runner] Warning: failed to write state snapshot\n";
     else
-        std::cout << "[Runner] State snapshot: " << snapshotPath.toStdString() << "\n";
+        std::cout << "[Runner] State snapshot: " << snapshotPath.toStdString()
+                  << (needFullModel ? "  (dual: model + kernel state)" : "") << "\n";
     advance.stateSnapshotPath = snapshotPath;
     if (m_runLogger)
         m_runLogger->recordRun(RunLogger::RunType::ForwardAdvance, m_runsCompleted + 1, wallA,
@@ -1744,6 +1756,62 @@ void DTRunner::applyParameterDrift(System *system, double tSerial)
 // with instead; DTKernelModel::runStage matches these by NAME, so the kernel's
 // own parameter ordering does not matter here.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// writeDualSnapshot
+// The kernel path never builds a System, which is where its speed comes from --
+// but DTAssimilation::prepareCalibrationSystem rebuilds its System with
+// System::LoadfromJson(snapshot), so a state-values-only snapshot leaves it with
+// nothing to load and every calibration aborts with "no forward snapshot
+// available yet". Write one file that satisfies both readers.
+//
+// The kernel's state names are block names and its state variable is the one
+// ohq_generate was given (Storage), so the values map straight onto the model.
+// ---------------------------------------------------------------------------
+bool DTRunner::writeDualSnapshot(const QString &path, const KernelState &endState,
+                                 const QJsonObject &extra)
+{
+    const std::string defaultTemplatePath =
+        QCoreApplication::applicationDirPath().toStdString() + "/../../resources/";
+    if (!m_snapshotSystem)
+    {
+        m_snapshotSystem.reset(new System());
+        m_snapshotSystem->SetDefaultTemplatePath(defaultTemplatePath);
+        m_snapshotSystem->SetSilent(true);
+        Script scr(m_config.scriptFile, m_snapshotSystem.get());
+        m_snapshotSystem->CreateFromScript(scr, defaultTemplatePath + "settings.json");
+        std::cout << "[Runner] dual snapshots enabled (calibration needs the full model)\n";
+    }
+
+    int applied = 0, missing = 0;
+    for (const auto &kv : endState.storage)
+    {
+        Object *o = m_snapshotSystem->object(kv.first);
+        if (!o) { ++missing; continue; }
+        if (o->SetVal("Storage", kv.second)) ++applied;
+    }
+    if (missing)
+        std::cerr << "[Runner] dual snapshot: " << missing
+                  << " kernel state name(s) have no matching object\n";
+
+    if (!m_snapshotSystem->SavetoJson(path.toStdString(), {}, false, true))
+        return false;
+
+    // Merge the kernel keys into the model JSON so KernelState::load() still
+    // recognises it on the next cycle.
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) return false;
+    QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+    f.close();
+    for (auto it = extra.constBegin(); it != extra.constEnd(); ++it) o[it.key()] = it.value();
+    o["_kernel_state_time"] = endState.time;
+    QJsonObject ks;
+    for (const auto &kv : endState.storage) ks[QString::fromStdString(kv.first)] = kv.second;
+    o["_kernel_states"] = ks;
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return false;
+    f.write(QJsonDocument(o).toJson(QJsonDocument::Indented));
+    return true;
+}
+
 std::map<std::string, double> DTRunner::kernelParameters(double tSerial) const
 {
     std::map<std::string, double> params = m_config.solver.parameters;
