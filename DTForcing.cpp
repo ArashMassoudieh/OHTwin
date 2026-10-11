@@ -54,6 +54,14 @@ QString openMeteoName(const std::string &variable)
 {
     if (variable == "precipitation") return "precipitation";
     if (variable == "et0")           return "et0_fao_evapotranspiration";
+    // Penman ET inputs. The interpreter fetches exactly these four for an
+    // "Evapotranspiration_Penmam (S)" source (DTRunner::runStage), so a codegen
+    // deployment using Penman needs them in its forcing map or the kernel runs on
+    // whatever ET inputs were baked in at generation time.
+    if (variable == "temperature")   return "temperature_2m";
+    if (variable == "humidity")      return "relative_humidity_2m";
+    if (variable == "wind")          return "windspeed_10m";
+    if (variable == "solar")         return "shortwave_radiation";
     return QString();
 }
 
@@ -241,9 +249,21 @@ bool parse(const QJsonValue &v, const std::function<QString(const QString &)> &r
         fe.variable = e.value("variable").toString().toStdString();
         fe.provider = e.value("provider").toString("openmeteo").toStdString();
         fe.scale = e.value("scale").toDouble(1.0);
-        if (fe.variable != "precipitation" && fe.variable != "et0")
+        // Accept anything openMeteoName() knows; a csv provider carries its own
+        // values and only needs to know whether it is an interval (precipitation)
+        // or point series.
+        if (fe.provider == "openmeteo" && openMeteoName(fe.variable).isEmpty())
         {
-            err = QString("forcing entry '%1': variable must be 'precipitation' or 'et0'").arg(fe.name.c_str());
+            err = QString("forcing entry '%1': unknown variable '%2' (precipitation, et0, "
+                          "temperature, humidity, wind, solar)")
+                      .arg(fe.name.c_str(), fe.variable.c_str());
+            return false;
+        }
+        if (fe.provider == "csv" && fe.variable != "precipitation" && fe.variable != "et0"
+            && openMeteoName(fe.variable).isEmpty())
+        {
+            err = QString("forcing entry '%1': unknown variable '%2'")
+                      .arg(fe.name.c_str(), fe.variable.c_str());
             return false;
         }
         if (fe.provider == "csv")

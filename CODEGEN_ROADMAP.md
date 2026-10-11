@@ -251,6 +251,41 @@ reporting backend and per-solve timing.
 `GetObjectiveFunctionValue` per sample (≤1e-8 rel), identical acceptance
 sequence, posterior mean/MAP identical; report speedup per cycle.
 
+**Phase 2 status 2026-10-11 — integration done, scope narrowed.** The twin now
+runs its calibration on `CMCMC<ohq::KernelSystem>` and loads the kernel from
+`solver.library`. Running the gate on `Wetland_assimilation_codegen_i9` found
+four gaps; three are fixed:
+
+- **Snapshot content.** `runKernelStages` writes state values only, but
+  `prepareCalibrationSystem` rebuilds its System with `LoadfromJson(snapshot)`,
+  so every calibration aborted with "no forward snapshot available yet".
+  `DTRunner::writeDualSnapshot` now writes one file carrying the full model *and*
+  `_kernel_states`, used only when the deployment also calibrates.
+- **Snapshot handoff.** `emit snapshotReady()` lived inside the interpreter
+  branch of `runOnce()`, which the codegen branch returns before reaching.
+- **Index vs name.** `KernelSystem::Solve()` pushed parameters and copied
+  observation series back *positionally*; a snapshot-loaded System is ordered
+  alphabetically and the kernel by declaration (4 of 7 differ on Wetland). Fixed
+  by name maps in `ohq_kernel.h` (OpenHydroQual `7852568`).
+- **Forcing — OPEN, and the reason for the scope decision below.** A codegen
+  deployment gets weather from the forcing map; the kernel's own forcing is baked
+  at generation time (for this model, an empty 2010 window, so precipitation is
+  identically zero and `CatchmentRunoffCoeff` provably does nothing — the
+  parameter self-test correctly refused). The forcing map fetches relative to
+  *now* (`past_days`/`forecast_days`), which cannot serve a deployment replaying
+  2020. The interpreter instead calls `DTWeather` with `openmeteo_historical` over
+  the simulation window.
+
+**Scope decision 2026-10-11: historical-replay deployments stay on the
+interpreter.** The codegen backend targets live-time twins (JM), where the
+forcing map's forecast window is the right thing. Supporting replays would mean
+adding an archive/simulation-window mode to `DTForcing`; not planned.
+`DTForcing` did gain the four Penman inputs (`temperature`, `humidity`, `wind`,
+`solar`) on the way, which a live Penman deployment needs.
+
+Also added: `mcmc_rng_seed` (0 = nondeterministic, as before) — the gate's
+"identical acceptance sequence" criterion is untestable without it.
+
 ### Phase 3 — performance
 Symbolic/AD Jacobian from the expression trees (replaces colored FD); dead-code
 elimination (only quantities reachable from residual + observations);
