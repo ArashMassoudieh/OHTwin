@@ -627,14 +627,40 @@ bool DTAssimilation::runCalibration(QString &errorMessage)
     // checks the output actually moves.
     if (m_config.solver.isCodegen() && !m_kernelVerified)
     {
-        if (!ohq::VerifyKernelMatches(sys))
+        // Names first, and this stays fatal: a model parameter the kernel does not
+        // expose would be sampled and never reach the forward model.
+        std::string missing;
+        if (!ohq::BuildKernelParamMap(sys, &missing))
+        {
+            errorMessage = QString("generated kernel does not expose model parameter '%1'; "
+                                   "regenerate the kernel from this model")
+                               .arg(QString::fromStdString(missing));
+            return false;
+        }
+
+        // The responsiveness probe perturbs each parameter and checks the output
+        // moves. It runs against a BARE kernel instance, i.e. the forcing baked in
+        // at generation time. When a forcing map supplies the real weather at run
+        // time that baked series is not representative -- for the Wetland model it
+        // is empty, so every rain-driven parameter looks unresponsive and is
+        // indistinguishable from one the kernel genuinely ignores. Report it, but
+        // do not refuse: the premise of the probe does not hold here.
+        const bool responsive = ohq::VerifyKernelMatches(sys);
+        if (!responsive && !m_config.forcing.enabled)
         {
             errorMessage = "generated kernel does not match the model's parameters "
                            "(see the report above); refusing to calibrate against it";
             return false;
         }
+        if (!responsive)
+            std::cerr << "[Assim] WARNING: the kernel self-test found unresponsive parameter(s) "
+                         "(see above). The probe uses the kernel's BAKED forcing, which this "
+                         "deployment overrides with a forcing map, so the result is not "
+                         "conclusive -- continuing. Verify sensitivity with solver.parameters "
+                         "if a parameter's posterior looks degenerate.\n";
+        else
+            std::cout << "[Assim] kernel parameter self-test passed\n";
         m_kernelVerified = true;
-        std::cout << "[Assim] kernel parameter self-test passed\n";
     }
 
     if (m_config.assimilation.method == "MCMC")

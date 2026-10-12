@@ -55,7 +55,7 @@
         "mcmc_realization_interval": 10,
         "calibration_window_days": 60,
         "mcmc_proposal_mode": "covariance",
-        "mcmc_max_sweeps": 900,
+        "mcmc_max_sweeps": 2500,
         "mcmc_quorum_fraction": 0.25,
         "mcmc_stability_enabled": false,
         "calibration_output_dir": "outputs/calibration",
