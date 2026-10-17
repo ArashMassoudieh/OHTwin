@@ -102,7 +102,14 @@ bool DTViewerWriter::init(const ViewerOutputConfig &cfg, const std::vector<std::
         const QJsonObject p = fv.toObject().value("properties").toObject();
         const QString id = p.value(idField).toString();
         units_ << id;
-        ph[id] = {{"unit", id}, {"segment", p.value("receiving_segment").toString()}};
+        // placeholders: {unit}, {segment} (= receiving_segment) and every other property of the unit, e.g. a
+        // {ds_segment} for the stream link out of the receiving segment
+        QHash<QString, QString> &u = ph[id];
+        for (auto it = p.constBegin(); it != p.constEnd(); ++it)
+            if (it.value().isString()) u[it.key()] = it.value().toString();
+            else if (it.value().isDouble()) u[it.key()] = QString::number(it.value().toDouble());
+        u["unit"] = id;
+        u["segment"] = p.value("receiving_segment").toString();
     }
     units_.sort();
 
@@ -237,10 +244,27 @@ std::vector<double> DTViewerWriter::values(const Channel &c, const std::vector<d
 }
 
 // ----------------------------------------------------------------------------------------------------- history
-void DTViewerWriter::addHistory(const std::vector<double> &t, const std::vector<std::vector<double>> &rows,
-                                const std::vector<ForcingSeries> &series)
+std::vector<std::vector<float>> DTViewerWriter::channelValues(const std::vector<double> &t,
+                                                              const std::vector<std::vector<double>> &rows,
+                                                              const std::vector<ForcingSeries> &series) const
 {
+    std::vector<std::vector<float>> out(channels_.size());
+    for (size_t c = 0; c < channels_.size(); ++c)
+        if (channels_[c].rainEntry < 0)
+            for (double v : values(channels_[c], t, rows, series)) out[c].push_back(float(v));
+    return out;
+}
+
+void DTViewerWriter::addHistory(const std::vector<double> &t, const std::vector<std::vector<double>> &rows,
+                                const std::vector<ForcingSeries> &series, const Band *band)
+{
+    const float fNaN = std::numeric_limits<float>::quiet_NaN();
     if (histV_.size() != channels_.size()) { histV_.assign(channels_.size(), {}); histT_.clear(); }
+    if (band && !band->empty() && histLo_.size() != channels_.size())          // first band: none before
+    {
+        histLo_.assign(channels_.size(), std::vector<float>(histT_.size(), fNaN));
+        histHi_ = histLo_;
+    }
     const double last = histT_.empty() ? -1e300 : histT_.back();
     size_t k0 = 0;
     while (k0 < t.size() && t[k0] <= last + 1e-6) ++k0;           // the stage starts where the history ends
@@ -248,6 +272,14 @@ void DTViewerWriter::addHistory(const std::vector<double> &t, const std::vector<
     const std::vector<std::vector<double>> rn(rows.begin() + long(k0), rows.end());
     for (size_t c = 0; c < channels_.size(); ++c)
         for (double v : values(channels_[c], tn, rn, series)) histV_[c].push_back(float(v));
+    if (!histLo_.empty())
+        for (size_t c = 0; c < channels_.size(); ++c)
+            for (size_t k = k0; k < t.size(); ++k)
+            {
+                const bool has = band && c < band->lo.size() && k < band->lo[c].size();
+                histLo_[c].push_back(has ? band->lo[c][k] : fNaN);
+                histHi_[c].push_back(has ? band->hi[c][k] : fNaN);
+            }
     histT_.insert(histT_.end(), tn.begin(), tn.end());
     // keep history_days
     size_t drop = 0;
@@ -256,6 +288,8 @@ void DTViewerWriter::addHistory(const std::vector<double> &t, const std::vector<
     {
         histT_.erase(histT_.begin(), histT_.begin() + long(drop));
         for (auto &v : histV_) v.erase(v.begin(), v.begin() + long(drop));
+        for (auto &v : histLo_) v.erase(v.begin(), v.begin() + long(drop));
+        for (auto &v : histHi_) v.erase(v.begin(), v.begin() + long(drop));
     }
     if (!saveHistory()) std::cerr << "[Viewer] Warning: cannot write " << cfg_.historyFile << "\n";
 }
@@ -272,17 +306,29 @@ bool DTViewerWriter::loadHistory()
     QStringList keys;
     QVector<double> t;
     in >> magic >> version >> keys >> t;
-    if (magic != "OWTH" || version != 1) return false;
+    if (magic != "OWTH" || (version != 1 && version != 2)) return false;
     histT_.assign(t.begin(), t.end());
-    for (const QString &k : keys)
+    auto readSet = [&](std::vector<std::vector<float>> &dst) {
+        for (const QString &k : keys)
+        {
+            QVector<float> v;
+            in >> v;
+            const int c = channelIndex_.value(k, -1);
+            if (c >= 0 && v.size() == t.size()) dst[size_t(c)].assign(v.begin(), v.end());
+        }
+        for (auto &v : dst)                              // a channel new to the config: no history
+            if (v.size() != histT_.size()) v.assign(histT_.size(), std::numeric_limits<float>::quiet_NaN());
+    };
+    readSet(histV_);
+    qint32 hasBand = 0;
+    if (version == 2) in >> hasBand;                     // version 2: a band may follow the values
+    if (hasBand)
     {
-        QVector<float> v;
-        in >> v;
-        const int c = channelIndex_.value(k, -1);
-        if (c >= 0 && v.size() == t.size()) histV_[size_t(c)].assign(v.begin(), v.end());
+        histLo_.assign(channels_.size(), {});
+        histHi_.assign(channels_.size(), {});
+        readSet(histLo_);
+        readSet(histHi_);
     }
-    for (auto &v : histV_)                               // a channel new to the config: no history
-        if (v.size() != histT_.size()) v.assign(histT_.size(), std::numeric_limits<float>::quiet_NaN());
     return in.status() == QDataStream::Ok;
 }
 
@@ -293,8 +339,11 @@ bool DTViewerWriter::saveHistory() const
     QDataStream out(&f);
     QStringList keys;
     for (const Channel &c : channels_) keys << c.key;
-    out << QByteArray("OWTH") << qint32(1) << keys << QVector<double>(histT_.begin(), histT_.end());
+    out << QByteArray("OWTH") << qint32(2) << keys << QVector<double>(histT_.begin(), histT_.end());
     for (const auto &v : histV_) out << QVector<float>(v.begin(), v.end());
+    out << qint32(histLo_.empty() ? 0 : 1);
+    for (const auto &v : histLo_) out << QVector<float>(v.begin(), v.end());
+    for (const auto &v : histHi_) out << QVector<float>(v.begin(), v.end());
     return f.commit();
 }
 
@@ -311,7 +360,8 @@ bool DTViewerWriter::saveText(const QString &path, const QByteArray &data, QStri
 
 // ------------------------------------------------------------------------------------------------------- write
 bool DTViewerWriter::write(double now, const std::vector<double> &t, const std::vector<std::vector<double>> &rows,
-                           const std::vector<ForcingSeries> &series, const QJsonObject &status, QString &err)
+                           const std::vector<ForcingSeries> &series, const QJsonObject &status, QString &err,
+                           const Band *band)
 {
     // time axis: the history up to now, then the forecast
     std::vector<double> T;
@@ -319,9 +369,31 @@ bool DTViewerWriter::write(double now, const std::vector<double> &t, const std::
     const size_t nh = T.size();
     std::vector<double> tf;
     std::vector<std::vector<double>> rf;
+    std::vector<size_t> kf;                                       // forecast rows: their index in t
     for (size_t k = 0; k < t.size(); ++k)
-        if (t[k] > now + 1e-6) { tf.push_back(t[k]); rf.push_back(rows[k]); }
+        if (t[k] > now + 1e-6) { tf.push_back(t[k]); rf.push_back(rows[k]); kf.push_back(k); }
     T.insert(T.end(), tf.begin(), tf.end());
+    // band of channel c over T: the history band, then the forecast band; empty if the channel has none
+    auto fullBand = [&](int c, bool upper) {
+        const auto &h = upper ? histHi_ : histLo_;
+        const auto *f = band && !band->empty() ? (upper ? &band->hi : &band->lo) : nullptr;
+        std::vector<double> y(T.size(), kNaN);
+        bool any = false;
+        if (size_t(c) < h.size())
+            for (size_t k = 0; k < nh && k < h[size_t(c)].size(); ++k)
+                if (std::isfinite(h[size_t(c)][k])) { y[k] = h[size_t(c)][k]; any = true; }
+        if (f && size_t(c) < f->size())
+            for (size_t j = 0; j < kf.size(); ++j)
+                if (kf[j] < (*f)[size_t(c)].size() && std::isfinite((*f)[size_t(c)][kf[j]]))
+                    { y[nh + j] = (*f)[size_t(c)][kf[j]]; any = true; }
+        if (!any) y.clear();
+        return y;
+    };
+    auto bandJson = [&](int c) -> QByteArray {
+        const std::vector<double> lo = fullBand(c, false), hi = fullBand(c, true);
+        if (lo.empty() || hi.empty()) return QByteArray();
+        return ",\"lo\":" + numbers(lo) + ",\"hi\":" + numbers(hi);
+    };
     auto full = [&](int c) {
         std::vector<double> y(T.size(), kNaN);
         const auto &h = histV_[size_t(c)];
@@ -358,7 +430,8 @@ bool DTViewerWriter::write(double now, const std::vector<double> &t, const std::
                 first = false;
                 b += str(key) + ":{\"label\":" + str(ev.toObject().value("label").toString() + ": " +
                                                      vv.toObject().value("label").toString()) +
-                     ",\"unit\":" + str(vv.toObject().value("unit").toString()) + ",\"v\":" + numbers(full(c)) + "}";
+                     ",\"unit\":" + str(vv.toObject().value("unit").toString()) + ",\"v\":" + numbers(full(c)) +
+                     bandJson(c) + "}";
             }
         b += "}}";
         if (!saveText(outDir + "/units/" + u + ".json", b, err)) return false;
@@ -421,7 +494,7 @@ bool DTViewerWriter::write(double now, const std::vector<double> &t, const std::
                 first = false;
                 b += str(sid + "_model") + ":{\"label\":" + str(s.value("label").toString() + ", model") +
                      ",\"unit\":" + str(s.value("unit").toString()) + ",\"t\":" + numbers(Tr, 10) +
-                     ",\"v\":" + numbers(full(c)) + "}";
+                     ",\"v\":" + numbers(full(c)) + bandJson(c) + "}";
             }
             const QString obs = s.value("observed").toString().replace("{gage}", id);
             if (obs.isEmpty() || cfg_.observationsDir.empty()) continue;

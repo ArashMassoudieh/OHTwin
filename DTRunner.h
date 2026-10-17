@@ -185,6 +185,11 @@ private:
     // `forecast` (ok = false if disabled or failed). Returns false only if Advance failed.
     bool runKernelStages(const QDateTime &advanceStart, const QDateTime &advanceEnd,
                          StageResult &advance, StageResult &forecast);
+    // solver.ensemble: every member's Advance [t0, tA] (from its own state, saved at tA) and Forecast [tA, tF];
+    // bandA/bandF: the quantiles of the members' viewer channels on the grids tGridA/tGridF (the main run's).
+    void runEnsemble(double t0, double tA, double tF, const KernelState &mainInit,
+                     const std::vector<ForcingSeries> &series, const std::vector<double> &tGridA,
+                     const std::vector<double> &tGridF, DTViewerWriter::Band &bandA, DTViewerWriter::Band &bandF);
 
     StageResult runStage(StageKind kind,
                          const QDateTime &stageStart,

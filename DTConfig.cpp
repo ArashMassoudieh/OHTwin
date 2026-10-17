@@ -203,6 +203,46 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
         const QJsonObject pv = sv.value("parameters").toObject();
         for (auto it = pv.constBegin(); it != pv.constEnd(); ++it)
             solver.parameters[it.key().toStdString()] = it.value().toDouble();
+
+        // ensemble{} (optional, codegen): parameter-uncertainty band (SolverConfig::Ensemble)
+        if (sv.contains("ensemble") && solver.isCodegen())
+        {
+            const QJsonObject en = sv.value("ensemble").toObject();
+            SolverConfig::Ensemble &E = solver.ensemble;
+            E.file = resolvePath(en.value("file").toString()).toStdString();
+            E.stateDir = resolvePath(en.value("state_dir").toString("state/ensemble")).toStdString();
+            E.threads = std::max(1, en.value("threads").toInt(1));
+            const QJsonArray q = en.value("quantiles").toArray();
+            if (q.size() == 2) { E.qlo = q[0].toDouble(); E.qhi = q[1].toDouble(); }
+            E.label = en.value("label").toString().toStdString();
+            QFile ef(QString::fromStdString(E.file));
+            if (!ef.open(QIODevice::ReadOnly | QIODevice::Text))
+            {
+                errorMessage = "config.json solver.ensemble.file: cannot read " + ef.fileName();
+                return false;
+            }
+            QStringList names;
+            while (!ef.atEnd())
+            {
+                const QString line = QString::fromUtf8(ef.readLine()).trimmed();
+                if (line.isEmpty() || line.startsWith('#')) continue;
+                const QStringList p = line.split(',');
+                if (names.isEmpty()) { for (const QString &n : p) names << n.trimmed(); continue; }
+                if (p.size() != names.size())
+                {
+                    errorMessage = QString("config.json solver.ensemble.file: a row has %1 values for %2 columns")
+                                       .arg(p.size()).arg(names.size());
+                    return false;
+                }
+                std::map<std::string, double> m = solver.parameters;
+                for (int i = 0; i < p.size(); ++i) m[names[i].toStdString()] = p[i].toDouble();
+                E.members.push_back(std::move(m));
+            }
+            const int cap = en.value("members").toInt(0);              // optional: only the first N rows
+            if (cap > 0 && size_t(cap) < E.members.size()) E.members.resize(size_t(cap));
+            E.enabled = !E.members.empty();
+            if (E.enabled) QDir().mkpath(QString::fromStdString(E.stateDir));
+        }
     }
 
     // ------------------------------------------------------------------

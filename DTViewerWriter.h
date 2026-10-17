@@ -30,6 +30,10 @@
 // History: the values of each Advance stage (on the chart time grid) are appended to a rolling store
 // (viewer_history.bin) that keeps output_times.history_days; the files combine it with the Forecast stage.
 // All files are replaced atomically (QSaveFile), so the viewer never reads a half-written one.
+//
+// Band (optional, solver.ensemble): the lower and upper quantiles of an ensemble of runs for every channel
+// except rain, on the same time grid as the main run. Stored in the history next to the values and written as
+// "lo"/"hi" arrays next to "v" in the unit and gage files.
 #pragma once
 #include "DTConfig.h"
 #include "DTForcing.h"
@@ -53,13 +57,26 @@ public:
     double stepDays() const { return chartStep_; }        // chart time grid (kernel output sampling)
     double historyDays() const { return historyDays_; }
 
+    // lo[c][k], hi[c][k]: channel c at the k-th time of the rows passed with it (NaN: none); lo empty = no band
+    struct Band
+    {
+        std::vector<std::vector<float>> lo, hi;
+        bool empty() const { return lo.empty(); }
+    };
+    size_t channelCount() const { return channels_.size(); }
+    // The values of every channel for one run (a rain channel gives an empty vector), e.g. an ensemble member.
+    std::vector<std::vector<float>> channelValues(const std::vector<double> &t,
+                                                  const std::vector<std::vector<double>> &rows,
+                                                  const std::vector<ForcingSeries> &series) const;
+
     // Append an Advance stage (kernel outputs on the chart grid; the forcing series of the cycle) to the history.
     void addHistory(const std::vector<double> &t, const std::vector<std::vector<double>> &rows,
-                    const std::vector<ForcingSeries> &series);
+                    const std::vector<ForcingSeries> &series, const Band *band = nullptr);
 
     // Write the viewer files for "now" (the Advance end) with the Forecast stage after it.
     bool write(double now, const std::vector<double> &t, const std::vector<std::vector<double>> &rows,
-               const std::vector<ForcingSeries> &series, const QJsonObject &status, QString &err);
+               const std::vector<ForcingSeries> &series, const QJsonObject &status, QString &err,
+               const Band *band = nullptr);
 
     QStringList warnings() const { return warnings_; }
 
@@ -87,5 +104,6 @@ private:
     // history store
     std::vector<double> histT_;
     std::vector<std::vector<float>> histV_;   // [channel][time]
+    std::vector<std::vector<float>> histLo_, histHi_;   // band, same shape (empty: no band yet)
     QStringList warnings_;
 };

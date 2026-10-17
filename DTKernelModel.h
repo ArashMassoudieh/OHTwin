@@ -82,6 +82,12 @@ public:
     KernelStageResult runStage(double t0, double t1, double dt0, const KernelState &init,
                                const std::map<std::string, double> &parameters,
                                const ForcingConfig &forcing, const std::vector<ForcingSeries> &series) const;
+    // The same with the output sampling given explicitly and no console output: safe to call from several
+    // threads at once (each call works on its own kernel instance), as the ensemble members do.
+    KernelStageResult runStageWith(double t0, double t1, double dt0, const KernelState &init,
+                                   const std::map<std::string, double> &parameters, const ForcingConfig &forcing,
+                                   const std::vector<ForcingSeries> &series, double sampleDays, double sampleFrom,
+                                   bool verbose) const;
 
 private:
     std::unique_ptr<ohq::Kernel> k_;

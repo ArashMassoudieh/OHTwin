@@ -86,6 +86,15 @@ KernelStageResult DTKernelModel::runStage(double t0, double t1, double dt0, cons
                                           const ForcingConfig &forcing,
                                           const std::vector<ForcingSeries> &series) const
 {
+    return runStageWith(t0, t1, dt0, init, parameters, forcing, series, outputInterval_, outputFrom_, true);
+}
+
+KernelStageResult DTKernelModel::runStageWith(double t0, double t1, double dt0, const KernelState &init,
+                                              const std::map<std::string, double> &parameters,
+                                              const ForcingConfig &forcing,
+                                              const std::vector<ForcingSeries> &series, double sampleDays,
+                                              double sampleFrom, bool verbose) const
+{
     KernelStageResult r;
     ohq::Kernel &k = *k_;
     void *h = k.create();
@@ -101,7 +110,7 @@ KernelStageResult DTKernelModel::runStage(double t0, double t1, double dt0, cons
     {
         bool found = false;
         for (int i = 0; i < k.n_parameters() && !found; ++i) found = (p.first == k.parameter_name(i));
-        if (!found) std::cerr << "[Kernel] warning: parameter '" << p.first << "' is not in the kernel\n";
+        if (!found && verbose) std::cerr << "[Kernel] warning: parameter '" << p.first << "' is not in the kernel\n";
     }
     k.apply_parameters(h);
     k.initialize_at(h, t0, dt0);
@@ -119,7 +128,7 @@ KernelStageResult DTKernelModel::runStage(double t0, double t1, double dt0, cons
             if (it != init.storage.end()) { st[i] = it->second; ++matched; }
         }
         k.import_state(h, t0, st.data(), nullptr, nullptr, nullptr);
-        if (matched < ns)
+        if (matched < ns && verbose)
             std::cerr << "[Kernel] warning: snapshot has " << matched << " of " << ns
                       << " states; the rest start from the model's initial values\n";
     }
@@ -148,12 +157,12 @@ KernelStageResult DTKernelModel::runStage(double t0, double t1, double dt0, cons
     // outputs: run to each grid time in [max(t0, from), t1] and read them there
     const int nOut = k.outputCount();
     int ok = 1;
-    if (outputInterval_ > 0 && nOut > 0)
+    if (sampleDays > 0 && nOut > 0)
     {
         const double eps = 1e-7;
-        for (double n = std::ceil((std::max(t0, outputFrom_) - eps) / outputInterval_); ok; n += 1)
+        for (double n = std::ceil((std::max(t0, sampleFrom) - eps) / sampleDays); ok; n += 1)
         {
-            const double ts = n * outputInterval_;
+            const double ts = n * sampleDays;
             if (ts > t1 + eps) break;
             if (ts > t0 + eps) ok = k.run_to(h, ts) && !k.solution_failed(h);
             if (!ok) break;
@@ -190,7 +199,7 @@ KernelStageResult DTKernelModel::runStage(double t0, double t1, double dt0, cons
     for (int i = 0; i < ns; ++i) r.endState.storage[k.state_name(i)] = st[i];
     k.destroy(h);
     r.ok = true;
-    std::cout << "[Kernel] stage " << t0 << " -> " << t1 << ": " << r.steps << " steps, " << nSet
+    if (verbose) std::cout << "[Kernel] stage " << t0 << " -> " << t1 << ": " << r.steps << " steps, " << nSet
               << " parameter overrides\n";
     return r;
 }

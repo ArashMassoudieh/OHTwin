@@ -112,6 +112,20 @@ struct SolverConfig
     double      dt0 = 0.0005;              // codegen: initial time step (days) of every stage
     std::map<std::string, double> parameters;   // codegen: parameter overrides by name
     bool isCodegen() const { return backend == "codegen"; }
+
+    // codegen, optional (solver.ensemble): parameter-uncertainty band. Every member (one row of `file`, e.g.
+    // posterior samples) runs the same Advance and Forecast stages as the main run from its own state
+    // (state_dir/member_NNN.json); the viewer files get the quantiles [qlo, qhi] of the members as "lo"/"hi".
+    struct Ensemble
+    {
+        bool enabled = false;
+        std::string file;                            // CSV: header = parameter names, one row per member
+        std::string stateDir;                        // member state snapshots (default <deployment>/state/ensemble)
+        int threads = 1;
+        double qlo = 0.025, qhi = 0.975;
+        std::string label;                           // describes the band (status.json "band")
+        std::vector<std::map<std::string, double>> members;   // solver.parameters overlaid with each row
+    } ensemble;
 };
 
 // Viewer files written every cycle (OpenWatershedTwin viewer; codegen backend with kernel outputs).

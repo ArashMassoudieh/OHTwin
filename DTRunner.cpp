@@ -28,15 +28,19 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <random>
 #include <string>
+#include <thread>
 #include <vector>
 #include "VizRenderer.h"
 #include "DTWeather.h"
@@ -1006,7 +1010,23 @@ bool DTRunner::runKernelStages(const QDateTime &advanceStart, const QDateTime &a
     }
     advance.ok = true;
     advance.observed = ra.observed;
-    if (m_viewer) m_viewer->addHistory(ra.outputTimes, ra.outputRows, series);
+
+    // ---- Ensemble (parameter-uncertainty band) ------------------------------
+    // The members' Forecast grid is the main run's: sampled from tA on the chart step, like the main Forecast.
+    DTViewerWriter::Band bandA, bandF;
+    if (m_viewer && m_config.solver.ensemble.enabled)
+    {
+        std::vector<double> tGridF;
+        const double step = m_viewer->stepDays();
+        for (double n = std::ceil((tA - 1e-7) / step); doForecast; n += 1)
+        {
+            const double ts = n * step;
+            if (ts > tF + 1e-7) break;
+            tGridF.push_back(ts);
+        }
+        runEnsemble(t0, tA, tF, init, series, ra.outputTimes, tGridF, bandA, bandF);
+    }
+    if (m_viewer) m_viewer->addHistory(ra.outputTimes, ra.outputRows, series, bandA.empty() ? nullptr : &bandA);
 
     QJsonObject extra;
     extra["_dt_interval_start_utc"] = advanceStart.toString(Qt::ISODate);
@@ -1052,8 +1072,17 @@ bool DTRunner::runKernelStages(const QDateTime &advanceStart, const QDateTime &a
             QJsonObject status;
             status["cycle"] = m_runsCompleted + 1;
             status["rain_source"] = QString("MRMS radar (observed), Open-Meteo (forecast)");
+            if (m_config.solver.ensemble.enabled)
+            {
+                QJsonObject b;
+                b["members"] = int(m_config.solver.ensemble.members.size());
+                b["quantiles"] = QJsonArray{m_config.solver.ensemble.qlo, m_config.solver.ensemble.qhi};
+                b["label"] = QString::fromStdString(m_config.solver.ensemble.label);
+                status["band"] = b;
+            }
             QString werr;
-            if (!m_viewer->write(tA, rf.outputTimes, rf.outputRows, series, status, werr))
+            if (!m_viewer->write(tA, rf.outputTimes, rf.outputRows, series, status, werr,
+                                 bandF.empty() ? nullptr : &bandF))
                 std::cerr << "[Runner] Viewer files: " << werr.toStdString() << "\n";
             else
                 std::cout << "[Runner] Viewer files written (now " << advanceEnd.toString(Qt::ISODate).toStdString()
@@ -1070,6 +1099,88 @@ bool DTRunner::runKernelStages(const QDateTime &advanceStart, const QDateTime &a
     else
         std::cout << "[Runner] Forecast stage disabled (forecast_horizon = 0).\n";
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// runEnsemble
+// solver.ensemble: the members run the cycle's Advance and Forecast with their own parameters, each from its
+// own state (state_dir/member_NNN.json; a member without one starts from the main run's initial state), on
+// `threads` threads. Per viewer channel and time, the quantiles [qlo, qhi] of the members that solved form the
+// band. A member whose solve fails is left out of this cycle (its state is not advanced).
+// ---------------------------------------------------------------------------
+void DTRunner::runEnsemble(double t0, double tA, double tF, const KernelState &mainInit,
+                           const std::vector<ForcingSeries> &series, const std::vector<double> &tGridA,
+                           const std::vector<double> &tGridF, DTViewerWriter::Band &bandA,
+                           DTViewerWriter::Band &bandF)
+{
+    const SolverConfig::Ensemble &E = m_config.solver.ensemble;
+    const size_t nm = E.members.size();
+    const double step = m_viewer->stepDays();
+    const double from = tA - m_viewer->historyDays();
+    const bool doForecast = tF > tA;
+    std::vector<std::vector<std::vector<float>>> va(nm), vf(nm);      // [member][channel][time]
+    std::vector<char> okA(nm, 0), okF(nm, 0);
+    std::atomic<size_t> next{0};
+    std::atomic<int> cold{0};
+    const QDateTime wall = QDateTime::currentDateTimeUtc();
+    auto work = [&]() {
+        for (size_t i = next++; i < nm; i = next++)
+        {
+            const QString path = QString::fromStdString(E.stateDir) + QString("/member_%1.json").arg(i, 3, 10, QChar('0'));
+            KernelState init;
+            if (!init.load(path)) { init = mainInit; ++cold; }
+            const KernelStageResult a = m_kernel->runStageWith(t0, tA, m_config.solver.dt0, init, E.members[i],
+                                                               m_config.forcing, series, step, from, false);
+            if (!a.ok || a.outputTimes.size() != tGridA.size()) continue;
+            a.endState.save(path, QJsonObject{{"_dt_member", int(i)}});
+            va[i] = m_viewer->channelValues(a.outputTimes, a.outputRows, series);
+            okA[i] = 1;
+            if (!doForecast) continue;
+            const KernelStageResult f = m_kernel->runStageWith(tA, tF, m_config.solver.dt0, a.endState, E.members[i],
+                                                               m_config.forcing, series, step, tA, false);
+            if (!f.ok || f.outputTimes.size() != tGridF.size()) continue;
+            vf[i] = m_viewer->channelValues(f.outputTimes, f.outputRows, series);
+            okF[i] = 1;
+        }
+    };
+    std::vector<std::thread> pool;
+    for (int k = 1; k < std::min<int>(E.threads, int(nm)); ++k) pool.emplace_back(work);
+    work();
+    for (auto &th : pool) th.join();
+
+    auto quantiles = [&](const std::vector<std::vector<std::vector<float>>> &v, const std::vector<char> &ok,
+                         size_t nt, DTViewerWriter::Band &band) {
+        const size_t nc = m_viewer->channelCount();
+        const float fNaN = std::numeric_limits<float>::quiet_NaN();
+        band.lo.assign(nc, std::vector<float>(nt, fNaN));
+        band.hi = band.lo;
+        std::vector<float> x;
+        x.reserve(nm);
+        auto q = [&](double p) {                                 // linear between order statistics
+            const double pos = p * double(x.size() - 1);
+            const size_t j = size_t(std::floor(pos));
+            const double w = pos - double(j);
+            return j + 1 < x.size() ? float((1 - w) * x[j] + w * x[j + 1]) : x[j];
+        };
+        for (size_t c = 0; c < nc; ++c)
+            for (size_t k = 0; k < nt; ++k)
+            {
+                x.clear();
+                for (size_t i = 0; i < nm; ++i)
+                    if (ok[i] && c < v[i].size() && k < v[i][c].size() && std::isfinite(v[i][c][k]))
+                        x.push_back(v[i][c][k]);
+                if (x.size() < 2) continue;
+                std::sort(x.begin(), x.end());
+                band.lo[c][k] = q(E.qlo);
+                band.hi[c][k] = q(E.qhi);
+            }
+    };
+    const int nA = int(std::count(okA.begin(), okA.end(), 1)), nF = int(std::count(okF.begin(), okF.end(), 1));
+    if (nA >= 2) quantiles(va, okA, tGridA.size(), bandA);
+    if (nF >= 2) quantiles(vf, okF, tGridF.size(), bandF);
+    std::cout << "[Ensemble] " << nm << " members on " << std::min<int>(E.threads, int(nm)) << " thread(s): Advance "
+              << nA << " ok, Forecast " << nF << " ok" << (cold ? ", " + std::to_string(cold) + " without a state of their own" : std::string())
+              << " (" << wall.secsTo(QDateTime::currentDateTimeUtc()) << " s)\n";
 }
 
 // ---------------------------------------------------------------------------
