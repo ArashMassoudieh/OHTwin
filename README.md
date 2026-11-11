@@ -46,6 +46,36 @@ templates to the server, so deployed copies update on the next deployment.
 The former OHTwin-only `Pond_Plugin.json.bak_depth` is retained in
 `resource_backups/`.
 
+## `deployment.port` in config.json is local-only, not shared
+
+`DTConfig.cpp` parses `port` and checks it's a positive integer, but nothing
+in OHTwin ever binds a socket to it — it isn't used to serve anything.
+Production (the AWS deploy scripts) routes by nginx path, not port, so it
+plays no role there either. The only thing it's for is local convenience:
+if you want to view a deployment's `outputs/` on your own machine, you
+start something like `python3 -m http.server <port>` pointed at it, and
+that port is yours to pick.
+
+Because each developer's machine has a different set of ports already in
+use, this number can legitimately differ per machine for the same
+deployment, with neither value more "correct" than the other. If a given
+deployment's `config.json` keeps showing up as locally modified for just
+this reason, stop git from flagging it rather than fighting the diff every
+time:
+
+```sh
+git update-index --skip-worktree deployments/<name>/config.json
+```
+
+To undo (e.g. to pull in an unrelated change to that same file later):
+
+```sh
+git update-index --no-skip-worktree deployments/<name>/config.json
+git checkout deployments/<name>/config.json   # pulls in the committed version
+# re-apply your local port, then re-flag:
+git update-index --skip-worktree deployments/<name>/config.json
+```
+
 ## Code-generated kernel backend and forcing map
 
 A deployment can run its forward cycle with a model compiled to C++ by OpenHydroQual's code generator
