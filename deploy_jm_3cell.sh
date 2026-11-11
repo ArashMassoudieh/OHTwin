@@ -56,7 +56,7 @@ EC2_PUBLIC_IP="52.42.223.42"
 EC2_HOST="${EC2_PUBLIC_IP}"
 DOMAIN="openhydrotwin.com"
 
-PEM_FILE="${PEM_FILE:-/home/arash/Dropbox/AWS_/ArashLinux.pem}"
+PEM_FILE="${PEM_FILE:-/home/arash/.ssh/ArashLinux.pem}"
 
 # Fixed from deploy_jm.sh's stale /home/arash/Projects/OpenHydroTwin, which
 # does not exist on this machine -- the repo lives here instead.
@@ -67,16 +67,17 @@ DEPLOYMENT="JM_forecast_3cell"          # directory under deployments/
 PAGE="JM_Bioretention_forecast_3cell"   # URL path and /var/www subdirectory
 SERVICE_PREFIX="drywelldt-jm-3cell"     # systemd template name, own namespace
 
-QT_VER="${QT_VER:-6.8.3}"
+QT_VER="${QT_VER:-6.9.0}"
 QT_ROOT="/home/arash/Qt/${QT_VER}"
 QT_DESKTOP="${QT_ROOT}/gcc_64"
 QMAKE_DESKTOP="${QT_DESKTOP}/bin/qmake"
 QT_LIB_DIR="${QT_DESKTOP}/lib"
 OHQ_LIB_DIR="${LOCAL_PROJECT}/libs/release"
 
+# No emsdk/wasm toolchain on this machine -- always reuse the prebuilt viewer.
 EMSDK_ENV="/home/arash/emsdk/emsdk_env.sh"
 SKIP_VIEWER_BUILD="${SKIP_VIEWER_BUILD:-1}"
-VIEWER_BUILD="${LOCAL_VIEWER}/build/WebAssembly_Qt_6_8_2_single_threaded-Release"
+VIEWER_BUILD="${LOCAL_PROJECT}/build-wasm-viewer"
 
 PRO_FILE="${LOCAL_PROJECT}/OHTwin.pro"
 RUNNER_BINARY_NAME="OHTwin"

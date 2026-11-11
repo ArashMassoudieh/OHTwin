@@ -49,7 +49,7 @@ set -e
 EC2_USER="ubuntu"
 EC2_HOST="52.42.223.42"
 DOMAIN="openhydrotwin.com"
-PEM_FILE="${PEM_FILE:-/home/arash/Dropbox/AWS_/ArashLinux.pem}"
+PEM_FILE="${PEM_FILE:-/home/arash/.ssh/ArashLinux.pem}"
 
 LOCAL_PROJECT="/mnt/3rd900/Projects/OHTwin"
 LOCAL_VIEWER="${LOCAL_PROJECT}/viewer"
@@ -66,7 +66,7 @@ BRIDGE_PROJECT="John-McCormack"
 BRIDGE_WINDOW_DAYS=14
 EC2_BRIDGE_ROOT="/home/ubuntu/jm_sensor_bridge_3cell"
 
-QT_VER="${QT_VER:-6.8.3}"
+QT_VER="${QT_VER:-6.9.0}"
 QT_ROOT="/home/arash/Qt/${QT_VER}"
 QT_DESKTOP="${QT_ROOT}/gcc_64"
 QMAKE_DESKTOP="${QT_DESKTOP}/bin/qmake"
@@ -74,7 +74,7 @@ QT_LIB_DIR="${QT_DESKTOP}/lib"
 OHQ_LIB_DIR="${LOCAL_PROJECT}/libs/release"
 
 SKIP_VIEWER_BUILD="${SKIP_VIEWER_BUILD:-1}"
-VIEWER_BUILD="${LOCAL_VIEWER}/build/WebAssembly_Qt_6_8_2_single_threaded-Release"
+VIEWER_BUILD="${LOCAL_PROJECT}/build-wasm-viewer"
 
 PRO_FILE="${LOCAL_PROJECT}/OHTwin.pro"
 RUNNER_BUILD="${LOCAL_PROJECT}/build-qmake"
