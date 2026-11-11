@@ -1,0 +1,11 @@
+{
+    "mode": "forward",
+    "refresh_seconds": 10,
+    "forward": {
+        "csv_url": "http://localhost:8093/outputs/selected_output.csv",
+        "viz_url": "http://localhost:8093/outputs/viz.svg",
+        "viz_state_url": "http://localhost:8093/outputs/viz_state.json",
+        "forecast_viz_url":       "http://localhost:8093/outputs/forecast_viz.svg",
+        "forecast_viz_state_url": "http://localhost:8093/outputs/forecast_viz_state.json"
+    }
+}
