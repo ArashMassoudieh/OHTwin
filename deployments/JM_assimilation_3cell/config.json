@@ -1,0 +1,59 @@
+{
+    "deployment": {
+        "name": "JM_assimilation_3cell",
+        "model_file": "model/JM.ohq",
+        "viz_file": "viz_jm.json",
+        "port": 8197
+    },
+    "runtime": {
+        "weather_source": "openmeteo",
+        "latitude": 38.91088,
+        "longitude": -76.98569,
+        "interval": "1day",
+        "forecast_horizon": "7day",
+        "time_acceleration": 1,
+        "state_variables": [],
+        "keep_debug_outputs": false,
+        "advance_to_observations": true
+    },
+    "observations": {
+        "save_interval": "1hr",
+        "noise_sigma": {
+            "default": 0.0,
+            "Precipitation": 0.0,
+            "DA-01 runoff": 0.1,
+            "Gutter 3 depth": 0.02,
+            "Pond 1 water depth": 0.02,
+            "Pond 2 water depth": 0.02,
+            "Pond 3 water depth": 0.02,
+            "Soil 1 moisture": 0.05,
+            "Soil 2 moisture": 0.05,
+            "Soil 3 moisture": 0.05,
+            "Pond 1 infiltration": 0.1,
+            "Pond 2 infiltration": 0.1,
+            "Pond 3 infiltration": 0.1,
+            "Pond 1 overflow": 0.1,
+            "Pond 2 overflow": 0.1,
+            "Pond 3 overflow": 0.1,
+            "Underdrain outlet flow": 0.1,
+            "Groundwater recharge": 0.1,
+            "Catch basin depth": 0.02,
+            "Catch basin outlet flow": 0.1,
+            "Soil 1 evaporation": 0.0,
+            "Soil 2 evaporation": 0.0,
+            "Soil 3 evaporation": 0.0
+        },
+        "noise_correlation_time": "6hr"
+    },
+    "assimilation": {
+        "_comment": "truth_csv_url/truth_meta_url point at the AnacostiaIQ sensor bridge (not a simulated truth run). Sensors are physically installed in the highest-elevation cell only (confirmed on site), which maps to Pond 1 / Engineered Soil 1 in this model -- so calibration_observations is deliberately just those two for now. The other columns keep simulating and reporting for the viewer, they just carry no assimilation pressure yet. Estimating the un-instrumented cells from the one instrumented cell is future work. The pressure transducer (planned for the deep inspection well) isn't mapped yet -- the model has no 'inspection well' object distinct from the pond surface, so its correspondence needs to be designed before it can be added here.",
+        "truth_csv_url": "http://localhost:8198/outputs/selected_output.csv",
+        "calibration_observations": [
+            "Pond 1 water depth",
+            "Soil 1 moisture"
+        ],
+        "truth_meta_url": "http://localhost:8198/outputs/selected_output_meta.json",
+        "poll_interval": "3day",
+        "calibration_output_dir": "outputs/calibration"
+    }
+}
