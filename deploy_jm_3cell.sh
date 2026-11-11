@@ -214,6 +214,16 @@ for lib in libQt6Network.so.6 libQt6Core.so.6 \
     fi
 done
 [[ -d "${OHQ_LIB_DIR}" ]] && cp "${OHQ_LIB_DIR}"/*.so* "${BUNDLE_DIR}/lib/" 2>/dev/null || true
+
+# This dev machine's libarmadillo (14.x) is newer than whatever EC2 last had
+# installed when the original JM_forecast binary was built (EC2 only has
+# libarmadillo12 system-wide) -- ldd on the pushed binary confirmed this is
+# the ONLY missing dependency (everything else armadillo needs -- BLAS,
+# LAPACK, GSL, SuperLU, etc. -- EC2 already has via its existing install).
+ARMADILLO_SO="$(ldconfig -p 2>/dev/null | grep 'libarmadillo\.so\.[0-9]* ' | head -1 | awk '{print $NF}')"
+[[ -n "${ARMADILLO_SO}" ]] || err "libarmadillo.so.* not found via ldconfig on this machine"
+cp -L "${ARMADILLO_SO}" "${BUNDLE_DIR}/lib/$(basename "${ARMADILLO_SO}")"
+log "Bundling $(basename "${ARMADILLO_SO}") (not present on EC2 at this version)"
 cp "${QT_DESKTOP}/plugins/tls/libqopensslbackend.so" "${BUNDLE_DIR}/plugins/tls/"
 
 # Wrapper — resolves libs relative to itself, inside the jm_twin_3cell tree only.
