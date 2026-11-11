@@ -302,7 +302,15 @@ ENDSSH
 # Step 5 — Push JM 3-cell binary, libs, wrapper, unit, resources
 # =============================================================================
 section "Pushing JM 3-cell runner and libraries..."
-scp "${SCP_OPTS[@]}" "${RUNNER_BIN}"                              "${EC2_USER}@${EC2_HOST}:${EC2_BIN}/"
+# Atomic push: other jm_3cell instances (forecast/assimilation/truth all
+# share this one binary path) may still be running against the OLD binary
+# right now, and scp writing directly into an executing file fails with
+# "Text file busy". Push to a side name, then `mv` into place -- `mv` on the
+# same filesystem is a rename, not a write, so it succeeds even while the
+# old inode is still mapped into running processes (they keep running fine
+# against the old inode until their next restart picks up the new one).
+scp "${SCP_OPTS[@]}" "${RUNNER_BIN}"                              "${EC2_USER}@${EC2_HOST}:${EC2_BIN}/OHTwin.new"
+ssh "${SSH_OPTS[@]}" "mv ${EC2_BIN}/OHTwin.new ${EC2_BIN}/OHTwin"
 scp "${SCP_OPTS[@]}" "${BUNDLE_DIR}/run_drywelldt_jm_3cell.sh"    "${EC2_USER}@${EC2_HOST}:${EC2_BIN}/"
 scp "${SCP_OPTS[@]}" "${BUNDLE_DIR}"/lib/*                        "${EC2_USER}@${EC2_HOST}:${EC2_LIB}/"
 scp "${SCP_OPTS[@]}" "${BUNDLE_DIR}"/plugins/tls/libqopensslbackend.so \

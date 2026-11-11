@@ -242,7 +242,13 @@ ENDSSH
 # other two forks, but this works standalone too)
 # =============================================================================
 section "Pushing runner and libraries..."
-scp "${SCP_OPTS[@]}" "${RUNNER_BIN}"                              "${EC2_USER}@${EC2_HOST}:${EC2_BIN}/"
+# Atomic push -- forecast_3cell and assimilation_3cell share this same binary
+# path and are running right now, so scp'ing directly into it fails with
+# "Text file busy". Push aside, then mv into place (a same-filesystem rename,
+# not a write -- safe even while the old inode is still mapped into those
+# running processes). See deploy_jm_3cell.sh for the same fix.
+scp "${SCP_OPTS[@]}" "${RUNNER_BIN}"                              "${EC2_USER}@${EC2_HOST}:${EC2_BIN}/OHTwin.new"
+ssh "${SSH_OPTS[@]}" "mv ${EC2_BIN}/OHTwin.new ${EC2_BIN}/OHTwin"
 scp "${SCP_OPTS[@]}" "${BUNDLE_DIR}/run_drywelldt_jm_3cell.sh"    "${EC2_USER}@${EC2_HOST}:${EC2_BIN}/"
 scp "${SCP_OPTS[@]}" "${BUNDLE_DIR}"/lib/*                        "${EC2_USER}@${EC2_HOST}:${EC2_LIB}/"
 scp "${SCP_OPTS[@]}" "${BUNDLE_DIR}"/plugins/tls/libqopensslbackend.so \
