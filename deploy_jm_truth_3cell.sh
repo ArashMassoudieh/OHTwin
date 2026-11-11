@@ -49,7 +49,6 @@ DOMAIN="openhydrotwin.com"
 PEM_FILE="${PEM_FILE:-/home/arash/.ssh/ArashLinux.pem}"
 
 LOCAL_PROJECT="/mnt/3rd900/Projects/OHTwin"
-LOCAL_VIEWER="${LOCAL_PROJECT}/viewer"
 
 DEPLOYMENT="JM_truth_3cell"          # directory under deployments/
 PAGE="JM_Bioretention_truth_3cell"   # URL path and /var/www subdirectory
@@ -61,9 +60,6 @@ QT_DESKTOP="${QT_ROOT}/gcc_64"
 QMAKE_DESKTOP="${QT_DESKTOP}/bin/qmake"
 QT_LIB_DIR="${QT_DESKTOP}/lib"
 OHQ_LIB_DIR="${LOCAL_PROJECT}/libs/release"
-
-SKIP_VIEWER_BUILD="${SKIP_VIEWER_BUILD:-1}"
-VIEWER_BUILD="${LOCAL_PROJECT}/build-wasm-viewer"
 
 PRO_FILE="${LOCAL_PROJECT}/OHTwin.pro"
 RUNNER_BUILD="${LOCAL_PROJECT}/build-qmake"
@@ -79,6 +75,11 @@ EC2_DEPLOY_ROOT="${EC2_ROOT}/deployments"
 EC2_WWW="/var/www/drywelldt"
 NGINX_LOC_DIR="/etc/nginx/ohtwin-locations"
 NGINX_SITE="/etc/nginx/sites-available/openhydrotwin"
+
+# Reference copy of the proven-working WASM viewer bundle, staged once on EC2
+# (see Step 7 below for why this is sourced server-side instead of scp'd from
+# this machine).
+EC2_KNOWN_GOOD_VIEWER="/home/ubuntu/known_good_viewer"
 
 # --- Flags -----------------------------------------------------------------
 FRESH=0
@@ -142,11 +143,14 @@ make -j"$(nproc)"
 log "Runner: ${RUNNER_BIN}"
 
 # =============================================================================
-# Step 2 — Viewer (reused prebuilt WASM)
+# Step 2 — Viewer (WebAssembly)
 # =============================================================================
-section "Preparing viewer (WebAssembly)..."
-[[ "${SKIP_VIEWER_BUILD}" == "1" ]] || err "This script only supports SKIP_VIEWER_BUILD=1 (reuse prebuilt viewer)"
-[[ -f "${VIEWER_BUILD}/OHTwinViewer.wasm" ]] || err "No prebuilt viewer at ${VIEWER_BUILD}/OHTwinViewer.wasm"
+# No local build or copy: this machine can't build the WASM viewer (no emsdk)
+# and its local prebuilt copy is a different, unverified build. Step 7
+# sources the actual files from a known-good reference copy on EC2 instead.
+section "Checking known-good viewer reference on EC2..."
+ssh "${SSH_OPTS[@]}" "[[ -f '${EC2_KNOWN_GOOD_VIEWER}/OHTwinViewer.wasm' ]]" || \
+    err "No known-good viewer bundle at ${EC2_KNOWN_GOOD_VIEWER} on EC2 -- stage one there first (see Step 7)."
 
 # =============================================================================
 # Step 3 — Stage libs, wrapper, systemd unit, viewer config
@@ -213,11 +217,11 @@ cat > "${BUNDLE_DIR}/config.json" << EOF
     "mode": "forward",
     "refresh_seconds": 300,
     "forward": {
-        "csv_url":                "http://${DOMAIN}/${PAGE}/outputs/selected_output.csv",
-        "viz_url":                "http://${DOMAIN}/${PAGE}/outputs/viz.svg",
-        "viz_state_url":          "http://${DOMAIN}/${PAGE}/outputs/viz_state.json",
-        "forecast_viz_url":       "http://${DOMAIN}/${PAGE}/outputs/forecast_viz.svg",
-        "forecast_viz_state_url": "http://${DOMAIN}/${PAGE}/outputs/forecast_viz_state.json"
+        "csv_url":                "https://${DOMAIN}/${PAGE}/outputs/selected_output.csv",
+        "viz_url":                "https://${DOMAIN}/${PAGE}/outputs/viz.svg",
+        "viz_state_url":          "https://${DOMAIN}/${PAGE}/outputs/viz_state.json",
+        "forecast_viz_url":       "https://${DOMAIN}/${PAGE}/outputs/forecast_viz.svg",
+        "forecast_viz_state_url": "https://${DOMAIN}/${PAGE}/outputs/forecast_viz_state.json"
     }
 }
 EOF
@@ -292,67 +296,20 @@ ENDSSH
 # =============================================================================
 # Step 7 — Viewer page
 # =============================================================================
+# Sourced server-side from the known-good reference copy (see deploy_jm_3cell.sh
+# for why: this machine's local build is unverified/different, and this
+# environment's outbound transfer of large files is unreliable). The
+# reference copy already has the splash injected.
 section "Publishing viewer page /${PAGE}/ ..."
-VIEW_STAGE="${BUNDLE_DIR}/viewer"
-rm -rf "${VIEW_STAGE}"; mkdir -p "${VIEW_STAGE}"
-cp "${VIEWER_BUILD}/OHTwinViewer.html" \
-   "${VIEWER_BUILD}/OHTwinViewer.js"   \
-   "${VIEWER_BUILD}/OHTwinViewer.wasm" \
-   "${VIEWER_BUILD}/qtloader.js"       \
-   "${VIEWER_BUILD}/qtlogo.svg"        \
-   "${VIEW_STAGE}/"
-cp "${BUNDLE_DIR}/config.json" "${VIEW_STAGE}/"
-
-SPLASH_FRAGMENT="${LOCAL_VIEWER}/splash_loading.html"
-if [[ -f "${SPLASH_FRAGMENT}" ]]; then
-    log "  Injecting loading splash..."
-    python3 - "${VIEW_STAGE}/OHTwinViewer.html" "${SPLASH_FRAGMENT}" << 'PYEOF'
-import re, sys
-page_path, frag_path = sys.argv[1], sys.argv[2]
-page = open(page_path).read()
-frag = open(frag_path).read()
-m = re.search(r'<figure[^>]*id="qtspinner".*?</figure>', page, re.S)
-if not m:
-    sys.exit("could not find the #qtspinner block in %s" % page_path)
-page = page[:m.start()] + frag + page[m.end():]
-page = page.replace(
-    "const status = document.querySelector('#qtstatus');",
-    "const status = document.querySelector('#qtstatus') || { set innerHTML(v) {\n"
-    "                var s = document.getElementById('dt-status');\n"
-    "                if (s) s.textContent = String(v).replace(/<[^>]*>/g, '');\n"
-    "            }, get innerHTML() { return ''; } };")
-old_showui = """            const showUi = (ui) => {
-                [spinner, screen].forEach(element => element.style.display = 'none');
-                if (screen === ui)
-                    screen.style.position = 'default';
-                ui.style.display = 'block';
-            }"""
-new_showui = """            const showUi = (ui) => {
-                screen.style.display = 'block';
-                spinner.style.display = (ui === spinner) ? 'block' : 'none';
-            }"""
-if old_showui not in page:
-    sys.exit("showUi() is not in the expected form in %s" % page_path)
-page = page.replace(old_showui, new_showui, 1)
-page = page.replace(
-    "#screen { width: 100%; height: 100%; }",
-    "#screen { width: 100%; height: 100%; }\n"
-    "      #qtspinner { position: fixed; inset: 0; z-index: 9999; margin: 0; }", 1)
-page = page.replace("onLoaded: () => showUi(screen),",
-                    "onLoaded: () => { if (window.dtSplash) window.dtSplash.done();\n"
-                    "                                      setTimeout(() => showUi(screen), 600); },")
-page = page.replace("showUi(spinner);\n                            status.innerHTML",
-                    "if (window.dtSplash) window.dtSplash.reset();\n"
-                    "                            showUi(spinner);\n                            status.innerHTML")
-open(page_path, "w").write(page)
-print("    splash injected (%d bytes)" % len(frag))
-PYEOF
-else
-    warn "  No splash fragment at ${SPLASH_FRAGMENT} — keeping the stock Qt logo screen"
-fi
-
-ssh "${SSH_OPTS[@]}" "mkdir -p ${EC2_WWW}/${PAGE} && rm -f ${EC2_WWW}/${PAGE}/*"
-scp "${SCP_OPTS[@]}" "${VIEW_STAGE}"/* "${EC2_USER}@${EC2_HOST}:${EC2_WWW}/${PAGE}/"
+ssh "${SSH_OPTS[@]}" bash -s -- "${PAGE}" "${EC2_WWW}" "${EC2_KNOWN_GOOD_VIEWER}" << 'ENDSSH'
+set -e
+PAGE="$1"; WWW="$2"; KNOWN_GOOD="$3"
+[[ -f "${KNOWN_GOOD}/OHTwinViewer.wasm" ]] || { echo "No known-good viewer at ${KNOWN_GOOD}" >&2; exit 1; }
+mkdir -p "${WWW}/${PAGE}"
+rm -f "${WWW}/${PAGE}"/*
+cp "${KNOWN_GOOD}"/* "${WWW}/${PAGE}/"
+ENDSSH
+scp "${SCP_OPTS[@]}" "${BUNDLE_DIR}/config.json" "${EC2_USER}@${EC2_HOST}:${EC2_WWW}/${PAGE}/config.json"
 
 # =============================================================================
 # Step 8 — nginx (additive, validated, rolled back on failure)
@@ -457,8 +414,8 @@ ENDSSH
 # =============================================================================
 section "JM 3-cell truth deployment complete"
 echo
-echo "  Viewer:  http://${DOMAIN}/${PAGE}/"
-echo "  Data:    http://${DOMAIN}/${PAGE}/outputs/"
+echo "  Viewer:  https://${DOMAIN}/${PAGE}/"
+echo "  Data:    https://${DOMAIN}/${PAGE}/outputs/"
 echo
 echo "  Logs:"
 echo "    ssh -i \"${PEM_FILE}\" ${EC2_USER}@${EC2_HOST}"
