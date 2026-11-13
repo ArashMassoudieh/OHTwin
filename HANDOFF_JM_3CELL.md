@@ -1,32 +1,62 @@
-# Session handoff — JM corrected 3-cell digital twin + live sensor assimilation (2026-11-11)
+# Session handoff — JM corrected 3-cell digital twin + live sensor assimilation (2026-11-11, updated 2026-11-13)
 
 ## Where things stand in one paragraph
 
 The site has only 3 constructed cells, not the 4 the original model assumed
-(confirmed on site). All three standard pages — truth, forecast, assimilation
-— are rebuilt on the corrected 3-column model, deployed to
-`openhydrotwin.com` in full isolation from the live Bioretention and
-original JM services, and verified working end to end, including a new
-bridge that feeds the assimilation page real field sensor data instead of a
-synthetic truth run. Two real bugs were found and fixed along the way
-(stale 4-cell diagram data, and a mixed-content bug that hung every page's
-loading splash forever). One open item remains and is **not a bug**: the
-assimilation page's comparison view looks empty until its first GA
-calibration cycle succeeds, which is expected, intermittent behavior shared
-by the production Bioretention deployment too.
+(confirmed on site). Two pages are live on `openhydrotwin.com`, in full
+isolation from the live Bioretention and original JM services: a standalone
+forecast (uncalibrated baseline) and an assimilation page fed by a new
+bridge that feeds it real field sensor data instead of a synthetic truth
+run. A third page, `JM_truth_3cell`, was built and deployed initially but
+has since been **retired from the server** (2026-11-13) — see "Why only two
+pages now" below. Its deployment definition is kept in the repo as the
+synthetic-reference option, just not currently running.
 
-## URLs
+## URLs (live)
 
 | Page | URL |
 |---|---|
-| Truth (synthetic reference) | `https://openhydrotwin.com/JM_Bioretention_truth_3cell/` |
 | Forecast (7-day, no sensor correction) | `https://openhydrotwin.com/JM_Bioretention_forecast_3cell/` |
 | Assimilation (real sensor-corrected) | `https://openhydrotwin.com/JM_Bioretention_assimilation_3cell/` |
 | Sensor bridge (proxy, not a viewer page) | `https://openhydrotwin.com/JM_sensor_bridge_3cell/outputs/selected_output.csv` |
 
+`JM_truth_3cell` (`.../JM_Bioretention_truth_3cell/`) now 404s by design —
+retired, not broken.
+
 None of these touch the live `/JM_Bioretention_forecast/` page or the
 Bioretention services — see Isolation below. `--set-landing` was never
 passed, so the site's root/landing target is unchanged.
+
+## Why only two pages now
+
+The general OHTwin pattern (confirmed against Bioretention's own live
+deployment list: only `Bioretention_truth` + `Bioretention_assimilation`,
+no separate forecast process at all) is two coupled processes, not three —
+"forecast" is just the forward-looking stage every deployment already
+produces each cycle (`forward_advance` + `forward_forecast`), so
+assimilation's own forecast output naturally reflects whatever calibration
+just happened, with no separate wiring needed.
+
+JM deviated from that by running three fully independent processes. Once
+`JM_truth_3cell`'s noise was zeroed (per Arash's request — see "Noise" below),
+it became byte-for-byte functionally identical to `JM_forecast_3cell`:
+same model file, same config apart from name/port, same zero noise, no
+coupling to anything either way. Running two processes that produce the
+exact same output forever was pure duplication, so truth was retired from
+the server on 2026-11-13 (`systemctl stop` + `disable`, nginx location file
+removed, published viewer page directory removed, all validated and
+reloaded cleanly). `deploy_jm_truth_3cell.sh` still works if anyone wants
+to redeploy it later; nothing about the fork was deleted, just unpublished.
+
+## Noise
+
+`JM_truth_3cell`'s `config.json` has non-zero `noise_sigma` on every
+observation (0.05 on Soil 1/2/3 moisture, 0.1–0.02 on others) — synthetic
+multiplicative noise, not sensor data, matching Bioretention's own `truth`
+convention. Arash flagged this as erratic-looking; briefly zeroed it out
+and verified the clean output, then reverted and kept the original noisy
+config since truth is retired from the server anyway and no longer
+displayed to anyone.
 
 ## Why 3 cells, not 4
 
@@ -51,11 +81,15 @@ straight to the Catch Basin, keeping the original start/end inverts.
   output path pointing at an unrelated project's directory). This is a
   pre-existing gap in the source deployments they were copied from, not
   something introduced during the 3-cell correction.
-- `JM_truth_3cell`'s role here is purely to match the existing three-page
-  Bioretention convention (`deploy.sh: VIEWER_PAGES=(truth assimilation
-  forecast)`) — its calibration role (feeding a synthetic "truth" to
-  assimilation) is superseded by the real sensor bridge below; nothing
-  points `truth_csv_url` at it.
+- `JM_truth_3cell` was originally built on the assumption that Bioretention
+  follows a three-page (truth/forecast/assimilation) convention. That
+  assumption turned out to be wrong — checked Bioretention's actual deployment
+  list and it only has two (`Bioretention_truth` + `Bioretention_assimilation`,
+  no separate forecast process at all; see "Why only two pages now" above).
+  `JM_truth_3cell`'s calibration role (feeding a synthetic "truth" to
+  assimilation) was already superseded by the real sensor bridge below;
+  nothing ever pointed `truth_csv_url` at it. Combined with its noise being
+  zeroed (making it identical to forecast), it's now retired from the server.
 
 ## The live sensor bridge (new)
 
@@ -102,8 +136,9 @@ entirely separate from both the live Bioretention services and the original
 - Tree: `/home/ubuntu/jm_twin_3cell/` (not `/home/ubuntu/jm_twin/` or
   `/home/ubuntu/drywelldt/`).
 - Systemd template: `drywelldt-jm-3cell@.service` (not `drywelldt@` or
-  `drywelldt-jm@`) — truth/forecast/assimilation are three instances of it,
-  same pattern Bioretention uses for its own truth/assimilation pair.
+  `drywelldt-jm@`) — forecast/assimilation are two instances of it (truth
+  was a third instance, now stopped and disabled — see "Why only two pages
+  now" above).
 - Bridge: its own standalone unit, `jm-sensor-bridge-3cell.service`, own
   tree `/home/ubuntu/jm_sensor_bridge_3cell/`.
 - nginx: each gets its own `/etc/nginx/ohtwin-locations/*.conf`, named
