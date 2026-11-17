@@ -412,6 +412,12 @@ bool DTRunner::init(QString &errorMessage)
                          &DTAssimilation::stopTimer);
 
         m_assimThread->start();
+        // A resumed runner may wait for wall-clock time or observations
+        // before advancing. Its existing snapshot is already usable by
+        // calibration; do not leave assimilation waiting for a new one.
+        const QString resumedSnapshot = findLatestStateSnapshot();
+        if (!resumedSnapshot.isEmpty())
+            emit snapshotReady(resumedSnapshot);
     }
     else
     {

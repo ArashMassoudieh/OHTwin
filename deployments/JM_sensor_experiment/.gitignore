@@ -1,0 +1,4 @@
+outputs/
+state/
+snapshots/
+__pycache__/

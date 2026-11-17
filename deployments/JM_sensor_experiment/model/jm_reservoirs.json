@@ -1,0 +1,188 @@
+{
+  "JM effective pond": {
+    "type": "block",
+    "typecategory": "Blocks",
+    "description": "JM effective pond reservoir",
+    "name": {
+      "type": "string",
+      "delegate": "String"
+    },
+    "Storage": {
+      "type": "balance",
+      "massbalance": "true",
+      "flow": "flow",
+      "inflow": "Precipitation",
+      "default": "0",
+      "includeinoutput": "true",
+      "ask_user": "true",
+      "criteria": "Storage>-0.000001",
+      "warningmessage": "Negative water storage"
+    },
+    "area": {
+      "type": "value",
+      "default": "11.3032032",
+      "ask_user": "true",
+      "delegate": "ValueBox",
+      "criteria": "area>0",
+      "warningmessage": "Invalid reservoir parameter"
+    },
+    "rain_area": {
+      "type": "value",
+      "default": "11.3032032",
+      "ask_user": "true",
+      "delegate": "ValueBox",
+      "criteria": "rain_area>0",
+      "warningmessage": "Invalid reservoir parameter"
+    },
+    "Precipitation": {
+      "type": "source",
+      "ask_user": "true",
+      "delegate": "ComboBox;Sources"
+    },
+    "depth": {
+      "type": "expression",
+      "expression": "Storage/area",
+      "includeinoutput": "true"
+    },
+    "overflow_depth": {
+      "type": "value",
+      "default": "0.21",
+      "ask_user": "true",
+      "delegate": "ValueBox"
+    },
+    "overflow_rate": {
+      "type": "value",
+      "default": "48",
+      "ask_user": "true",
+      "delegate": "ValueBox"
+    }
+  },
+  "JM effective soil": {
+    "type": "block",
+    "typecategory": "Blocks",
+    "description": "JM effective soil reservoir",
+    "name": {
+      "type": "string",
+      "delegate": "String"
+    },
+    "Storage": {
+      "type": "balance",
+      "massbalance": "true",
+      "flow": "flow",
+      "inflow": "",
+      "default": "0",
+      "includeinoutput": "true",
+      "ask_user": "true",
+      "criteria": "Storage>-0.000001",
+      "warningmessage": "Negative water storage"
+    },
+    "capacity": {
+      "type": "value",
+      "default": "3.617",
+      "ask_user": "true",
+      "delegate": "ValueBox",
+      "criteria": "capacity>0",
+      "warningmessage": "Invalid reservoir parameter"
+    },
+    "moisture_index": {
+      "type": "expression",
+      "expression": "100*Storage/capacity",
+      "includeinoutput": "true"
+    },
+    "drainage_rate": {
+      "type": "value",
+      "default": "0.5",
+      "ask_user": "true",
+      "delegate": "ValueBox",
+      "criteria": "drainage_rate>0",
+      "warningmessage": "Invalid reservoir parameter"
+    }
+  },
+  "JM infiltration": {
+    "type": "link",
+    "typecategory": "Connectors",
+    "name": {
+      "type": "string",
+      "delegate": "String"
+    },
+    "flow": {
+      "type": "expression",
+      "expression": "infiltration_rate*_pos(Storage.s)*_max(0;1-Storage.e/capacity.e)",
+      "applylimit": "true",
+      "includeinoutput": "true"
+    },
+    "infiltration_rate": {
+      "type": "value",
+      "default": "12",
+      "ask_user": "true",
+      "delegate": "ValueBox",
+      "criteria": "infiltration_rate>0",
+      "warningmessage": "Invalid reservoir parameter"
+    }
+  },
+  "JM drainage": {
+    "type": "link",
+    "typecategory": "Connectors",
+    "name": {
+      "type": "string",
+      "delegate": "String"
+    },
+    "flow": {
+      "type": "expression",
+      "expression": "drainage_rate.s*_pos(Storage.s)",
+      "applylimit": "true",
+      "includeinoutput": "true"
+    }
+  },
+  "JM overflow": {
+    "type": "link",
+    "typecategory": "Connectors",
+    "name": {
+      "type": "string",
+      "delegate": "String"
+    },
+    "flow": {
+      "type": "expression",
+      "expression": "overflow_rate.s*_pos(Storage.s-area.s*overflow_depth.s)",
+      "applylimit": "true",
+      "includeinoutput": "true"
+    }
+  },
+  "JM effective rain": {
+    "type": "source",
+    "typecategory": "Sources",
+    "description": "Precipitation",
+    "icon": {
+      "filename": "cloud.png"
+    },
+    "name": {
+      "description": "Name",
+      "type": "string",
+      "ask_user": "true",
+      "delegate": "String"
+    },
+    "coefficient": {
+      "type": "expression",
+      "expression": "rain_area",
+      "ask_user": "false",
+      "delegate": "ValueBox"
+    },
+    "timeseries": {
+      "type": "timeseries_prec",
+      "includeinoutput": "false",
+      "description": "Precipitation Cumulative",
+      "ask_user": "true",
+      "unit": "m;mm;in;ft",
+      "delegate": "Browser;time series"
+    },
+    "Intensity": {
+      "type": "expression",
+      "expression": "timeseries",
+      "includeinoutput": "true",
+      "description": "Precipitation intensity",
+      "ask_user": "false",
+      "unit": "m/day;mm/day;in/day;ft/day;m/hr;mm/hr;in/hr",
+      "delegate": "Browser;time series"
+    }
+  }
+}

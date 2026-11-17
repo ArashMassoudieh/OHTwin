@@ -44,8 +44,8 @@ static const QDate kNOAAOHQEpoch(1899, 12, 30);
 // while a forecast stage simulates [t, t+interval+horizon], eight days for the
 // JM deployment. The tail then has no data behind it: the series simply stops,
 // and downstream interpolation holds the final sample, so invented weather is
-// silently presented as forecast. forecast_days is now 10 (about 9.0-9.96 days
-// of coverage) to keep an 8-day window comfortably inside real data.
+// silently presented as forecast. Requests now use the actual UTC start/end dates so both historical
+// calibration windows and forward horizons request their full date range.
 //
 // This warns if that margin is ever exhausted anyway — a longer horizon, a
 // longer interval, or an Open-Meteo change would all erode it quietly.
@@ -62,8 +62,8 @@ static void warnIfWindowUncovered(const std::string &what,
               << " but the simulated window runs to "
               << intervalEnd.toUTC().toString(Qt::ISODate).toStdString()
               << " (short by " << shortHours << " h). Values past the data end "
-                 "are held at the last sample, not forecast — raise "
-                 "forecast_days or shorten forecast_horizon.\n";
+                 "are held at the last sample, not forecast — check the API date "
+                 "range or shorten forecast_horizon.\n";
 }
 
 NOAAWeatherFetcher::NOAAWeatherFetcher(QObject *parent)
@@ -211,7 +211,11 @@ CPrecipitation NOAAWeatherFetcher::getOpenMeteoPrecipitation(
     query.addQueryItem("latitude",      QString::number(latitude,  'f', 5));
     query.addQueryItem("longitude",     QString::number(longitude, 'f', 5));
     query.addQueryItem("hourly",        "precipitation");
-    query.addQueryItem("forecast_days", "10");   // see coverage note above warnIfWindowUncovered()
+    // Calibration windows extend into the past; a forecast_days-only request
+    // silently omits those dates. Explicit UTC dates cover both calibration
+    // history and the requested forward horizon.
+    query.addQueryItem("start_date", intervalStart.toUTC().date().toString(Qt::ISODate));
+    query.addQueryItem("end_date", intervalEnd.toUTC().date().toString(Qt::ISODate));
     query.addQueryItem("timezone",      "GMT");
     url.setQuery(query);
 
@@ -428,7 +432,11 @@ TimeSeries<double> NOAAWeatherFetcher::getOpenMeteoTimeSeries(
     query.addQueryItem("latitude",      QString::number(latitude,  'f', 5));
     query.addQueryItem("longitude",     QString::number(longitude, 'f', 5));
     query.addQueryItem("hourly",        quantity);
-    query.addQueryItem("forecast_days", "10");   // see coverage note above warnIfWindowUncovered()
+    // Calibration windows extend into the past; a forecast_days-only request
+    // silently omits those dates. Explicit UTC dates cover both calibration
+    // history and the requested forward horizon.
+    query.addQueryItem("start_date", intervalStart.toUTC().date().toString(Qt::ISODate));
+    query.addQueryItem("end_date", intervalEnd.toUTC().date().toString(Qt::ISODate));
     query.addQueryItem("timezone",      "GMT");
     url.setQuery(query);
 

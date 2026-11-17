@@ -181,28 +181,40 @@ entirely separate from both the live Bioretention services and the original
    name, then `mv` into place — a rename, not a write, safe even while the
    old inode is still mapped into the other running processes).
 
-## Not a bug: the assimilation comparison view starting out empty
+## Assimilation failures diagnosed 2026-11-17
 
-The GA calibration pre-flight check (`VerifyAllQuantities`, OpenHydroQual
-`Object::VerifyQuans`) requires each Soil block's moisture content strictly
-between its residual and saturated bounds. **Checked directly against
-Bioretention's own live production snapshot at the time of writing: 2 of
-its 4 soil blocks were already sitting right at/just over `theta_sat`**
-(0.40227 and 0.40053 against a 0.400 bound) — so this exact check would
-fail for production too, in that moment. Production's assimilation has had
-enough calibration attempts over months (polling every 3 days) that some
-land when moisture isn't pinned at the boundary; this deployment, being new,
-had only had one or two attempts, both unlucky. Confirmed in
-`AssimViewer.cpp` that the comparison view specifically is only drawn from
-inside the GA-success callback, which is why the whole comparison panel
-looks empty rather than partially populated.
+The previous explanation that an empty viewer was merely an unlucky saturated
+soil snapshot was incorrect. The failing snapshot's four soil moisture values
+were within their residual/saturated bounds. An isolated reproduction of
+`LoadfromJson` followed by `VerifyAllQuantities` yielded four errors: derived
+Storage was still zero. Calling `CalcAllInitialValues` before validation yielded
+zero errors, without modifying theta or relaxing any criteria. The calibration
+pre-flight now initializes derived state before validating the loaded snapshot.
 
-This is expected, recurring behavior tied to how real soil moisture
-naturally sits near saturation, not a deployment-specific defect — nothing
-to fix here. `poll_interval` is back at `3day` / `time_acceleration` at `1`
-(production-matching) on the server; it was temporarily shortened several
-times purely to test this faster; none of those test values were ever
-committed to the repo.
+A separate bridge routing defect rejected the viewer's cache-busting query
+strings (`selected_output.csv?_t=...`) with HTTP 404. Route matching now uses
+only the parsed URL path; CSV and metadata queries both work. Regression tests
+are in `tests/test_jm_sensor_bridge.py`.
+
+Weather requests also used only `forecast_days=10`, omitting the historical
+part of the 14-day sensor window. Both Open-Meteo forecast fetchers now request
+explicit UTC start/end dates. A live API check returned all five required hourly
+variables for 2026-11-03 through 2026-11-17 (360 samples each).
+
+A negative regression check also confirms that a deliberately invalid soil
+moisture value remains rejected after initialization; validation was not
+bypassed or loosened.
+
+Calibration was configured to retry every three days, so a running service did
+not imply successful calibration. A new GA deployment now schedules an initial
+calibration once its first forward snapshot arrives if no merged GA history
+exists. The resume path now passes its existing snapshot to assimilation even
+when forward advancement is waiting for wall-clock time or observations.
+Established deployments retain the configured polling cadence. Check
+actual calibration artifacts and the run log before describing this page as
+sensor-corrected. Real sensor mapping
+remains limited to Cell 1 (MaxBotix and A0); depth datum and volumetric moisture
+conversion remain provisional as documented above.
 
 ## Loose ends / future work
 

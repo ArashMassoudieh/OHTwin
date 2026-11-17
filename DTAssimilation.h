@@ -107,7 +107,7 @@ public slots:
     // Snapshot handoff from the forward thread. Connect via signal/slot
     // (auto-becomes QueuedConnection across threads); never call directly
     // from another thread.
-    void setLatestSnapshot(QString path) { m_latestSnapshotPath = path; }
+    void setLatestSnapshot(QString path);
 
 private:
     const DTConfig       &m_config;

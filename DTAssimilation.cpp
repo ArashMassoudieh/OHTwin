@@ -130,6 +130,23 @@ bool DTAssimilation::configure(QString &errorMessage)
     return true;
 }
 
+void DTAssimilation::setLatestSnapshot(QString path)
+{
+    const bool firstSnapshot = m_latestSnapshotPath.isEmpty();
+    m_latestSnapshotPath = path;
+    // A new GA deployment otherwise waits an entire poll interval (three
+    // days for JM) before its first calibration. Bootstrap once when a
+    // forward snapshot exists; established deployments retain their cadence.
+    const QString history = QString::fromStdString(
+        m_config.assimilation.calibrationOutputDir) + "/ga_output_merged.txt";
+    if (firstSnapshot && m_config.assimilation.method == "GA" &&
+        !QFileInfo::exists(history))
+    {
+        std::cout << "[Assim] no GA history; scheduling initial calibration\n";
+        QTimer::singleShot(0, this, &DTAssimilation::onPollTick);
+    }
+}
+
 void DTAssimilation::onPollTick()
 {
     // Defensive guard. Under normal operation the Qt event loop on the
@@ -673,8 +690,8 @@ bool DTAssimilation::runCalibration(QString &errorMessage)
 // injectCalibrationWeather
 // Fetch precipitation + the four Penman ET forcings over [tStart, tEnd] and
 // inject them into `sys`. Shared by the calibration solve and the rolling-
-// window spin-up. Best-effort: a failed fetch injects an empty series (the
-// solver then sees no forcing for that gap) but never fails the cycle.
+// window spin-up. Missing precipitation fails the cycle; missing ET inputs
+// are reported explicitly rather than silently accepted as complete forcing.
 // ---------------------------------------------------------------------------
 bool DTAssimilation::injectCalibrationWeather(System &sys,
                                               double tStart, double tEnd,
@@ -1039,6 +1056,10 @@ bool DTAssimilation::prepareCalibrationSystem(System &sys,
         recordCalibrationFailure(calStart, errorMessage);
         return false;
     }
+    // Snapshot properties include theta, but derived state such as Storage
+    // remains unset after LoadfromJson. Criteria can depend on that state;
+    // initialize it before validation, as the forward solver does.
+    sys.CalcAllInitialValues();
     ErrorHandler errs = sys.VerifyAllQuantities();
     if (errs.Count() != 0)
     {

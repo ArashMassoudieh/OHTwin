@@ -1,0 +1,42 @@
+# Reduced three-cell experiment: six dynamic reservoirs; effective rates, not measured Ksat.
+loadtemplate; filename=main_components.json
+addtemplate; filename=jm_reservoirs.json
+create source;type=JM effective rain,name=Rain,timeseries=
+create parameter;type=Parameter,name=JM_infiltration_rate,low=0.5,high=48,value=12,prior_distribution=log-normal
+create parameter;type=Parameter,name=JM_drainage_rate,low=0.02,high=4,value=0.5,prior_distribution=log-normal
+create block;type=fixed_head,name=Outlet,head=-5,Storage=100000
+create block;type=JM effective pond,name=Pond 1,area=11.3032032,rain_area=311.64479606399993,Precipitation=Rain,Storage=0,overflow_depth=0.21,overflow_rate=48
+create block;type=JM effective soil,name=Soil 1,capacity=3.617477152128,Storage=2.1704862912768,drainage_rate=0.5
+create block;type=JM effective pond,name=Pond 2,area=11.3032032,rain_area=107.59255900799998,Precipitation=Rain,Storage=0,overflow_depth=0.21,overflow_rate=48
+create block;type=JM effective soil,name=Soil 2,capacity=3.617477152128,Storage=2.1704862912768,drainage_rate=0.5
+create block;type=JM effective pond,name=Pond 3,area=11.3032032,rain_area=89.940981408,Precipitation=Rain,Storage=0,overflow_depth=0.21,overflow_rate=48
+create block;type=JM effective soil,name=Soil 3,capacity=3.617477152128,Storage=2.1704862912768,drainage_rate=0.5
+create link;from=Pond 1,to=Soil 1,type=JM infiltration,name=Infiltration 1,infiltration_rate=12
+create link;from=Soil 1,to=Outlet,type=JM drainage,name=Drainage 1
+create link;from=Pond 1,to=Pond 2,type=JM overflow,name=Overflow 1
+create link;from=Pond 2,to=Soil 2,type=JM infiltration,name=Infiltration 2,infiltration_rate=12
+create link;from=Soil 2,to=Outlet,type=JM drainage,name=Drainage 2
+create link;from=Pond 2,to=Pond 3,type=JM overflow,name=Overflow 2
+create link;from=Pond 3,to=Soil 3,type=JM infiltration,name=Infiltration 3,infiltration_rate=12
+create link;from=Soil 3,to=Outlet,type=JM drainage,name=Drainage 3
+create link;from=Pond 3,to=Outlet,type=JM overflow,name=Overflow 3
+setasparameter;object=Infiltration 1,quantity=infiltration_rate,parametername=JM_infiltration_rate
+setasparameter;object=Soil 1,quantity=drainage_rate,parametername=JM_drainage_rate
+setasparameter;object=Infiltration 2,quantity=infiltration_rate,parametername=JM_infiltration_rate
+setasparameter;object=Soil 2,quantity=drainage_rate,parametername=JM_drainage_rate
+setasparameter;object=Infiltration 3,quantity=infiltration_rate,parametername=JM_infiltration_rate
+setasparameter;object=Soil 3,quantity=drainage_rate,parametername=JM_drainage_rate
+create observation;type=Observation,name=Soil 1 moisture index,object=Soil 1,expression=moisture_index,comparison_method=Least Squared,error_standard_deviation=5,observed_data=
+create observation;type=Observation,name=Pond 1 water depth,object=Pond 1,expression=depth,comparison_method=Least Squared,error_standard_deviation=0.02,observed_data=
+create observation;type=Observation,name=Soil 2 moisture index,object=Soil 2,expression=moisture_index,comparison_method=Least Squared,error_standard_deviation=5,observed_data=
+create observation;type=Observation,name=Pond 2 water depth,object=Pond 2,expression=depth,comparison_method=Least Squared,error_standard_deviation=0.02,observed_data=
+create observation;type=Observation,name=Soil 3 moisture index,object=Soil 3,expression=moisture_index,comparison_method=Least Squared,error_standard_deviation=5,observed_data=
+create observation;type=Observation,name=Pond 3 water depth,object=Pond 3,expression=depth,comparison_method=Least Squared,error_standard_deviation=0.02,observed_data=
+setvalue;object=system,quantity=simulation_start_time,value=46329
+setvalue;object=system,quantity=simulation_end_time,value=46343
+setvalue;object=system,quantity=maxpop,value=12
+setvalue;object=system,quantity=ngen,value=8
+setvalue;object=system,quantity=numthreads,value=2
+setvalue;object=Solver Settings,quantity=initial_time_step,value=0.001
+setvalue;object=Solver Settings,quantity=max_timestep_increase_factor,value=5
+setvalue;object=Solver Settings,quantity=nr_tolerance,value=0.0000001

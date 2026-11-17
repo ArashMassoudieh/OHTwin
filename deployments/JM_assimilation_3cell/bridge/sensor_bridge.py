@@ -73,7 +73,7 @@ import http.server
 import json
 import sys
 import urllib.request
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 OHQ_EPOCH = datetime.datetime(1899, 12, 30)
 
@@ -200,7 +200,9 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        if self.path not in ("/outputs/selected_output.csv", "/outputs/selected_output_meta.json"):
+        # The viewer appends ?_t=... to bypass caches; route by path only.
+        path = urlsplit(self.path).path
+        if path not in ("/outputs/selected_output.csv", "/outputs/selected_output_meta.json"):
             self.send_response(404)
             self.end_headers()
             return
@@ -212,7 +214,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 (t, spec["convert"](v)) for t, v in raw
             ]
 
-        if self.path.endswith(".csv"):
+        if path.endswith(".csv"):
             self._send(build_csv(series_by_name), "text/csv")
         else:
             self._send(build_meta(series_by_name, self.window_days), "application/json")
