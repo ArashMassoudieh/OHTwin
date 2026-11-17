@@ -180,3 +180,16 @@ Run the existing experiment executable and evaluator on each generated `a0` and
 `a2` input directory, then run `tools/evaluate_state_replay.py` on their parent.
 No live deployment changes are necessary. See RAW_DATA_AUDIT.md for the correction
 to the earlier observation-switch diagnosis and VALIDATION_PLAN.md for promotion.
+
+## Field follow-up and signal quality
+
+See FIELD_FOLLOWUP_RESULTS.md for the frozen-parameter check on newly collected
+field data. `tools/audit_field_raw.py` preserves every raw record and computes
+causal trailing median/MAD diagnostic flags. Flags are not automatic sensor
+failure labels and are not fed back to live alarms or calibration. A1 jumps
+remain visible after increased voltage precision; no hardware cause is established.
+
+`tools/report_field_followup.py` scores only new forecast origins using
+`evaluate_state_replay.score(..., origin_start=...)`; it verifies supplied frozen
+parameters match the outputs. The source inputs and extended forcing are archived
+with the report. A new complete rainfall validation period is still required.

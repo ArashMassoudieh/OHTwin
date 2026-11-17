@@ -37,7 +37,7 @@ def main():
     args.output.mkdir(parents=True,exist_ok=False)
     diagnostics={'calibration_counts':CALIBRATION,'raw_start':start.isoformat(), 'raw_end':end.isoformat(),
                  'classification':'Retrospective stable-calibration replay; same inspected test dates',
-                 'raw_unit':'V rounded by upstream writer to 0.01 V','channels':{}}
+                 'raw_unit':'V; older records rounded to 0.01 V, new records retain precision after the 2026-11-17 uploader update','channels':{}}
     for key,sensor in [('a0',SENSORS[0]),('a2',SENSORS[2])]:
         target=args.output/key;target.mkdir()
         accepted=[]

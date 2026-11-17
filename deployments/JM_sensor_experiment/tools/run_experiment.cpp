@@ -174,6 +174,7 @@ int main(int argc,char**argv) {
   {"training_end_serial",trainEnd},{"holdout_used_for_fitting",false},
   {"initial_unevaluated_boundary_sample_omitted",true},
   {"method","OHQ GA parameter calibration; frozen-parameter conditional hindcast; no state nudging"}};
+ if(d.contains("fixed_parameters"))result.insert("method","Fixed previously fitted parameters supplied in input; no refitting; conditional hindcast");
  result.insert("separate_rolling_state_test",d["rolling_state_test"].toBool(false));
  if(d["rolling_state_test"].toBool(false))result.insert("state_update_gain",d["state_update_gain"].toDouble(.5));
  QFile resultFile(out+"/parameters.json");resultFile.open(QIODevice::WriteOnly);resultFile.write(QJsonDocument(result).toJson());

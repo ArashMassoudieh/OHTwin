@@ -9,12 +9,14 @@ import numpy as np
 from evaluate import metrics, read_output
 
 
-def score(run):
+def score(run, origin_start=None):
     data=json.loads((run/'input.json').read_text())
     truth=np.array(data['validation'])
     frozen=read_output(run/'assimilated.csv')['Soil 1 moisture index']
     with (run/'rolling_forecasts.csv').open() as f:
         forecasts=[{k:float(v) for k,v in r.items()} for r in csv.DictReader(f)]
+    if origin_start is not None:
+        forecasts=[r for r in forecasts if r['origin']>=origin_start-1e-8]
     scores={};increments={}
     for r in forecasts:
         if r['observation_available_at']>r['origin']+1e-8:
