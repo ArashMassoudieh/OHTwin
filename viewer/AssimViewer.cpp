@@ -605,6 +605,9 @@ void AssimViewer::rebuildFitnessCharts(const QVector<CycleSummary> &cycles)
             auto *s = new QLineSeries();
             s->setName(shortName);
             s->setPen(pen);
+            // A new deployment has one calibration cycle: without a marker
+            // a one-point line renders nothing even though data is loaded.
+            s->setPointsVisible(true);
             fp.chart->addSeries(s);
 
             QAbstractAxis *xAx = m_useDateAxis
@@ -779,6 +782,7 @@ void AssimViewer::rebuildParameterCharts(const QVector<CycleSummary> &cycles)
 
         // Best line.
         pp.bestSeries = new QLineSeries();
+        pp.bestSeries->setPointsVisible(true);
         QPen pen{QColor(kLineColors[k % kLineColors.size()])};
         pen.setWidthF(2.4);
         pen.setCapStyle(Qt::RoundCap);

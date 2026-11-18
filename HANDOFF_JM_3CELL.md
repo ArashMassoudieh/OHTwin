@@ -231,3 +231,27 @@ conversion remain provisional as documented above.
   expected to differ per developer machine; use
   `git update-index --skip-worktree` on a file if that keeps showing up as
   a spurious local diff.
+
+## Assimilation viewer repair — 2026-11-18
+
+The first full calibration completed on 17 November at 23:40 UTC, but the browser
+still displayed no data. Its explicit error was `ga_output_merged.txt parsed but
+produced no cycles.` The GA archive changed the objective header from `likelihood`
+to `neg_log_likelihood`; GaMergedLoader required only the historical spelling and
+rejected every generation header. It now accepts both spellings. Native tests
+cover both, and the actual server archive loads one cycle with four parameters
+and the two used observation metrics. Fitness and best-parameter lines also show
+point markers so the single first cycle is visible without a line segment.
+
+The patched WASM viewer is isolated to the assimilation page under
+`assets-ga-objective-v2/`. Its previous HTML/assets are backed up at
+`/home/ubuntu/jm_viewer_backups/assimilation-before-ga-objective-v2`.
+Transfers were SHA256-verified before atomically switching the page HTML.
+The forecast page and model processes were not restarted. The assimilation
+deploy script now uses `/home/ubuntu/known_good_viewer_ga_objective_v2` by default,
+with an environment override, to avoid restoring the incompatible viewer on a
+future deployment. Existing versioned assets are retained for open browser tabs.
+
+This repairs display/parsing only. The first fitted metrics are poor (negative
+NSE for both fitted observations), and the observation-to-model mappings remain
+provisional. Showing calibration results does not establish predictive validity.

@@ -110,7 +110,11 @@ bool GaMergedLoader::parseColumnHeader(const QString &line,
         return false;
 
     // Locate the fixed-name columns.
-    idxLikelihood = tok.indexOf("likelihood");
+    // GA logs renamed this objective in September 2026. Both formats
+    // have the same column layout; accept current and historical archives.
+    idxLikelihood = tok.indexOf("neg_log_likelihood");
+    if (idxLikelihood < 0)
+        idxLikelihood = tok.indexOf("likelihood");
     idxFitness    = tok.indexOf("Fitness");
     idxRank       = tok.indexOf("Rank");
     if (idxLikelihood < 0 || idxFitness < 0 || idxRank < 0)

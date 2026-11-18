@@ -90,7 +90,7 @@ NGINX_SITE="/etc/nginx/sites-available/openhydrotwin"
 # Reference copy of the proven-working WASM viewer bundle, staged once on EC2
 # (see Step 7 below for why this is sourced server-side instead of scp'd from
 # this machine).
-EC2_KNOWN_GOOD_VIEWER="/home/ubuntu/known_good_viewer"
+EC2_KNOWN_GOOD_VIEWER="${EC2_KNOWN_GOOD_VIEWER:-/home/ubuntu/known_good_viewer_ga_objective_v2}"
 
 FRESH=0
 for arg in "$@"; do
@@ -348,7 +348,8 @@ set -e
 PAGE="$1"; WWW="$2"; KNOWN_GOOD="$3"
 [[ -f "${KNOWN_GOOD}/OHTwinViewer.wasm" ]] || { echo "No known-good viewer at ${KNOWN_GOOD}" >&2; exit 1; }
 mkdir -p "${WWW}/${PAGE}"
-rm -f "${WWW}/${PAGE}"/*
+# Keep versioned viewer assets available to browsers already using them.
+# The supplied HTML chooses the current bundle; overwriting it is sufficient.
 cp "${KNOWN_GOOD}"/* "${WWW}/${PAGE}/"
 ENDSSH
 scp "${SCP_OPTS[@]}" "${BUNDLE_DIR}/config.json" "${EC2_USER}@${EC2_HOST}:${EC2_WWW}/${PAGE}/config.json"
