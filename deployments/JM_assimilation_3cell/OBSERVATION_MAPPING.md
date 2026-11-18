@@ -54,7 +54,7 @@ The previous full-depth observation mapping/state/calibration was backed up at
 `/home/ubuntu/jm_twin_3cell/backups/before-shallow-20261118` before a fresh layered
 assimilation state was started. The forecast deployment was not changed.
 New calibration output is `outputs/calibration_shallow_v1`, separate from the old
-fit. The main viewer shows an explicitly labeled previous-calibration checkpoint while the new epoch runs. Its static previous model output and corresponding old-mapping observation data are kept separate from the new target. When the new GA archive exists, the page navigates to `latest/OHTwinViewer.html`, which uses the new calibration config.
+fit. Fitness/parameters show an explicitly labeled previous-calibration checkpoint while the new epoch runs. Comparison shows the current bridge observations and provisional new-model output, including diagnostic series excluded from fitting. When the new GA archive exists, the page navigates to `latest/OHTwinViewer.html`, which uses the new calibration history and fitted reanalysis for comparison.
 
 Local native OHQ check constructed, validated and solved the layered model with 23
 observations. Bridge HTTP/numeric/timestamp tests passed. Server logs confirmed two

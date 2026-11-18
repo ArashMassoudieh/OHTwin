@@ -90,7 +90,7 @@ NGINX_SITE="/etc/nginx/sites-available/openhydrotwin"
 # Reference copy of the proven-working WASM viewer bundle, staged once on EC2
 # (see Step 7 below for why this is sourced server-side instead of scp'd from
 # this machine).
-EC2_KNOWN_GOOD_VIEWER="${EC2_KNOWN_GOOD_VIEWER:-/home/ubuntu/known_good_viewer_ga_objective_v2}"
+EC2_KNOWN_GOOD_VIEWER="${EC2_KNOWN_GOOD_VIEWER:-/home/ubuntu/known_good_viewer_observations_v3}"
 
 FRESH=0
 for arg in "$@"; do
@@ -252,7 +252,7 @@ cat > "${BUNDLE_DIR}/config.json" << EOF
     "assimilation": {
         "ga_merged_url":    "https://${DOMAIN}/${PAGE}/outputs/calibration_shallow_v1/ga_output_merged.txt",
         "observed_csv_url": "https://${DOMAIN}/${BRIDGE_PAGE}/outputs/selected_output.csv",
-        "modeled_csv_url":  "https://${DOMAIN}/${PAGE}/outputs/selected_output.csv",
+        "modeled_csv_url":  "https://${DOMAIN}/${PAGE}/outputs/reanalysis_output.csv",
         "x_axis": "t_now",
         "fitness_metrics": ["nse", "nmse"],
         "parameter_panel": {
@@ -361,6 +361,8 @@ p=Path(sys.argv[1]);s=p.read_text()
 import shutil
 latest=p.parent/'latest';latest.mkdir(exist_ok=True)
 shutil.copy2(p.parent/'config.json',latest/'config.json')
+for name in ('OHTwinViewer.js', 'OHTwinViewer.wasm', 'qtloader.js', 'qtlogo.svg'):
+    if (p.parent/name).exists(): shutil.copy2(p.parent/name,latest/name)
 (latest/p.name).write_text(s.replace('<script src="calibration_status.js"></script>','').replace('assets-ga-objective-v2/','../assets-ga-objective-v2/'))
 if 'src="calibration_status.js"' not in s:
     p.write_text(s.replace('</body>', '<script src="calibration_status.js"></script>\n</body>'))

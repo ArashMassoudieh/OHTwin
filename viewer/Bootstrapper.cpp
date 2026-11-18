@@ -1,3 +1,4 @@
+#include <QDateTime>
 // Bootstrapper.cpp
 
 #include "Bootstrapper.h"
@@ -29,7 +30,7 @@ void Bootstrapper::start()
     m_nam = new QNetworkAccessManager(this);
     connect(m_nam, &QNetworkAccessManager::finished,
             this, &Bootstrapper::onConfigReply);
-    m_nam->get(QNetworkRequest(QUrl("config.json")));
+    m_nam->get(QNetworkRequest(QUrl("config.json?_t=" + QString::number(QDateTime::currentMSecsSinceEpoch()))));
 #else
     // Desktop: read config.json from the override path if provided,
     // otherwise from next to the binary. qmake's copy_viewer_config rule

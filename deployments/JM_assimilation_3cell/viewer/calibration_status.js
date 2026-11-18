@@ -3,7 +3,7 @@
     const notice = document.createElement('div');
     notice.setAttribute('role', 'status');
     notice.style.cssText = 'position:fixed;bottom:8px;left:12px;right:12px;z-index:10000;padding:10px 14px;border-radius:8px;background:#fff3cd;color:#513d08;font:14px/1.4 sans-serif;box-shadow:0 2px 10px #0002';
-    notice.textContent = 'Previous calibration shown (MB + A0, old soil mapping). The updated MB + shallow A0/A2 calibration is running. This page will switch to the new results when ready.';
+    notice.textContent = 'Fitness/parameters: previous calibration. Comparison: current observations and provisional model output. Updated MB + shallow A0/A2 calibration is running; results switch automatically when ready.';
     document.body.appendChild(notice);
     async function check() {
         try {

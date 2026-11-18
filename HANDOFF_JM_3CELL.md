@@ -287,3 +287,19 @@ Checks: 21 JM Python tests passed; native OHQ constructed/validated/solved the
 The existing schematic has not been redrawn to show the lower soil nodes.
 
 User requested keeping the page visible while calibration runs. The root page now shows an explicitly labeled previous-calibration checkpoint from `previous-calibration/`; new results are staged under `latest/` with the revised config. The status script navigates there once the new GA archive exists. No calibration service was restarted for this presentation change.
+
+## 2026-11-18: show all measured diagnostic observations
+
+The comparison viewer incorrectly cleared measured series unless they belonged
+to the completed GA's calibration set. It now displays every available measured
+series, includes its values in axis ranges, and explicitly labels non-fit series
+as diagnostic. Calibration membership and weights were not changed. WASM startup
+config fetch now uses a cache-busting timestamp to avoid stale observation URLs.
+
+Root page keeps previous fitness/parameters, but Comparison now uses the current
+bridge and provisional layered-model output. The banner distinguishes these.
+The new completed-calibration page uses `reanalysis_output.csv` for comparison
+with its fitted historical model, rather than the pre-calibration forecast.
+Viewer assets are `assets-observations-v3/`; known-good flat bundle is
+`/home/ubuntu/known_good_viewer_observations_v3`. Calibration service was not
+restarted for the viewer change.

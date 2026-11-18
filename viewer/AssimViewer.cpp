@@ -1465,13 +1465,7 @@ void AssimViewer::updateComparisonPanels()
     if (newNames != currentNames)
         rebuildComparisonPanels(m_lastObserved, m_lastModeled);
 
-    // Push data into each panel and compute joint axis ranges.
-    // For panels whose series is NOT one of the GA's "used" calibration
-    // observations (m_lastUsedNames), we hide the observed scatter
-    // entirely — those variables don't have meaningful observation
-    // data for the assimilation, only the modeled prediction.
-    // If we haven't seen a GA result yet (m_lastUsedNames empty),
-    // we show observed dots for all panels (conservative default).
+    // Real observations stay visible independently of calibration membership.
     const bool gaSeen = !m_lastUsedNames.isEmpty();
 
     for (ComparisonPanel &p : m_compPanels)
@@ -1479,15 +1473,17 @@ void AssimViewer::updateComparisonPanels()
         const CsvSeries *obs = findByName(m_lastObserved, p.name);
         const CsvSeries *mod = findByName(m_lastModeled,  p.name);
 
-        const bool isCalibrated = !gaSeen || m_lastUsedNames.contains(p.name);
+        const bool isCalibrated = gaSeen && m_lastUsedNames.contains(p.name);
+        p.chart->setTitle(p.name + (obs && !isCalibrated
+            ? QStringLiteral(" — diagnostic (not used in calibration)") : QString()));
 
-        if (obs && isCalibrated) p.observedSer->replace(obs->points);
+        if (obs) p.observedSer->replace(obs->points);
         else                     p.observedSer->clear();
-        p.observedSer->setVisible(isCalibrated && obs != nullptr);
+        p.observedSer->setVisible(obs != nullptr);
         // Hide the legend marker for the scatter when we're not drawing it,
         // so the legend doesn't show a stray "Observed" entry.
         const auto markers = p.chart->legend()->markers(p.observedSer);
-        for (auto *m : markers) m->setVisible(isCalibrated && obs != nullptr);
+        for (auto *m : markers) m->setVisible(obs != nullptr);
 
         if (mod) p.modeledSer->replace(mod->points);
         else     p.modeledSer->clear();
@@ -1506,7 +1502,7 @@ void AssimViewer::updateComparisonPanels()
             yMin = std::min(yMin, s->yMin);
             yMax = std::max(yMax, s->yMax);
         };
-        if (isCalibrated) absorb(obs);
+        absorb(obs);
         absorb(mod);
 
         if (xMax > xMin)
