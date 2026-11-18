@@ -1474,7 +1474,10 @@ void AssimViewer::updateComparisonPanels()
         const CsvSeries *mod = findByName(m_lastModeled,  p.name);
 
         const bool isCalibrated = gaSeen && m_lastUsedNames.contains(p.name);
-        p.chart->setTitle(p.name + (obs && !isCalibrated
+        const QString title = p.name == QStringLiteral("Groundwater recharge")
+            ? QStringLiteral("Groundwater exchange (m³/day; + recharge, − upward)")
+            : p.name;
+        p.chart->setTitle(title + (obs && !isCalibrated
             ? QStringLiteral(" — diagnostic (not used in calibration)") : QString()));
 
         if (obs) p.observedSer->replace(obs->points);
@@ -1513,13 +1516,16 @@ void AssimViewer::updateComparisonPanels()
         if (yMax > yMin)
         {
             const double pad = (yMax - yMin) * 0.05 + 1e-9;
-            // Observed/modeled quantities (flows, depths, moisture) are
-            // non-negative; keep the padded axis floor at zero.
-            p.yAxis->setRange(std::max(0.0, yMin - pad), yMax + pad);
+            // Exchange flows can reverse direction. Preserve negative data;
+            // only non-negative series retain the zero floor.
+            p.yAxis->setRange(yMin < 0.0 ? yMin - pad : std::max(0.0, yMin - pad),
+                              yMax + pad);
         }
         else if (yMax == yMin)
         {
-            p.yAxis->setRange(std::max(0.0, yMin - 1.0), yMax + 1.0);
+            const double pad = yMin < 0.0 ? std::max(std::abs(yMin) * 0.05, 1e-9) : 1.0;
+            p.yAxis->setRange(yMin < 0.0 ? yMin - pad : std::max(0.0, yMin - pad),
+                              yMax + pad);
         }
     }
 }

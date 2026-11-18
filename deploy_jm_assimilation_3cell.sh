@@ -90,7 +90,7 @@ NGINX_SITE="/etc/nginx/sites-available/openhydrotwin"
 # Reference copy of the proven-working WASM viewer bundle, staged once on EC2
 # (see Step 7 below for why this is sourced server-side instead of scp'd from
 # this machine).
-EC2_KNOWN_GOOD_VIEWER="${EC2_KNOWN_GOOD_VIEWER:-/home/ubuntu/known_good_viewer_observations_v3}"
+EC2_KNOWN_GOOD_VIEWER="${EC2_KNOWN_GOOD_VIEWER:-/home/ubuntu/known_good_viewer_signed_flow_v4}"
 
 FRESH=0
 for arg in "$@"; do

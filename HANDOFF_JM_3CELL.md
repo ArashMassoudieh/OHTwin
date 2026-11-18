@@ -303,3 +303,21 @@ with its fitted historical model, rather than the pre-calibration forecast.
 Viewer assets are `assets-observations-v3/`; known-good flat bundle is
 `/home/ubuntu/known_good_viewer_observations_v3`. Calibration service was not
 restarted for the viewer change.
+
+## 2026-11-18: signed groundwater exchange display
+
+Groundwater recharge is the signed native-soil → fixed-groundwater link flow,
+`(head.s-head.e)*K_eff/length*area`, in m³/day. Negative values represent upward
+exchange, not invalid telemetry. Comparison incorrectly forced all Y axes to
+start at zero and clipped the negative part (sampled range -0.000917505 to
++0.00191883 m³/day). Axis bounds now preserve negative data while retaining a
+zero floor for nonnegative series. Label clarifies positive recharge / negative
+upward exchange. This remains model-only; there is no recharge observation.
+
+Assets: `assets-signed-flow-v4/`; flat deployment reference:
+`/home/ubuntu/known_good_viewer_signed_flow_v4`. Only viewer assets changed;
+no model/parameter/data changes or calibration restart.
+The visible step at the November 18 model restart is a cold-start/model-epoch
+transition: selected_output.csv retains older model history followed by the new
+layered-model forecast. It is not a measured groundwater jump. Historical model
+output remains preserved; no new recharge sensor has been introduced.
