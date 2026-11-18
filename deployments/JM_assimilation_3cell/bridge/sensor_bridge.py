@@ -14,7 +14,7 @@ import statistics
 from concurrent.futures import ThreadPoolExecutor
 import sys
 import urllib.request
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, urlsplit, parse_qs
 
 OHQ_EPOCH = datetime.datetime(1899, 12, 30)
 
@@ -194,6 +194,13 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             series_by_name = dict(pool.map(fetch, FIELD_SENSORS.items()))
         now_serial = (datetime.datetime.utcnow() - OHQ_EPOCH).total_seconds() / 86400
         series_by_name.update(shallow_observations(series_by_name, now_serial))
+        # Public charts omit electrical diagnostics; full acquisition and the
+        # default bridge feed retain them for calibration audits/debugging.
+        if parse_qs(urlsplit(self.path).query).get("view") == ["public"]:
+            series_by_name = {name: values for name, values in series_by_name.items()
+                              if not name.endswith(" voltage")
+                              and name != "Pressure current diagnostic"}
+
 
         if path.endswith(".csv"):
             self._send(build_csv(series_by_name), "text/csv")

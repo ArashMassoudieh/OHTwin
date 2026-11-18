@@ -328,3 +328,10 @@ Chart visibility cache recovery: the status script URL is now versioned as
 rendered normally in the inspected browser; an older cached pending-calibration
 script was a possible cause of the user's blank display, not conclusively proven.
 Fresh entry URL: `/JM_Bioretention_assimilation_3cell/?v=visible-v5`.
+
+Public chart simplification (2026-11-18): `?view=public` on the bridge CSV omits
+A0/A1/A2 voltage and pressure loop-current diagnostics. Root and latest viewer
+configs use this public feed. Moisture indices, water levels and inlet flow remain
+visible. The default full bridge feed, raw cloud records and calibration input
+are unchanged. Bridge service was restarted; assimilation PID stayed 1723100.
+Nine bridge tests passed, including separation of public and full responses.

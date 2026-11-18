@@ -251,7 +251,7 @@ cat > "${BUNDLE_DIR}/config.json" << EOF
     "refresh_seconds": 300,
     "assimilation": {
         "ga_merged_url":    "https://${DOMAIN}/${PAGE}/outputs/calibration_shallow_v1/ga_output_merged.txt",
-        "observed_csv_url": "https://${DOMAIN}/${BRIDGE_PAGE}/outputs/selected_output.csv",
+        "observed_csv_url": "https://${DOMAIN}/${BRIDGE_PAGE}/outputs/selected_output.csv?view=public",
         "modeled_csv_url":  "https://${DOMAIN}/${PAGE}/outputs/reanalysis_output.csv",
         "x_axis": "t_now",
         "fitness_metrics": ["nse", "nmse"],
@@ -486,7 +486,7 @@ section "JM 3-cell assimilation deployment complete"
 echo
 echo "  Viewer:  https://${DOMAIN}/${PAGE}/"
 echo "  Data:    https://${DOMAIN}/${PAGE}/outputs/"
-echo "  Bridge:  https://${DOMAIN}/${BRIDGE_PAGE}/outputs/selected_output.csv"
+echo "  Bridge:  https://${DOMAIN}/${BRIDGE_PAGE}/outputs/selected_output.csv?view=public"
 echo
 echo "  Logs:"
 echo "    ssh -i \"${PEM_FILE}\" ${EC2_USER}@${EC2_HOST}"

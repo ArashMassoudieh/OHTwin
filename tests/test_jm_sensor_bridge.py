@@ -45,6 +45,18 @@ class BridgeRoutingTest(unittest.TestCase):
             self.assertEqual(response.headers.get_content_type(), 'application/json')
             self.assertEqual(json.load(response)['deployment_name'], 'JM_assimilation_3cell')
 
+    def test_public_view_hides_electrical_diagnostics_only(self):
+        with urlopen(self.base + '/outputs/selected_output.csv?view=public&_t=123') as response:
+            public = response.read()
+        with urlopen(self.base + '/outputs/selected_output.csv') as response:
+            full = response.read()
+        self.assertNotIn(b'voltage', public)
+        self.assertNotIn(b'Pressure current diagnostic', public)
+        self.assertIn(b'Cell 1 A0 voltage', full)
+        self.assertIn(b'Pressure current diagnostic', full)
+        for name in (b'Pond 1 water depth', b'Cell 1 shallow moisture index', b'Cell 1 inlet flow diagnostic'):
+            self.assertIn(name, public)
+
     def test_unknown_route_remains_not_found(self):
         with self.assertRaises(HTTPError) as caught:
             urlopen(self.base + '/missing?_t=123')

@@ -65,3 +65,7 @@ new calibration must finish and be evaluated before claiming model accuracy.
 
 The existing schematic has not been redrawn into a six-layer diagram; consult the
 model script for the explicit upper/lower soil connections.
+
+Public Comparison uses `?view=public` to omit electrical troubleshooting channels
+(A0/A1/A2 voltage and pressure loop current). The default bridge response still
+contains all channels; calibration and raw data storage are unaffected.
