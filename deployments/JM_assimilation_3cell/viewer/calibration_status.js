@@ -1,5 +1,11 @@
 // Keep historical charts visible while clearly distinguishing the new calibration.
 (() => {
+    // Remove the superseded pending-calibration style if it survived a hot load.
+    for (const style of document.querySelectorAll('style')) {
+        if (/#screen\s*\{\s*visibility:\s*hidden\s*!important;?\s*\}/.test(style.textContent)) style.remove();
+    }
+    const screen = document.getElementById('screen');
+    if (screen) screen.style.visibility = 'visible';
     const notice = document.createElement('div');
     notice.setAttribute('role', 'status');
     notice.style.cssText = 'position:fixed;bottom:8px;left:12px;right:12px;z-index:10000;padding:10px 14px;border-radius:8px;background:#fff3cd;color:#513d08;font:14px/1.4 sans-serif;box-shadow:0 2px 10px #0002';

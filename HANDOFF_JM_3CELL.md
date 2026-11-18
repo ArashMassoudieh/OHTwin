@@ -321,3 +321,10 @@ The visible step at the November 18 model restart is a cold-start/model-epoch
 transition: selected_output.csv retains older model history followed by the new
 layered-model forecast. It is not a measured groundwater jump. Historical model
 output remains preserved; no new recharge sensor has been introduced.
+
+Chart visibility cache recovery: the status script URL is now versioned as
+`calibration_status.js?v=visible-v5`, and it removes the superseded exact
+`#screen { visibility: hidden !important; }` style if present. The chart page
+rendered normally in the inspected browser; an older cached pending-calibration
+script was a possible cause of the user's blank display, not conclusively proven.
+Fresh entry URL: `/JM_Bioretention_assimilation_3cell/?v=visible-v5`.

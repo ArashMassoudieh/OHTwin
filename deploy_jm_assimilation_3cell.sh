@@ -363,9 +363,11 @@ latest=p.parent/'latest';latest.mkdir(exist_ok=True)
 shutil.copy2(p.parent/'config.json',latest/'config.json')
 for name in ('OHTwinViewer.js', 'OHTwinViewer.wasm', 'qtloader.js', 'qtlogo.svg'):
     if (p.parent/name).exists(): shutil.copy2(p.parent/name,latest/name)
-(latest/p.name).write_text(s.replace('<script src="calibration_status.js"></script>','').replace('assets-ga-objective-v2/','../assets-ga-objective-v2/'))
-if 'src="calibration_status.js"' not in s:
-    p.write_text(s.replace('</body>', '<script src="calibration_status.js"></script>\n</body>'))
+(latest/p.name).write_text(s.replace('<script src="calibration_status.js"></script>','').replace('<script src="calibration_status.js?v=visible-v5"></script>','').replace('assets-ga-objective-v2/','../assets-ga-objective-v2/'))
+s=s.replace('src="calibration_status.js"','src="calibration_status.js?v=visible-v5"')
+if 'src="calibration_status.js?v=visible-v5"' not in s:
+    s=s.replace('</body>', '<script src="calibration_status.js?v=visible-v5"></script>\n</body>')
+p.write_text(s)
 PYSTATUS
 
 
