@@ -1,76 +1,17 @@
 #!/usr/bin/env python3
-"""
-AnacostiaIQ -> OpenHydroTwin sensor bridge, for JM_assimilation_3cell.
-
-Serves `GET /outputs/selected_output.csv` and `/outputs/selected_output_meta.json`
-in the exact shape DTAssimilation.cpp expects from a truth_csv_url -- the same
-role JM_truth's simulated output normally plays in the Bioretention examples,
-just backed by the real field station's live sensor API instead of another
-simulation run. Nothing else in DTAssimilation needs to change: it already
-treats "truth" as "whatever this URL returns," with no assumption it came
-from a simulation.
-
-Field station status (checked 2026-11-11 against the live dashboard at
-http://54.213.147.59/SensorDashboard.html): the original field-station-01
-is retired. It was physically replaced by jm-cua-twin-pi (station id
-jm_cua_twin_pi_staging, "John McCormack Field Station"), which has been
-live and posting since its commissioning on 2026-10-30. The dashboard's
-own config.json confirms this is the live feed, not a demo/fallback
-("demo_fallback": false). This bridge pulls from that replacement Pi.
-
-Mapping (confirmed 2026-11-11 -- see deployments/JM_assimilation_3cell/config.json
-for the corresponding calibration_observations entry):
-  - MaxBotix "Ponding Depth" (sensor id: staging_maxbotix_depth, project
-    John-McCormack) -> "Pond 1 water depth"
-      Sensors are physically installed in the highest-elevation cell only
-      (confirmed on site), which is Pond 1 / Engineered Soil 1 in this
-      corrected 3-column model. HC-SR04 "Inflow Weir Head"
-      (staging_hcsr04_depth) is NOT used here -- by name it measures at an
-      inflow/weir structure, not the pond itself, and there's no matching
-      model observation for that distinct quantity yet. Revisit if that
-      turns out to be the wrong read.
-  - Moisture probe A0 (sensor id: staging_moisture_sensor) -> "Soil 1 moisture"
-      (A1/staging_moisture_a1 and A2/staging_moisture_a2 exist too, but
-      only one instrumented cell maps into this 3-column model for now.)
-  - The pressure transducer (planned for the deep inspection well) is NOT
-    wired in yet -- staging_pressure_loop_current_raw is still uncalibrated
-    current, not depth, and the model has no "inspection well" object
-    distinct from the pond surface, so its correspondence needs to be
-    designed first.
-  - The other two cells (Pond 2/3, Soil 2/3) carry no real-sensor feed and
-    keep running on the model alone -- estimating them from the one
-    instrumented cell is explicitly future work, not attempted here.
-
-CAVEATS -- read before trusting any assimilation result this produces:
-  - Depth datum: field reports inches from its OWN configured zero reference
-    (totalLength - measured, see MaxbotixSensor in the AnacostiaIQ repo);
-    the model's "Pond 1 water depth" is meters above JM Pond 1's
-    bottom_elevation. This bridge only does the unit conversion (in -> m).
-    It does NOT reconcile the two zero datums, which most likely differ.
-    Treat early runs as a plumbing/connectivity check, not a calibrated
-    result, until that reconciliation is done deliberately.
-  - Moisture scale: field reports a 0-100% value normalized against its own
-    dry/wet calibration points (and the dashboard's own notes flag that
-    calibration as provisional/non-quantitative for both A0 and A1); the
-    model's theta is volumetric water content (0 to theta_sat, roughly
-    0-0.4 here). This bridge applies a simple linear placeholder,
-    theta = theta_res + (pct/100)*(theta_sat - theta_res), with no real
-    site soil calibration behind it.
-  - Data history: the replacement Pi's own data starts 2026-10-30T15:31:14Z
-    ("_commissioningComment" in the dashboard config). Earlier bench/staging
-    records exist but aren't representative of the as-installed sensor --
-    this bridge's default window is short enough to avoid pulling that in,
-    but widen --window-days with that in mind.
-
-Usage:
-    python3 sensor_bridge.py [--port 8198] [--api http://54.213.147.59:5000]
-                             [--project John-McCormack] [--window-days 14]
+"""Live JM sensor observations. Shallow moisture is a provisional dry/wet index,
+not measured volumetric water content. A fixed A0/A2 pair provides one Cell 1
+observation; A1 remains available separately because its voltage jumps are unresolved.
+HC flow and pressure current are diagnostic, not fitted while physical issues remain.
 """
 
 import argparse
 import datetime
 import http.server
 import json
+import math
+import statistics
+from concurrent.futures import ThreadPoolExecutor
 import sys
 import urllib.request
 from urllib.parse import quote, urlsplit
@@ -84,22 +25,52 @@ THETA_SAT = 0.4
 IN_TO_M = 0.0254
 
 FIELD_SENSORS = {
-    "staging_maxbotix_depth": {
-        "observation_name": "Pond 1 water depth",
-        "convert": lambda v: v * IN_TO_M,  # in -> m, datum NOT reconciled
-    },
-    "staging_moisture_sensor": {
-        "observation_name": "Soil 1 moisture",
-        "convert": lambda v: THETA_RES + (v / 100.0) * (THETA_SAT - THETA_RES),
-    },
+    "staging_maxbotix_depth": {"observation_name": "Pond 1 water depth", "convert": lambda v: v * IN_TO_M},
+    "staging_moisture_sensor_raw": {"observation_name": "Cell 1 A0 voltage", "convert": float},
+    "staging_moisture_a1_raw": {"observation_name": "Cell 1 A1 voltage", "convert": float},
+    "staging_moisture_a2_raw": {"observation_name": "Cell 1 A2 voltage", "convert": float},
+    "staging_inflow_flow_rate": {"observation_name": "Cell 1 inlet flow diagnostic", "convert": lambda v: v * 86.4},
+    "staging_inflow_weir_head": {"observation_name": "Inlet weir head diagnostic", "convert": lambda v: v * IN_TO_M},
+    "staging_pressure_loop_current_raw": {"observation_name": "Pressure current diagnostic", "convert": float},
 }
+CALIBRATION = {"A0": (17155, 5600), "A1": (17155, 2400), "A2": (17155, 6400)}
+
+def shallow_observations(series, now_serial):
+    """Completed UTC 15-minute medians; no gap filling or changing membership."""
+    channels = {}
+    for channel in CALIBRATION:
+        grouped = {}
+        for t, voltage in series.get(f"Cell 1 {channel} voltage", []):
+            if not math.isfinite(voltage) or not 0 < voltage < 4.096:
+                continue
+            bucket = math.floor(t * 96 + 1e-7)
+            if (bucket + 1) / 96 > now_serial:
+                continue
+            grouped.setdefault(bucket, []).append(voltage)
+        dry, wet = CALIBRATION[channel]
+        channels[channel] = {
+            bucket: min(100., max(0., 100 * (dry - statistics.median(values) / .000125) / (dry - wet)))
+            for bucket, values in grouped.items() if len(values) >= 5
+        }
+    result = {
+        f"Cell 1 {channel} moisture index": [((b + 1) / 96, v) for b, v in sorted(values.items())]
+        for channel, values in channels.items()
+    }
+    # Timestamp at bin END: never imply that the median was available earlier.
+    result["Cell 1 shallow moisture index"] = [
+        ((b + 1) / 96, (channels["A0"][b] + channels["A2"][b]) / 2)
+        for b in sorted(channels["A0"].keys() & channels["A2"].keys())
+    ]
+    return result
 
 
 def iso_to_ohq_serial(iso_ts: str) -> float:
     # Server emits isoformat() + "Z"; fromisoformat() before Python 3.11
     # doesn't accept the trailing Z, so strip it -- OHQ serial dates are
     # naive/UTC anyway, same as the server's own utcnow() timestamps.
-    dt = datetime.datetime.fromisoformat(iso_ts.rstrip("Z"))
+    dt = datetime.datetime.fromisoformat(iso_ts.replace("Z", "+00:00"))
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
     return (dt - OHQ_EPOCH).total_seconds() / 86400.0
 
 
@@ -133,7 +104,7 @@ def fetch_sensor_series(api_base: str, project: str, sensor_id: str, window_days
         # reading or read timeout), not a real measurement -- 0 IS a real
         # reading (MB7389 R5000 "no target" = genuine zero ponding depth),
         # so only negative values are dropped here.
-        if v < 0:
+        if not math.isfinite(v) or v < 0:
             continue
         series.append((t, v))
     series.sort(key=lambda p: p[0])
@@ -175,10 +146,18 @@ def build_meta(series_by_name, window_days):
                 for name, point in latest.items()
                 for t, v in ([point] if point else [(None, None)])
             },
+            "observation_mapping": {
+                "Pond 1 water depth": {"unit": "m", "status": "provisional field zero; not independently surveyed"},
+                "Cell 1 shallow moisture index": {"unit": "% index", "probes": ["A0", "A2"], "layer": "upper 0.3048 m (model discretization, not surveyed probe depth)", "status": "relative dry/wet proxy; not calibrated VWC"},
+                "Cell 1 inlet flow diagnostic": {"unit": "m3/day", "status": "not assimilated: leaves in box; reconstructed history includes restored weir calibration"},
+                "Pressure current diagnostic": {"unit": "mA", "status": "not assimilated: no field pressure-depth calibration"},
+            },
             "caveats": [
-                "Depth datum (field zero vs model Pond 1 bottom_elevation) is NOT reconciled -- unit-converted only.",
-                "Moisture scale (field 0-100% dry/wet calibration vs model volumetric theta) is a linear placeholder, not a real soil calibration.",
-                "Source is the replacement Pi (jm_cua_twin_pi_staging), live since 2026-10-30; earlier bench/staging data is excluded by the window.",
+                "MB field zero was adopted from a dry reference; physical well/pond correspondence remains provisional.",
+                "Shallow index uses fixed raw-voltage calibration and A0/A2 membership; missing either probe leaves a gap. A1 remains diagnostic due unresolved jumps.",
+                "Moisture is a relative index, not calibrated VWC. The model index is a provisional effective-saturation proxy in its upper one-foot layer.",
+                "All moisture probes belong to Cell 1; Cells 2/3 have no direct observations.",
+                "HC is diagnostic only; no measured flow is added to modeled runoff, avoiding double counting.",
             ],
         },
         indent=4,
@@ -207,12 +186,14 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             return
 
-        series_by_name = {}
-        for sensor_id, spec in FIELD_SENSORS.items():
+        def fetch(item):
+            sensor_id, spec = item
             raw = fetch_sensor_series(self.api_base, self.project, sensor_id, self.window_days)
-            series_by_name[spec["observation_name"]] = [
-                (t, spec["convert"](v)) for t, v in raw
-            ]
+            return spec["observation_name"], [(t, spec["convert"](v)) for t, v in raw]
+        with ThreadPoolExecutor(max_workers=7) as pool:
+            series_by_name = dict(pool.map(fetch, FIELD_SENSORS.items()))
+        now_serial = (datetime.datetime.utcnow() - OHQ_EPOCH).total_seconds() / 86400
+        series_by_name.update(shallow_observations(series_by_name, now_serial))
 
         if path.endswith(".csv"):
             self._send(build_csv(series_by_name), "text/csv")

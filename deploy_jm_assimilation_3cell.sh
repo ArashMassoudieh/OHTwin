@@ -15,7 +15,7 @@
 #      as its own small standalone systemd service, jm-sensor-bridge-3cell,
 #      bound to 127.0.0.1:8198. It polls the REAL field API
 #      (http://54.213.147.59:5000, project John-McCormack) and republishes
-#      Pond 1 water depth / Soil 1 moisture for DTAssimilation to fetch from
+#      Pond 1 water depth / Cell 1 shallow moisture index for DTAssimilation to fetch from
 #      localhost -- same mechanism verified locally via an SSH tunnel.
 #
 # Why the bridge needs its own nginx location (new pattern here)
@@ -250,7 +250,7 @@ cat > "${BUNDLE_DIR}/config.json" << EOF
     "mode": "assimilation",
     "refresh_seconds": 300,
     "assimilation": {
-        "ga_merged_url":    "https://${DOMAIN}/${PAGE}/outputs/calibration/ga_output_merged.txt",
+        "ga_merged_url":    "https://${DOMAIN}/${PAGE}/outputs/calibration_shallow_v1/ga_output_merged.txt",
         "observed_csv_url": "https://${DOMAIN}/${BRIDGE_PAGE}/outputs/selected_output.csv",
         "modeled_csv_url":  "https://${DOMAIN}/${PAGE}/outputs/selected_output.csv",
         "x_axis": "t_now",
@@ -353,6 +353,19 @@ mkdir -p "${WWW}/${PAGE}"
 cp "${KNOWN_GOOD}"/* "${WWW}/${PAGE}/"
 ENDSSH
 scp "${SCP_OPTS[@]}" "${BUNDLE_DIR}/config.json" "${EC2_USER}@${EC2_HOST}:${EC2_WWW}/${PAGE}/config.json"
+scp "${SCP_OPTS[@]}" "${LOCAL_PROJECT}/deployments/${DEPLOYMENT}/viewer/calibration_status.js" "${EC2_USER}@${EC2_HOST}:${EC2_WWW}/${PAGE}/calibration_status.js"
+ssh "${SSH_OPTS[@]}" python3 - "${EC2_WWW}/${PAGE}/OHTwinViewer.html" << 'PYSTATUS'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1]);s=p.read_text()
+import shutil
+latest=p.parent/'latest';latest.mkdir(exist_ok=True)
+shutil.copy2(p.parent/'config.json',latest/'config.json')
+(latest/p.name).write_text(s.replace('<script src="calibration_status.js"></script>','').replace('assets-ga-objective-v2/','../assets-ga-objective-v2/'))
+if 'src="calibration_status.js"' not in s:
+    p.write_text(s.replace('</body>', '<script src="calibration_status.js"></script>\n</body>'))
+PYSTATUS
+
 
 # =============================================================================
 # Step 8 — nginx: assimilation page (alias, same pattern as everything else)
@@ -444,7 +457,7 @@ set -e
 D="$1"; SVC="$2"; BRIDGE_SVC="$3"
 sudo systemctl enable "${BRIDGE_SVC}.service"
 sudo systemctl restart "${BRIDGE_SVC}.service"
-sleep 3
+curl --fail --silent --show-error --retry 3 --retry-connrefused --retry-delay 1 --max-time 45 http://127.0.0.1:8198/outputs/selected_output_meta.json > /dev/null
 sudo systemctl status "${BRIDGE_SVC}.service" --no-pager | head -12
 echo
 sudo systemctl enable "${SVC}@${D}.service"

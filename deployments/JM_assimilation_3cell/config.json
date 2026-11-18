@@ -41,19 +41,20 @@
             "Catch basin outlet flow": 0.1,
             "Soil 1 evaporation": 0.0,
             "Soil 2 evaporation": 0.0,
-            "Soil 3 evaporation": 0.0
+            "Soil 3 evaporation": 0.0,
+            "Cell 1 shallow moisture index": 0.0
         },
         "noise_correlation_time": "6hr"
     },
     "assimilation": {
-        "_comment": "truth_csv_url/truth_meta_url point at the AnacostiaIQ sensor bridge (not a simulated truth run). Sensors are physically installed in the highest-elevation cell only (confirmed on site), which maps to Pond 1 / Engineered Soil 1 in this model -- so calibration_observations is deliberately just those two for now. The other columns keep simulating and reporting for the viewer, they just carry no assimilation pressure yet. Estimating the un-instrumented cells from the one instrumented cell is future work. The pressure transducer (planned for the deep inspection well) isn't mapped yet -- the model has no 'inspection well' object distinct from the pond surface, so its correspondence needs to be designed before it can be added here.",
+        "_comment": "Cell 1 observations only. MB depth retains a provisional field zero. Fixed A0/A2 raw-voltage-derived shallow index is compared with normalized saturation of the upper one-foot model layer, not claimed as calibrated VWC. A1, HC inlet flow (leaves), and pressure current are retained as diagnostics. Other cells share soil parameters, not sensor values.",
         "truth_csv_url": "http://localhost:8198/outputs/selected_output.csv",
         "calibration_observations": [
             "Pond 1 water depth",
-            "Soil 1 moisture"
+            "Cell 1 shallow moisture index"
         ],
         "truth_meta_url": "http://localhost:8198/outputs/selected_output_meta.json",
         "poll_interval": "3day",
-        "calibration_output_dir": "outputs/calibration"
+        "calibration_output_dir": "outputs/calibration_shallow_v1"
     }
 }

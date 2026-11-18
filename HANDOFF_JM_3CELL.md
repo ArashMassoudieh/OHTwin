@@ -255,3 +255,35 @@ future deployment. Existing versioned assets are retained for open browser tabs.
 This repairs display/parsing only. The first fitted metrics are poor (negative
 NSE for both fitted observations), and the observation-to-model mappings remain
 provisional. Showing calibration results does not establish predictive validity.
+
+## 2026-11-18: field observation mapping and shallow soil epoch
+
+See `deployments/JM_assimilation_3cell/OBSERVATION_MAPPING.md`. Real observations
+remain distinct from model forcing. The bridge now exposes all three moisture
+voltages/indices, a fixed A0/A2 shallow target, MB depth, HC head/inlet flow and
+pressure current. HC is compared with the Gutter 1 → Pond 1 link only as a
+diagnostic while leaves remain; pressure is not converted using the borrowed
+lab calibration. No sensor values are assigned to Cells 2/3.
+
+The assimilation soil is explicitly split into upper 0.3048 m and lower 0.6096 m
+layers, preserving total volume with vertical and proportionate horizontal
+exchange. New target is `Cell 1 shallow moisture index`, not an asserted VWC.
+The index-to-model-saturation operator and MB zero remain provisional.
+
+Deployment at 15:13 UTC started a fresh layered-model state after backing up old
+state/snapshots/model/config/outputs under
+`/home/ubuntu/jm_twin_3cell/backups/before-shallow-20261118`. Forecast was untouched.
+New GA output uses `outputs/calibration_shallow_v1`; the viewer clearly shows
+pending recalibration and current mapping until that archive exists. It does not
+show old fitness as a result for the new observation definition. The first start
+raced the bridge; after confirming bridge readiness, assimilation was restarted
+successfully. Deployment now waits for bridge readiness before starting it.
+Server confirmed two matched targets and 99,055 buffered points across 11 series.
+New GA started 15:13:42 UTC; fit quality is not yet known. Do not report fully fixed
+or better predictive performance before evaluating its completed results.
+
+Checks: 21 JM Python tests passed; native OHQ constructed/validated/solved the
+23-observation layered model; layer depth/continuity/routing checks passed.
+The existing schematic has not been redrawn to show the lower soil nodes.
+
+User requested keeping the page visible while calibration runs. The root page now shows an explicitly labeled previous-calibration checkpoint from `previous-calibration/`; new results are staged under `latest/` with the revised config. The status script navigates there once the new GA archive exists. No calibration service was restarted for this presentation change.
