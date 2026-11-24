@@ -39,6 +39,7 @@
 #include "DTConfig.h"
 #include "DTRunner.h"
 #include "DTDebugLog.h"
+#include "DTFreshStart.h"
 
 #include <QCommandLineOption>
 #include <QCommandLineParser>
@@ -96,6 +97,15 @@ int main(int argc, char *argv[])
 
     parser.process(app);
 
+    if (parser.isSet(freshOpt) && parser.isSet(renderOnlyOpt)) {
+        std::cerr << "[Main] --fresh cannot be combined with --render-only.\n";
+        return 1;
+    }
+    if (parser.isSet(forceOpt) && !parser.isSet(freshOpt)) {
+        std::cerr << "[Main] --force requires --fresh.\n";
+        return 1;
+    }
+
     if (!parser.isSet(deploymentOpt))
     {
         std::cerr << "[Main] --deployment <path> is required.\n"
@@ -119,14 +129,30 @@ int main(int argc, char *argv[])
     }
 
 
-    // ------------------------------------------------------------------
-    // 2a. Handle --fresh: erase contents of state/ and outputs/
-    // ------------------------------------------------------------------
-    // ------------------------------------------------------------------
-    // 2a. Handle --fresh: erase contents of state/ and outputs/
-    // ------------------------------------------------------------------
+    // Validate both deletion targets before touching either one.
     if (parser.isSet(freshOpt))
     {
+        QString safetyError;
+        if (!validateFreshTargets(deploymentRoot, safetyError)) {
+            std::cerr << "[Fresh] " << safetyError.toStdString() << "\n";
+            return 1;
+        }
+        std::cerr << "[Fresh] Permanently erase run data in:\n  "
+                  << config.stateDir << "\n  " << config.outputDir << "\n";
+        const QString calibrationDir = QString::fromStdString(config.assimilation.calibrationOutputDir);
+        if (config.assimilation.enabled && !calibrationDir.isEmpty()
+            && !freshContains(QString::fromStdString(config.outputDir), calibrationDir)
+            && !freshContains(QString::fromStdString(config.stateDir), calibrationDir)) {
+            std::cerr << "[Fresh] Calibration directory is outside these targets; "
+                         "its history will be retained: " << calibrationDir.toStdString() << "\n";
+        }
+        if (!parser.isSet(forceOpt)) {
+            std::cerr << "Type DELETE to continue: " << std::flush;
+            if (!confirmFresh(std::cin)) {
+                std::cerr << "[Fresh] Cancelled; run data was not erased.\n";
+                return 1;
+            }
+        }
         QString freshErr;
         if (!DTConfig::eraseDirectoryContents(
                 QString::fromStdString(config.stateDir), freshErr))

@@ -123,6 +123,7 @@ private:
     std::atomic<qint64> m_bufferPointCount{0};
     qint64 m_pollIntervalWallClockMs = 0;
     int m_cyclesCompleted = 0;
+    QString m_completedPopulationPath;
     // Calibration pipeline: runCalibration dispatches on
     // m_config.assimilation.method after solver-agnostic prep.
     bool runCalibration(QString &errorMessage);

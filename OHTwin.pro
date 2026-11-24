@@ -152,6 +152,9 @@ SOURCES += \
     noaaweatherfetcher.cpp
 
 HEADERS += \
+    DTFreshStart.h \
+    DTCalibrationResume.h \
+    DTObservationSelection.h \
     ../../XString.h \
     ../OpenHydroQual/aquifolium/include/Objective_Function.h \
     ../OpenHydroQual/aquifolium/include/Objective_Function_Set.h \

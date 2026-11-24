@@ -362,6 +362,26 @@ bool DTRunner::init(QString &errorMessage)
             return false;
         }
 
+        // A calibration can finish after the last forward snapshot. On restart
+        // recover its parameters, but keep the chronological forward state.
+        const auto forwardState = readJson(findLatestStateSnapshot());
+        const auto forwardParameters = forwardState.value("Parameters").toObject();
+        if (!forwardParameters.isEmpty()) {
+            const QDir calibrationDir(QString::fromStdString(
+                m_config.assimilation.calibrationOutputDir));
+            const auto candidates = calibrationDir.entryInfoList(
+                {"state_calibrated*.json"}, QDir::Files, QDir::Time);
+            for (const auto &candidate : candidates) {
+                const auto calibrated = readJson(candidate.absoluteFilePath());
+                if (calibrated.value("Parameters").toObject().keys() != forwardParameters.keys())
+                    continue;
+                m_pendingCalibratedSnapshot = candidate.absoluteFilePath();
+                std::cout << "[Runner] restored calibrated parameters for next forward cycle: "
+                          << m_pendingCalibratedSnapshot.toStdString() << "\n";
+                break;
+            }
+        }
+
         // Diagnostic logging on poll outcomes.  Cross-thread signals
         // become QueuedConnection automatically, so these lambda bodies
         // run on the main thread — safe to use std::cout/std::cerr.

@@ -43,6 +43,7 @@
 #include "DTStreamingMCMC.h"
 #include "DTDebugLog.h"
 #include "DTObservationSelection.h"
+#include "DTCalibrationResume.h"
 
 DTAssimilation::DTAssimilation(const DTConfig &config, QObject *parent)
     : QObject(parent)
@@ -69,6 +70,14 @@ DTAssimilation::DTAssimilation(const DTConfig &config, QObject *parent)
 // ---------------------------------------------------------------------------
 bool DTAssimilation::configure(QString &errorMessage)
 {
+    const auto historyDir = QString::fromStdString(m_config.assimilation.calibrationOutputDir);
+    m_cyclesCompleted = completedCalibrationCycles(historyDir);
+    if (m_config.assimilation.method == "GA" && m_cyclesCompleted > 0)
+        m_completedPopulationPath = completedCalibrationPopulation(historyDir);
+    if (m_cyclesCompleted > 0)
+        std::cout << "[Assim] restored " << m_cyclesCompleted
+                  << " completed calibration cycles; population seed "
+                  << (m_completedPopulationPath.isEmpty() ? "unavailable" : "recovered") << "\n";
     if (!m_config.assimilation.enabled)
     {
         errorMessage = "DTAssimilation::configure(): assimilation block is "
@@ -267,10 +276,11 @@ bool DTAssimilation::archiveGAOutput(int cycleIndex)
     {
         QFile dest(destPath);
 
+        const bool newArchive = !QFileInfo::exists(destPath) || QFileInfo(destPath).size() == 0;
         const QIODevice::OpenMode mode =
             QIODevice::WriteOnly |
             QIODevice::Text |
-            ((cycleIndex <= 1)
+            ((newArchive)
                  ? QIODevice::Truncate
                  : QIODevice::Append);
 
@@ -288,7 +298,7 @@ bool DTAssimilation::archiveGAOutput(int cycleIndex)
                     : QStringLiteral("n/a");
 
             // Fresh merged file header
-            if (cycleIndex <= 1)
+            if (newArchive)
             {
                 out << "=====================================================\n";
                 out << " OpenHydroTwin Assimilation GA Archive\n";
@@ -1285,8 +1295,12 @@ bool DTAssimilation::runCalibrationGA(System &sys,
     ga.filenames.outputfilename = "ga_output.txt";
 
     // 6. Warm-start from previous cycle's terminal population, if available.
-    const QString prevOutput = calibDir + "/ga_output.txt";
-    if (m_cyclesCompleted > 0 && QFileInfo::exists(prevOutput))
+    const QString prevOutput = m_completedPopulationPath;
+    std::vector<std::string> currentParameterNames;
+    for (int i = 0; i < static_cast<int>(sys.Parameters().size()); ++i)
+        currentParameterNames.push_back(sys.Parameters()[i]->GetName());
+    if (m_cyclesCompleted > 0 && !prevOutput.isEmpty()
+        && calibrationPopulationMatches(prevOutput, currentParameterNames))
     {
         ga.filenames.getfromfilename = prevOutput.toStdString();
         ga.getinifromoutput(prevOutput.toStdString());
@@ -1366,6 +1380,9 @@ bool DTAssimilation::runCalibrationGA(System &sys,
     }
 
     ++m_cyclesCompleted;
+    const auto completedPopulation = calibDir + "/ga_population_completed.txt";
+    if (atomicCalibrationCopy(calibDir + "/ga_output.txt", completedPopulation))
+        m_completedPopulationPath = completedPopulation;
     std::cout << "[Assim] calibration cycle " << m_cyclesCompleted
               << " completed: " << newSnapshotPath.toStdString() << "\n";
 

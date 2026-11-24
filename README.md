@@ -155,3 +155,37 @@ viewer config says which kernel output feeds each variable; the kernel must be g
 (`ohq_generate --outputs`). Values of each Advance stage are kept in a rolling history
 (`state/viewer_history.bin`, `output_times.history_days`); the files combine it with the Forecast stage and are
 replaced atomically.
+
+### Calibration recovery after restart
+
+GA assimilation recovers completed cycle numbering from `parameter_history.csv`
+and `ga_output_merged.txt` in its configured calibration output directory.
+Existing merged history is appended to, never truncated by a reset cycle counter.
+A restart extracts the last archived GA population into `ga_population_resume.txt`;
+it does not trust `ga_output.txt`, which may contain a failed or interrupted run.
+Parameter names/order must match the current model before warm-starting. Each
+successful cycle also saves `ga_population_completed.txt` atomically for the next
+cycle in that process. Missing/incompatible seeds fall back to a cold population
+without deleting history. Interrupted generations are not resumed mid-generation.
+
+The forward runner restores the latest saved calibrated parameters when their
+parameter names match its saved forward state. It retains that forward state's
+chronological storage/state and time, rather than replacing them with calibration
+initial conditions. Previous observation selections remain in each cycle's
+`observation_selection.jsonl` record; the current config selects the next cycle.
+Keep a distinct calibration directory when changing model structure or switching
+between generated test inputs and measured observations. Normal restart is the
+recovery path; do not use `--fresh`, which deliberately clears run data.
+
+### Restart and reset commands
+
+Normal startup (`OHTwin --deployment /path/to/deployment`) resumes saved state
+and completed calibration history. `--render-only` regenerates visuals without
+simulation. `--fresh` permanently clears that deployment's `state/` and
+`outputs/` contents, after displaying both paths and requiring the exact answer
+`DELETE`. EOF or any other answer cancels. For unattended resets, explicitly
+add `--force`. `--force` alone and `--fresh --render-only` are rejected.
+Linked state/output directories are rejected before either directory is cleared.
+Model/config files, `snapshots/`, and sensor records on the API are retained.
+A calibration directory outside state/outputs is also retained, with a warning;
+therefore that configuration does not produce a completely cold calibration.
