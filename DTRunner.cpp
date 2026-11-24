@@ -20,6 +20,7 @@
 
 #include "DTRunner.h"
 #include "DTSelectedOutput.h"
+#include "DTLiveTiming.h"
 
 #include "System.h"
 #include "Script.h"
@@ -689,6 +690,13 @@ bool DTRunner::runOnce()
         advanceEnd = advanceStart.addMSecs(m_config.intervalMs);
     }
 
+    // A restart may happen midway through a normal interval, or before
+    // the observation buffer has populated. Never persist tomorrow's state
+    // as today's Advance simply because the fallback interval is one day.
+    advanceEnd = liveAdvanceEnd(advanceEnd, QDateTime::currentDateTimeUtc(),
+                                m_config.isLiveForecastMode());
+    if (advanceEnd <= advanceStart) return true;
+
     std::cout << "\n[Runner] ======== Cycle " << (m_runsCompleted + 1) << " ========\n";
 
 
@@ -856,7 +864,7 @@ bool DTRunner::runOnce()
         if (m_forecastDays > 0.0)
         {
             const QDateTime forecastEnd =
-                advanceStart.addMSecs(m_config.intervalMs + m_config.forecastHorizonMs);
+                advanceEnd.addMSecs(m_config.forecastHorizonMs);
 
             forecast = runStage(StageKind::Forecast,
                                 advanceStart, forecastEnd,

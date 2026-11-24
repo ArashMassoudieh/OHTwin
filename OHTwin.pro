@@ -152,6 +152,7 @@ SOURCES += \
     noaaweatherfetcher.cpp
 
 HEADERS += \
+    DTLiveTiming.h \
     DTSelectedOutput.h \
     DTFreshStart.h \
     DTCalibrationResume.h \

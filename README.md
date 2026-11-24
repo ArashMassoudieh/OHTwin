@@ -198,3 +198,11 @@ abort the merge and preserve the existing chart file. Each series is sorted by
 time at the CSV writer's five-decimal day precision; duplicate timestamps use
 the latest appended value. Different-length
 series and genuine zero measurements are retained.
+
+### Live time boundaries
+
+For unaccelerated live deployments (no configured start/stop date), the Advance
+stage is capped at the current UTC time, including startup and an empty
+observation-buffer fallback. Repeated restarts cannot persist a future day as
+completed state. Forecast output still extends beyond the Advance endpoint by
+the configured horizon. Historical replay and accelerated runs are exempt.
