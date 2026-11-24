@@ -189,3 +189,12 @@ Linked state/output directories are rejected before either directory is cleared.
 Model/config files, `snapshots/`, and sensor records on the API are retained.
 A calibration directory outside state/outputs is also retained, with a warning;
 therefore that configuration does not produce a completely cold calibration.
+
+### Selected-output timestamp integrity
+
+The runner reads alternating time/value CSV columns without interpreting blank
+padding as epoch-zero observations. Incomplete, non-numeric or non-finite pairs
+abort the merge and preserve the existing chart file. Each series is sorted by
+time at the CSV writer's five-decimal day precision; duplicate timestamps use
+the latest appended value. Different-length
+series and genuine zero measurements are retained.

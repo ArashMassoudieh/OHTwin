@@ -19,6 +19,7 @@
  */
 
 #include "DTRunner.h"
+#include "DTSelectedOutput.h"
 
 #include "System.h"
 #include "Script.h"
@@ -1443,40 +1444,20 @@ bool DTRunner::mergeIntoSelectedOutput(const TimeSeriesSet<double> &advanceObs,
     QFileInfo fi(selectedOutputFile);
     if (fi.exists() && fi.size() > 0)
     {
-        TimeSeriesSet<double> loaded(selectedOutputFile.toStdString(), true);
-        if (!loaded.file_not_found) {
-            merged = loaded;
-            // DIAG: what did we actually read back?
-            if (!merged.empty()) {
-                const auto &ts = merged[0];
-                std::cerr << "[DIAG] loaded '" << ts.name() << "' size=" << ts.size()
-                          << " t[0]=" << (ts.size()? ts.getTime(0):-1)
-                          << " t[last]=" << (ts.size()? ts.getTime(ts.size()-1):-1)
-                          << " cutoff=" << (cutoffTime - kBoundaryEpsilonDays) << "\n";
-            }
-            const size_t before = merged.empty()?0:merged[0].size();
-
-            std::cerr << "[DIAG2] elem[0].t=" << merged[0][0].t
-                      << " getTime(0)=" << merged[0].getTime(0)
-                      << " | elem[last].t=" << merged[0][merged[0].size()-1].t
-                      << " getTime(last)=" << merged[0].getTime(merged[0].size()-1) << "\n";
-
-            merged.knockout(cutoffTime - kBoundaryEpsilonDays);
-            const size_t after = merged.empty()?0:merged[0].size();
-            std::cerr << "[DIAG] knockout dropped " << (before-after)
-                      << " points (before=" << before << " after=" << after << ")\n";
+        std::vector<DTSelectedSeries> loaded;
+        QString readError;
+        if (!readSelectedOutput(selectedOutputFile, loaded, readError)) {
+            std::cerr << "[Runner] selected output preserved; cannot read history: "
+                      << readError.toStdString() << "\n";
+            return false;
         }
-        if (loaded.file_not_found)
-        {
-            std::cerr << "[Runner] mergeIntoSelectedOutput: failed to read "
-                      << selectedOutputFile.toStdString()
-                      << " — starting fresh.\n";
-        }
-        else
-        {
-            merged = loaded;
-            // 2. Drop the previous cycle's forecast tail.
-            merged.knockout(cutoffTime - kBoundaryEpsilonDays);
+        for (const auto &series : loaded) {
+            TimeSeries<double> history;
+            history.setName(series.name.toStdString());
+            for (const auto &point : series.points)
+                if (point.first < cutoffTime - kBoundaryEpsilonDays)
+                    history.append(point.first, point.second);
+            merged.push_back(history);
         }
     }
     else
@@ -1550,6 +1531,24 @@ bool DTRunner::mergeIntoSelectedOutput(const TimeSeriesSet<double> &advanceObs,
     // ------------------------------------------------------------------
     // 5. Reorder and write back (full file with header)
     // ------------------------------------------------------------------
+    // Inputs can overlap at rounded CSV boundaries or contain duplicate times.
+    // Match the writer's five-decimal day precision before deduplicating;
+    // otherwise distinct internal times can serialize to identical CSV times.
+    for (auto &series : merged) {
+        std::map<double, double> ordered;
+        for (size_t j = 0; j < series.size(); ++j) {
+            const auto &point = series[j];
+            if (!std::isfinite(point.t) || !std::isfinite(point.c)) {
+                std::cerr << "[Runner] refusing to write non-finite selected output.\n";
+                return false;
+            }
+            ordered[selectedOutputTime(point.t)] = point.c;
+        }
+        TimeSeries<double> normalized;
+        normalized.setName(series.name());
+        for (const auto &point : ordered) normalized.append(point.first, point.second);
+        series = normalized;
+    }
     merged = dtReorderSelectedOutput(merged, m_config.deploymentName);
     merged.write(selectedOutputFile.toStdString());
     std::cout << "[Runner] selected_output.csv merged: "
