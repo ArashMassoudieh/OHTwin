@@ -5,7 +5,7 @@
 | MB `staging_maxbotix_depth`, inches | `Pond 1 water depth`, meters above the pond's own zero | Yes, provisional field zero |
 | A0/A2 raw voltages | `Cell 1 shallow moisture index`, upper 0.3048 m soil layer, relative index | Yes, provisional observation operator |
 | A0, A1, A2 separately | Per-probe voltage and relative-index diagnostics for Cell 1 | No independent duplicate weighting |
-| HC restored inlet flow, L/s | `Cell 1 inlet flow diagnostic`, Gutter 1 → Pond 1 curb-cut flow, m³/day | No: leaves in the box and restored mounting calibration remain uncertain |
+| HC restored inlet flow, L/s | `Cell 1 inlet flow diagnostic`, Gutter 1 → Pond 1 curb-cut flow, m³/day | Selected provisionally (2026-11-24); leaves and mounting calibration remain uncertain. Availability in a running calibration requires configuration reload. |
 | HC head above weir, inches | Weir-head diagnostic, meters; not gutter or pond depth | No matching box-storage object |
 | Pressure transmitter current, mA | Pressure-current diagnostic | No field current-to-depth calibration or confirmed observation location |
 
@@ -69,3 +69,29 @@ model script for the explicit upper/lower soil connections.
 Public Comparison uses `?view=public` to omit electrical troubleshooting channels
 (A0/A1/A2 voltage and pressure loop current). The default bridge response still
 contains all channels; calibration and raw data storage are unaffected.
+
+### Inlet-flow selection (2026-11-24)
+
+The calibration list now includes `Cell 1 inlet flow diagnostic`, mapped to the
+existing Gutter 1 → Pond 1 link flow in m³/day (L/s × 86.4). Head and flow
+are dependent measurements; only flow is selected. This does not add a second
+inflow load. Field obstructions still require checking before scientific use.
+
+The GA runtime now re-reads only `assimilation.calibration_observations` from
+its deployment config at the start of each calibration cycle. Names must exist
+in the loaded model and their series must be supplied by the observation feed.
+Adding a name does not create a new model observation or input load. The inlet
+flow observation already exists in this JM model.
+
+A valid, nonempty list replaces the previous selection for the next cycle.
+Malformed, missing, duplicate, unknown, or empty edits retain the last accepted
+selection. An in-flight GA keeps its original objective. Each cycle appends its
+selection to `observation_selection.jsonl`; completed calibration results are
+not rewritten. Other configuration settings are not hot-reloaded. Use an atomic
+file replacement when editing deployment config.
+
+This capability requires the updated executable to be loaded once. The process
+already running on the server cannot gain new compiled behavior without being
+replaced, so it is left untouched under the no-restart instruction. The updated
+binary can be staged for a future approved process replacement; thereafter
+observation-list changes require no restart.

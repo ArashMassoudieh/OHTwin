@@ -28,6 +28,8 @@
 #include <QTimer>
 #include "System.h"
 #include <atomic>
+#include <string>
+#include <vector>
 #include <QDateTime>
 #include "terminal/OHQ-Common/ohq_kernel.h"
 
@@ -111,6 +113,7 @@ public slots:
 
 private:
     const DTConfig       &m_config;
+    std::vector<std::string> m_calibrationSelection;
     DTObservationBuffer   m_buffer;
     QTimer                m_pollTimer;
     bool                  m_started = false;

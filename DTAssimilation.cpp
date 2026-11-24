@@ -42,10 +42,12 @@
 #include "RunLogger.h"
 #include "DTStreamingMCMC.h"
 #include "DTDebugLog.h"
+#include "DTObservationSelection.h"
 
 DTAssimilation::DTAssimilation(const DTConfig &config, QObject *parent)
     : QObject(parent)
     , m_config(config)
+    , m_calibrationSelection(config.assimilation.calibrationObservations)
 {
     m_pollTimer.setParent(this);
     m_pollTimer.setSingleShot(false);
@@ -1086,8 +1088,40 @@ bool DTAssimilation::prepareCalibrationSystem(System &sys,
     //    Observations not in the list have no observed_data set, so they
     //    contribute zero to the misfit but still get simulated and
     //    written to outputs for client-side visualization.
-    const auto &selected = m_config.assimilation.calibrationObservations;
+    // Reload at a cycle boundary only; never mutate an in-flight GA.
+    std::set<std::string> availableObservations;
+    for (unsigned int i = 0; i < sys.ObservationsCount(); ++i)
+        availableObservations.insert(sys.observation(i)->GetName());
+    QString selectionError;
+    const auto previousSelection = m_calibrationSelection;
+    if (!reloadObservationSelection(
+            QDir(QString::fromStdString(m_config.deploymentRoot)).filePath("config.json"),
+            availableObservations, m_calibrationSelection, selectionError)) {
+        std::cerr << "[Assim] observation selection unchanged: "
+                  << selectionError.toStdString() << "\n";
+    } else if (m_calibrationSelection != previousSelection) {
+        std::cerr << "[Assim] calibration observation selection reloaded ("
+                  << m_calibrationSelection.size() << " observations)\n";
+    }
+    const auto &selected = m_calibrationSelection;
     const bool useAll = selected.empty();
+    // Keep each cycle's objective definition with its results. Never rewrite
+    // the selection history when the next cycle uses a different set.
+    QJsonArray selectedNames;
+    for (const auto &name : selected)
+        selectedNames.append(QString::fromStdString(name));
+    QJsonObject selectionRecord{
+        {"recorded_utc", QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs)},
+        {"completed_cycles_before_run", m_cyclesCompleted},
+        {"observations", selectedNames},
+        {"legacy_use_all", useAll}};
+    QDir().mkpath(QString::fromStdString(m_config.assimilation.calibrationOutputDir));
+    QFile selectionHistory(QDir(QString::fromStdString(
+        m_config.assimilation.calibrationOutputDir)).filePath("observation_selection.jsonl"));
+    if (selectionHistory.open(QIODevice::WriteOnly | QIODevice::Append))
+        selectionHistory.write(QJsonDocument(selectionRecord).toJson(QJsonDocument::Compact) + "\n");
+    else
+        std::cerr << "[Assim] warning: cannot record observation selection history\n";
 
     int matched = 0;
     int skipped = 0;

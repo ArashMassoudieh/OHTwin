@@ -47,11 +47,12 @@
         "noise_correlation_time": "6hr"
     },
     "assimilation": {
-        "_comment": "Cell 1 observations only. MB depth retains a provisional field zero. Fixed A0/A2 raw-voltage-derived shallow index is compared with normalized saturation of the upper one-foot model layer, not claimed as calibrated VWC. A1, HC inlet flow (leaves), and pressure current are retained as diagnostics. Other cells share soil parameters, not sensor values.",
+        "_comment": "Cell 1 observations only. MB depth retains a provisional field zero. Fixed A0/A2 raw-voltage-derived shallow index is compared with normalized saturation of the upper one-foot model layer, not claimed as calibrated VWC. HC-derived inlet flow is now selected as a provisional observation of Gutter 1 \u2192 Pond 1 flow, not an additional load. Do not also fit the dependent head series. Leaves and mounting uncertainty still limit physical interpretation. A1 and pressure current remain diagnostics. Other cells share soil parameters, not sensor values.",
         "truth_csv_url": "http://localhost:8198/outputs/selected_output.csv",
         "calibration_observations": [
             "Pond 1 water depth",
-            "Cell 1 shallow moisture index"
+            "Cell 1 shallow moisture index",
+            "Cell 1 inlet flow diagnostic"
         ],
         "truth_meta_url": "http://localhost:8198/outputs/selected_output_meta.json",
         "poll_interval": "3day",
